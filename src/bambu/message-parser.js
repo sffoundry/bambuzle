@@ -1,0 +1,106 @@
+'use strict';
+
+const { GCODE_STATE_MAP, GCODE_STATE } = require('../utils/constants');
+
+/**
+ * Deep-merge source into target. Arrays are replaced, not merged.
+ * This handles the partial-update pattern from P1P/A1 printers.
+ */
+function deepMerge(target, source) {
+  if (!source || typeof source !== 'object') return target;
+  if (!target || typeof target !== 'object') return source;
+
+  const result = { ...target };
+  for (const key of Object.keys(source)) {
+    const srcVal = source[key];
+    const tgtVal = result[key];
+
+    if (Array.isArray(srcVal)) {
+      result[key] = srcVal;
+    } else if (srcVal !== null && typeof srcVal === 'object' && !Array.isArray(srcVal)) {
+      result[key] = deepMerge(tgtVal, srcVal);
+    } else {
+      result[key] = srcVal;
+    }
+  }
+  return result;
+}
+
+/**
+ * Parse an MQTT message payload into a structured update.
+ * The printer sends JSON with a `print` key containing status fields.
+ */
+function parseMessage(raw) {
+  let data;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  return data;
+}
+
+/**
+ * Extract the normalized printer state from a merged state object.
+ * This picks out the fields we care about for storage and display.
+ */
+function extractPrinterState(merged) {
+  const p = merged.print || {};
+
+  return {
+    gcodeState: GCODE_STATE_MAP[p.gcode_state] || GCODE_STATE.UNKNOWN,
+    gcodeFile: p.gcode_file || p.subtask_name || '',
+    subtaskName: p.subtask_name || '',
+    taskId: p.task_id || '',
+    progress: p.mc_percent ?? null,
+    remainingMin: p.mc_remaining_time ?? null,
+    layerNum: p.layer_num ?? null,
+    totalLayers: p.total_layer_num ?? null,
+
+    // Temperatures
+    nozzleTemp: p.nozzle_temper ?? null,
+    nozzleTarget: p.nozzle_target_temper ?? null,
+    bedTemp: p.bed_temper ?? null,
+    bedTarget: p.bed_target_temper ?? null,
+    chamberTemp: p.chamber_temper ?? null,
+
+    // Fan speeds (0-15 → percentage)
+    partFanSpeed: p.cooling_fan_speed != null ? fanToPercent(p.cooling_fan_speed) : null,
+    auxFanSpeed: p.big_fan1_speed != null ? fanToPercent(p.big_fan1_speed) : null,
+    chamberFanSpeed: p.big_fan2_speed != null ? fanToPercent(p.big_fan2_speed) : null,
+
+    // Speed
+    speedLevel: p.spd_lvl ?? null,
+    speedMagnitude: p.spd_mag ?? null,
+
+    // WiFi
+    wifiSignal: p.wifi_signal != null ? parseInt(p.wifi_signal, 10) : null,
+
+    // HMS errors
+    hmsErrors: p.hms || [],
+
+    // AMS
+    ams: p.ams || null,
+
+    // Misc
+    sdcard: p.sdcard ?? null,
+    online: p.online ?? null,
+    printType: p.print_type || '',
+    bigFan1Speed: p.big_fan1_speed ?? null,
+    bigFan2Speed: p.big_fan2_speed ?? null,
+  };
+}
+
+/**
+ * Convert BambuLab fan speed value to percentage.
+ * Values are reported as a string like "15" (max) or number 0-15.
+ */
+function fanToPercent(val) {
+  const num = typeof val === 'string' ? parseInt(val, 10) : val;
+  if (isNaN(num)) return null;
+  // Some printers report 0-100, others 0-15
+  if (num > 15) return Math.round(num);
+  return Math.round((num / 15) * 100);
+}
+
+module.exports = { deepMerge, parseMessage, extractPrinterState, fanToPercent };

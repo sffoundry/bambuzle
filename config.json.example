@@ -1,0 +1,16 @@
+{
+  "sampling": {
+    "activeIntervalSec": 5,
+    "idleIntervalSec": 30
+  },
+  "retention": {
+    "days": 90
+  },
+  "server": {
+    "port": 3000,
+    "host": "0.0.0.0"
+  },
+  "log": {
+    "level": "info"
+  }
+}

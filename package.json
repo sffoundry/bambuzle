@@ -1,0 +1,26 @@
+{
+  "name": "bambuzle",
+  "version": "1.0.0",
+  "description": "BambuLab 3D printer cloud monitoring dashboard",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "keywords": [
+    "bambulab",
+    "3d-printing",
+    "mqtt",
+    "monitoring"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "better-sqlite3": "^11.10.0",
+    "croner": "^8.1.2",
+    "dotenv": "^16.6.1",
+    "express": "^4.22.1",
+    "mqtt": "^5.15.0",
+    "pino": "^9.14.0",
+    "ws": "^8.19.0"
+  }
+}

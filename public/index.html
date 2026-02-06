@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bambuzle — Printer Dashboard</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/uplot@1.6.31/dist/uPlot.iife.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uplot@1.6.31/dist/uPlot.min.css">
+</head>
+<body>
+  <header>
+    <h1>Bambuzle</h1>
+    <div id="connection-status" class="status-dot disconnected" title="WebSocket disconnected"></div>
+    <nav>
+      <button class="nav-btn active" data-view="dashboard">Dashboard</button>
+      <button class="nav-btn" data-view="events">Events</button>
+      <button class="nav-btn" data-view="alerts">Alerts</button>
+    </nav>
+  </header>
+
+  <!-- Login overlay — shown when not authenticated -->
+  <div id="login-overlay" class="login-overlay hidden">
+    <div class="login-card">
+      <h2>Bambuzle</h2>
+      <p id="login-subtitle" class="login-subtitle">Sign in with your BambuLab account</p>
+      <div id="login-error" class="login-error hidden"></div>
+
+      <!-- Step 1: Email + Password -->
+      <form id="login-form">
+        <label>Email <input type="email" name="email" required autocomplete="username"></label>
+        <label>Password <input type="password" name="password" required autocomplete="current-password"></label>
+        <button type="submit" class="btn-primary login-btn">Sign In</button>
+      </form>
+
+      <!-- Step 2: Verification Code -->
+      <form id="verify-form" class="hidden">
+        <p class="verify-hint">A verification code was sent to your email.</p>
+        <label>Verification Code <input type="text" name="code" required autocomplete="one-time-code" inputmode="numeric" pattern="[0-9]*" maxlength="6"></label>
+        <button type="submit" class="btn-primary login-btn">Verify</button>
+        <button type="button" id="verify-back" class="btn-secondary">Back</button>
+      </form>
+    </div>
+  </div>
+
+  <main>
+    <!-- Dashboard view -->
+    <section id="view-dashboard" class="view active">
+      <div id="printer-cards" class="printer-grid"></div>
+      <div id="chart-panel" class="chart-panel hidden">
+        <div class="chart-header">
+          <h2 id="chart-printer-name"></h2>
+          <div class="chart-controls">
+            <select id="chart-range">
+              <option value="5m">5 min</option>
+              <option value="10m">10 min</option>
+              <option value="15m">15 min</option>
+              <option value="30m">30 min</option>
+              <option value="1h">1 hour</option>
+              <option value="6h">6 hours</option>
+              <option value="24h" selected>24 hours</option>
+              <option value="7d">7 days</option>
+            </select>
+            <button id="chart-close" class="btn-close" title="Close charts">&times;</button>
+          </div>
+        </div>
+        <div id="temp-chart" class="chart-container"></div>
+        <div id="progress-chart" class="chart-container"></div>
+      </div>
+    </section>
+
+    <!-- Events view -->
+    <section id="view-events" class="view">
+      <h2>Recent Events</h2>
+      <table id="events-table" class="data-table">
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Printer</th>
+            <th>Type</th>
+            <th>Severity</th>
+            <th>Message</th>
+          </tr>
+        </thead>
+        <tbody id="events-body"></tbody>
+      </table>
+    </section>
+
+    <!-- Alerts view -->
+    <section id="view-alerts" class="view">
+      <div class="alerts-header">
+        <h2>Alert Rules</h2>
+        <button id="btn-add-alert" class="btn-primary">+ Add Rule</button>
+      </div>
+      <div id="alert-rules-list"></div>
+      <div id="alert-form-modal" class="modal hidden">
+        <div class="modal-content">
+          <h3 id="alert-form-title">New Alert Rule</h3>
+          <form id="alert-form">
+            <label>Name <input type="text" name="name" required></label>
+            <label>Printer
+              <select name="deviceId">
+                <option value="">All printers</option>
+              </select>
+            </label>
+            <label>Condition Type
+              <select name="conditionType" required>
+                <option value="state_change">State Change</option>
+                <option value="hms_error">HMS Error</option>
+                <option value="temp_anomaly">Temperature Anomaly</option>
+                <option value="temp_threshold">Temperature Threshold</option>
+                <option value="progress_stall">Progress Stall</option>
+              </select>
+            </label>
+            <div id="condition-config-fields"></div>
+            <label>Notify Via
+              <select name="notifyVia">
+                <option value="console">Console</option>
+                <option value="webhook">Webhook</option>
+              </select>
+            </label>
+            <div id="notify-config-fields"></div>
+            <label>Cooldown (seconds) <input type="number" name="cooldownSec" value="300" min="0"></label>
+            <div class="form-actions">
+              <button type="submit" class="btn-primary">Save</button>
+              <button type="button" id="btn-cancel-alert" class="btn-secondary">Cancel</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="/js/app.js"></script>
+</body>
+</html>
