@@ -1,0 +1,14 @@
+# Working On
+
+## Active Work
+
+| Developer | Feature | Branch | Started | Files |
+|-----------|---------|--------|---------|-------|
+| | | | | |
+
+## Recently Completed
+
+| Developer | Feature | Branch | Completed | Notes |
+|-----------|---------|--------|-----------|-------|
+| Steven + Claude | H2D dual nozzle + event sorting/filtering | main | 2026-02-06 | v0.2.0 |
+| Steven + Claude | Initial dashboard | main | 2026-02-05 | v0.1.0 |
