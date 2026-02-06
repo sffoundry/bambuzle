@@ -72,6 +72,23 @@
     <!-- Events view -->
     <section id="view-events" class="view">
       <h2>Recent Events</h2>
+      <div class="event-filters">
+        <select id="filter-printer">
+          <option value="">All Printers</option>
+        </select>
+        <select id="filter-type">
+          <option value="">All Types</option>
+          <option value="state_change">state_change</option>
+          <option value="hms_error">hms_error</option>
+          <option value="alert_fired">alert_fired</option>
+        </select>
+        <select id="filter-severity">
+          <option value="">All Severities</option>
+          <option value="info">info</option>
+          <option value="warning">warning</option>
+          <option value="error">error</option>
+        </select>
+      </div>
       <table id="events-table" class="data-table">
         <thead>
           <tr>

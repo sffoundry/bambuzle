@@ -47,6 +47,31 @@ function parseMessage(raw) {
 function extractPrinterState(merged) {
   const p = merged.print || {};
 
+  // Decode dual-nozzle temps from extruder.info (H2D and similar)
+  let nozzleTemp = p.nozzle_temper ?? null;
+  let nozzleTarget = p.nozzle_target_temper ?? null;
+  let nozzle2Temp = null;
+  let nozzle2Target = null;
+  let extruderCount = 1;
+
+  const extruderInfo = p.extruder?.info;
+  if (Array.isArray(extruderInfo) && extruderInfo.length > 0) {
+    extruderCount = extruderInfo.length;
+    // Each entry has a temp field: packed as (target << 16) | current
+    const e0 = extruderInfo[0];
+    if (e0 && e0.temp != null) {
+      nozzleTemp = e0.temp & 0xFFFF;
+      nozzleTarget = (e0.temp >> 16) & 0xFFFF;
+    }
+    if (extruderInfo.length > 1) {
+      const e1 = extruderInfo[1];
+      if (e1 && e1.temp != null) {
+        nozzle2Temp = e1.temp & 0xFFFF;
+        nozzle2Target = (e1.temp >> 16) & 0xFFFF;
+      }
+    }
+  }
+
   return {
     gcodeState: GCODE_STATE_MAP[p.gcode_state] || GCODE_STATE.UNKNOWN,
     gcodeFile: p.gcode_file || p.subtask_name || '',
@@ -58,8 +83,11 @@ function extractPrinterState(merged) {
     totalLayers: p.total_layer_num ?? null,
 
     // Temperatures
-    nozzleTemp: p.nozzle_temper ?? null,
-    nozzleTarget: p.nozzle_target_temper ?? null,
+    nozzleTemp,
+    nozzleTarget,
+    nozzle2Temp,
+    nozzle2Target,
+    extruderCount,
     bedTemp: p.bed_temper ?? null,
     bedTarget: p.bed_target_temper ?? null,
     chamberTemp: p.chamber_temper ?? null,

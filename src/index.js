@@ -280,6 +280,8 @@ function maybeSample(deviceId, state) {
     bedTarget: state.bedTarget,
     nozzleTemp: state.nozzleTemp,
     nozzleTarget: state.nozzleTarget,
+    nozzle2Temp: state.nozzle2Temp,
+    nozzle2Target: state.nozzle2Target,
     chamberTemp: state.chamberTemp,
     partFanSpeed: state.partFanSpeed,
     auxFanSpeed: state.auxFanSpeed,

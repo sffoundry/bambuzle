@@ -311,6 +311,13 @@ main { padding: 12px; }
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 1px;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  transition: color 0.15s;
+}
+.data-table th:hover {
+  color: var(--green);
 }
 .data-table td {
   font-size: 12px;
@@ -321,6 +328,28 @@ main { padding: 12px; }
 .severity-info { color: var(--accent); }
 .severity-warning { color: var(--yellow); }
 .severity-error { color: var(--red); }
+
+/* Event Filters */
+.event-filters {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+.event-filters select {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 3px 6px;
+  border-radius: var(--radius);
+  font-size: 11px;
+  font-family: var(--font);
+  text-transform: uppercase;
+}
+.event-filters select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
 
 /* Alerts */
 .alerts-header {

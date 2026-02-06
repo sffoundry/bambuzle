@@ -65,17 +65,20 @@ function insertSample(s) {
   return getDb().prepare(`
     INSERT INTO samples (
       device_id, job_id, ts, bed_temp, bed_target, nozzle_temp, nozzle_target,
+      nozzle2_temp, nozzle2_target,
       chamber_temp, part_fan_speed, aux_fan_speed, chamber_fan_speed,
       progress, layer_num, total_layers, remaining_min, gcode_state,
       speed_level, wifi_signal
     ) VALUES (
       ?, ?, datetime('now'), ?, ?, ?, ?,
+      ?, ?,
       ?, ?, ?, ?,
       ?, ?, ?, ?, ?,
       ?, ?
     )
   `).run(
     s.deviceId, s.jobId || null, s.bedTemp, s.bedTarget, s.nozzleTemp, s.nozzleTarget,
+    s.nozzle2Temp ?? null, s.nozzle2Target ?? null,
     s.chamberTemp, s.partFanSpeed, s.auxFanSpeed, s.chamberFanSpeed,
     s.progress, s.layerNum, s.totalLayers, s.remainingMin, s.gcodeState,
     s.speedLevel, s.wifiSignal

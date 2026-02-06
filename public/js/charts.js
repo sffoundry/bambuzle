@@ -9,6 +9,8 @@ let liveBuffer = []; // { ts, nozzle_temp, nozzle_target, bed_temp, bed_target, 
 const COLORS = {
   nozzle: '#ff3333',
   nozzleTarget: '#ff333366',
+  nozzle2: '#ff6666',
+  nozzle2Target: '#ff666666',
   bed: '#ff8800',
   bedTarget: '#ff880066',
   chamber: '#cc66ff',
@@ -100,14 +102,25 @@ export function pushLivePoint(deviceId, state) {
   if (deviceId !== currentDeviceId || !tempChart) return;
 
   const nowSec = Date.now() / 1000;
+  const isDual = tempChart._isDual;
 
   // Append to temp chart
   tempChart.data[0].push(nowSec);
-  tempChart.data[1].push(state.nozzleTemp);
-  tempChart.data[2].push(state.nozzleTarget);
-  tempChart.data[3].push(state.bedTemp);
-  tempChart.data[4].push(state.bedTarget);
-  tempChart.data[5].push(state.chamberTemp);
+  if (isDual) {
+    tempChart.data[1].push(state.nozzleTemp);
+    tempChart.data[2].push(state.nozzleTarget);
+    tempChart.data[3].push(state.nozzle2Temp ?? null);
+    tempChart.data[4].push(state.nozzle2Target ?? null);
+    tempChart.data[5].push(state.bedTemp);
+    tempChart.data[6].push(state.bedTarget);
+    tempChart.data[7].push(state.chamberTemp);
+  } else {
+    tempChart.data[1].push(state.nozzleTemp);
+    tempChart.data[2].push(state.nozzleTarget);
+    tempChart.data[3].push(state.bedTemp);
+    tempChart.data[4].push(state.bedTarget);
+    tempChart.data[5].push(state.chamberTemp);
+  }
 
   // Trim old points outside current range window
   const cutoff = nowSec - rangeSec(currentRange);
@@ -141,7 +154,36 @@ function renderTempChart(samples, events) {
   const bedTarget = samples.map((s) => s.bed_target);
   const chamberTemp = samples.map((s) => s.chamber_temp);
 
-  const data = [timestamps, nozzleTemp, nozzleTarget, bedTemp, bedTarget, chamberTemp];
+  // Detect if any sample has nozzle2 data
+  const isDual = samples.some((s) => s.nozzle2_temp != null);
+
+  let data, series;
+
+  if (isDual) {
+    const nozzle2Temp = samples.map((s) => s.nozzle2_temp ?? null);
+    const nozzle2Target = samples.map((s) => s.nozzle2_target ?? null);
+    data = [timestamps, nozzleTemp, nozzleTarget, nozzle2Temp, nozzle2Target, bedTemp, bedTarget, chamberTemp];
+    series = [
+      {},
+      { label: 'Nozzle L', stroke: COLORS.nozzle, width: 2 },
+      { label: 'Nzl L Tgt', stroke: COLORS.nozzleTarget, width: 1, dash: [4, 3] },
+      { label: 'Nozzle R', stroke: COLORS.nozzle2, width: 2 },
+      { label: 'Nzl R Tgt', stroke: COLORS.nozzle2Target, width: 1, dash: [4, 3] },
+      { label: 'Bed', stroke: COLORS.bed, width: 2 },
+      { label: 'Bed Tgt', stroke: COLORS.bedTarget, width: 1, dash: [4, 3] },
+      { label: 'Chamber', stroke: COLORS.chamber, width: 2 },
+    ];
+  } else {
+    data = [timestamps, nozzleTemp, nozzleTarget, bedTemp, bedTarget, chamberTemp];
+    series = [
+      {},
+      { label: 'Nozzle', stroke: COLORS.nozzle, width: 2 },
+      { label: 'Nzl Tgt', stroke: COLORS.nozzleTarget, width: 1, dash: [4, 3] },
+      { label: 'Bed', stroke: COLORS.bed, width: 2 },
+      { label: 'Bed Tgt', stroke: COLORS.bedTarget, width: 1, dash: [4, 3] },
+      { label: 'Chamber', stroke: COLORS.chamber, width: 2 },
+    ];
+  }
 
   const container = document.getElementById('temp-chart');
   const width = container.clientWidth || 800;
@@ -157,17 +199,11 @@ function renderTempChart(samples, events) {
       { stroke: '#338855', grid: { stroke: '#1a4a2a44' }, font: '10px Courier New', ticks: { stroke: '#1a4a2a' } },
       { stroke: '#338855', grid: { stroke: '#1a4a2a44' }, label: 'DEG C', font: '10px Courier New', labelFont: '10px Courier New', ticks: { stroke: '#1a4a2a' } },
     ],
-    series: [
-      {},
-      { label: 'Nozzle', stroke: COLORS.nozzle, width: 2 },
-      { label: 'Nzl Tgt', stroke: COLORS.nozzleTarget, width: 1, dash: [4, 3] },
-      { label: 'Bed', stroke: COLORS.bed, width: 2 },
-      { label: 'Bed Tgt', stroke: COLORS.bedTarget, width: 1, dash: [4, 3] },
-      { label: 'Chamber', stroke: COLORS.chamber, width: 2 },
-    ],
+    series,
   };
 
   tempChart = new uPlot(opts, data, container);
+  tempChart._isDual = isDual;
 }
 
 function renderProgressChart(samples, events) {

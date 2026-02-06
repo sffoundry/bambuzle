@@ -50,8 +50,11 @@ function updateCardContent(card, deviceId, printer) {
   const stateClass = gcodeState.toLowerCase();
 
   const progress = live.progress ?? null;
+  const isDual = live.nozzle2Temp != null || live.extruderCount === 2;
   const nozzle = live.nozzleTemp != null ? `${Math.round(live.nozzleTemp)}°C` : '--';
   const nozzleTarget = live.nozzleTarget != null && live.nozzleTarget > 0 ? ` / ${Math.round(live.nozzleTarget)}°C` : '';
+  const nozzle2 = live.nozzle2Temp != null ? `${Math.round(live.nozzle2Temp)}°C` : '--';
+  const nozzle2Target = live.nozzle2Target != null && live.nozzle2Target > 0 ? ` / ${Math.round(live.nozzle2Target)}°C` : '';
   const bed = live.bedTemp != null ? `${Math.round(live.bedTemp)}°C` : '--';
   const bedTarget = live.bedTarget != null && live.bedTarget > 0 ? ` / ${Math.round(live.bedTarget)}°C` : '';
   const chamber = live.chamberTemp != null ? `${Math.round(live.chamberTemp)}°C` : '--';
@@ -61,6 +64,11 @@ function updateCardContent(card, deviceId, printer) {
   const wifi = live.wifiSignal != null ? `${live.wifiSignal} dBm` : '--';
   const file = live.subtaskName || live.gcodeFile || '';
 
+  const nozzleRows = isDual
+    ? `<div class="stat"><span class="stat-label">Nozzle L</span><span class="stat-value">${nozzle}${nozzleTarget}</span></div>
+      <div class="stat"><span class="stat-label">Nozzle R</span><span class="stat-value">${nozzle2}${nozzle2Target}</span></div>`
+    : `<div class="stat"><span class="stat-label">Nozzle</span><span class="stat-value">${nozzle}${nozzleTarget}</span></div>`;
+
   card.innerHTML = `
     <div class="card-header">
       <span class="printer-name">${escapeHtml(db.name || deviceId)}</span>
@@ -68,7 +76,7 @@ function updateCardContent(card, deviceId, printer) {
       <span class="state-badge ${stateClass}">${gcodeState}</span>
     </div>
     <div class="card-stats">
-      <div class="stat"><span class="stat-label">Nozzle</span><span class="stat-value">${nozzle}${nozzleTarget}</span></div>
+      ${nozzleRows}
       <div class="stat"><span class="stat-label">Bed</span><span class="stat-value">${bed}${bedTarget}</span></div>
       <div class="stat"><span class="stat-label">Chamber</span><span class="stat-value">${chamber}</span></div>
       <div class="stat"><span class="stat-label">Layer</span><span class="stat-value">${layer}${totalLayers}</span></div>

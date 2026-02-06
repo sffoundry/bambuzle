@@ -9,6 +9,12 @@ const state = {
   reconnectTimer: null,
 };
 
+// ─── Events State ───
+
+let allEvents = [];
+let eventSortCol = 'ts';
+let eventSortDir = 'desc';
+
 // ─── Auth ───
 
 async function checkAuth() {
@@ -236,36 +242,138 @@ export function selectPrinter(deviceId) {
 
 // ─── Events Table ───
 
+const SEVERITY_ORDER = { error: 0, warning: 1, info: 2 };
+const EVENT_COLUMNS = ['ts', 'printer', 'event_type', 'severity', 'message'];
+
+function initEventSorting() {
+  const headers = document.querySelectorAll('#events-table thead th');
+  headers.forEach((th, i) => {
+    const col = EVENT_COLUMNS[i];
+    th.addEventListener('click', () => {
+      if (eventSortCol === col) {
+        eventSortDir = eventSortDir === 'asc' ? 'desc' : 'asc';
+      } else {
+        eventSortCol = col;
+        eventSortDir = col === 'ts' ? 'desc' : 'asc';
+      }
+      updateSortIndicators();
+      renderEvents();
+    });
+  });
+  updateSortIndicators();
+}
+
+function updateSortIndicators() {
+  const headers = document.querySelectorAll('#events-table thead th');
+  headers.forEach((th, i) => {
+    const col = EVENT_COLUMNS[i];
+    const base = th.textContent.replace(/[\u25B2\u25BC]\s*/g, '').trim();
+    if (col === eventSortCol) {
+      const arrow = eventSortDir === 'asc' ? '\u25B2' : '\u25BC';
+      th.textContent = `${arrow} ${base}`;
+    } else {
+      th.textContent = base;
+    }
+  });
+}
+
+function initEventFilters() {
+  const printerFilter = document.getElementById('filter-printer');
+  const typeFilter = document.getElementById('filter-type');
+  const severityFilter = document.getElementById('filter-severity');
+
+  // Populate printer options from known printers
+  populatePrinterFilter();
+
+  printerFilter.addEventListener('change', renderEvents);
+  typeFilter.addEventListener('change', renderEvents);
+  severityFilter.addEventListener('change', renderEvents);
+}
+
+function populatePrinterFilter() {
+  const printerFilter = document.getElementById('filter-printer');
+  const current = printerFilter.value;
+  const opts = ['<option value="">All Printers</option>'];
+  for (const [deviceId, printer] of Object.entries(state.printers)) {
+    const name = printer.db?.name || deviceId;
+    opts.push(`<option value="${escapeHtml(deviceId)}">${escapeHtml(name)}</option>`);
+  }
+  printerFilter.innerHTML = opts.join('');
+  printerFilter.value = current;
+}
+
+function getFilteredSortedEvents() {
+  const printerVal = document.getElementById('filter-printer').value;
+  const typeVal = document.getElementById('filter-type').value;
+  const severityVal = document.getElementById('filter-severity').value;
+
+  let filtered = allEvents;
+
+  if (printerVal) {
+    filtered = filtered.filter((e) => e.device_id === printerVal);
+  }
+  if (typeVal) {
+    filtered = filtered.filter((e) => e.event_type === typeVal);
+  }
+  if (severityVal) {
+    filtered = filtered.filter((e) => e.severity === severityVal);
+  }
+
+  filtered.sort((a, b) => {
+    let cmp = 0;
+    switch (eventSortCol) {
+      case 'ts':
+        cmp = (a.ts || '').localeCompare(b.ts || '');
+        break;
+      case 'printer':
+        cmp = (a.printer_name || a.device_id || '').localeCompare(b.printer_name || b.device_id || '');
+        break;
+      case 'event_type':
+        cmp = (a.event_type || '').localeCompare(b.event_type || '');
+        break;
+      case 'severity':
+        cmp = (SEVERITY_ORDER[a.severity] ?? 3) - (SEVERITY_ORDER[b.severity] ?? 3);
+        break;
+      case 'message':
+        cmp = (a.message || '').localeCompare(b.message || '');
+        break;
+    }
+    return eventSortDir === 'asc' ? cmp : -cmp;
+  });
+
+  return filtered;
+}
+
+function renderEvents() {
+  const tbody = document.getElementById('events-body');
+  tbody.innerHTML = '';
+  const events = getFilteredSortedEvents();
+  for (const evt of events) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${formatTime(evt.ts)}</td>
+      <td>${escapeHtml(evt.printer_name || evt.device_id || '')}</td>
+      <td>${escapeHtml(evt.event_type || '')}</td>
+      <td><span class="severity-${evt.severity}">${evt.severity}</span></td>
+      <td>${escapeHtml(evt.message || '')}</td>
+    `;
+    tbody.appendChild(tr);
+  }
+}
+
 async function loadEvents() {
   try {
     const res = await fetch('/api/events?limit=200');
-    const events = await res.json();
-    const tbody = document.getElementById('events-body');
-    tbody.innerHTML = '';
-    for (const evt of events) {
-      addEventRow(evt);
-    }
+    allEvents = await res.json();
+    populatePrinterFilter();
+    renderEvents();
   } catch { /* ignore */ }
 }
 
 function addEventRow(evt) {
-  const tbody = document.getElementById('events-body');
-  const tr = document.createElement('tr');
-  tr.innerHTML = `
-    <td>${formatTime(evt.ts)}</td>
-    <td>${evt.printer_name || evt.device_id || ''}</td>
-    <td>${evt.event_type}</td>
-    <td><span class="severity-${evt.severity}">${evt.severity}</span></td>
-    <td>${escapeHtml(evt.message || '')}</td>
-  `;
-  if (tbody.firstChild) {
-    tbody.insertBefore(tr, tbody.firstChild);
-  } else {
-    tbody.appendChild(tr);
-  }
-  while (tbody.children.length > 200) {
-    tbody.removeChild(tbody.lastChild);
-  }
+  allEvents.unshift(evt);
+  if (allEvents.length > 200) allEvents.length = 200;
+  renderEvents();
 }
 
 // ─── Initial Load ───
@@ -306,3 +414,5 @@ export { state, formatTime, escapeHtml };
 setupAuthForms();
 checkAuth();
 connectWs();
+initEventSorting();
+initEventFilters();

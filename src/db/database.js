@@ -79,7 +79,13 @@ function runMigrations(database) {
       message TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_events_device_ts ON events(device_id, ts);
+  `);
 
+  // Add nozzle2 columns for H2D dual-nozzle printers
+  try { database.exec(`ALTER TABLE samples ADD COLUMN nozzle2_temp REAL`); } catch { /* already exists */ }
+  try { database.exec(`ALTER TABLE samples ADD COLUMN nozzle2_target REAL`); } catch { /* already exists */ }
+
+  database.exec(`
     CREATE TABLE IF NOT EXISTS alert_rules (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
