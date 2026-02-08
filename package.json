@@ -1,6 +1,6 @@
 {
   "name": "bambuzle",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "BambuLab 3D printer cloud monitoring dashboard",
   "main": "src/index.js",
   "scripts": {
