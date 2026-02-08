@@ -13,6 +13,8 @@ Self-hosted monitoring dashboard for BambuLab 3D printers. Connects to BambuLab 
 
 ## Quick Start
 
+Requires **Node.js 18+** and a C/C++ toolchain (for compiling `better-sqlite3`). See [Install.md](Install.md) for details.
+
 ```bash
 git clone https://github.com/sffoundry/bambuzle.git
 cd bambuzle

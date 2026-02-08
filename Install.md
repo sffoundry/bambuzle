@@ -1,6 +1,6 @@
 # Installation
 
-Bambuzle requires **Node.js 18+** and a C/C++ toolchain (needed to compile the `better-sqlite3` native module).
+Bambuzle requires **Node.js 18+** and a C/C++ toolchain (needed to compile the `better-sqlite3` native module). Python 3.6+ is also required at build time by `node-gyp` (the Node.js native module compiler) — it is **not** a runtime dependency.
 
 ## Prerequisites by Platform
 
@@ -8,11 +8,10 @@ Bambuzle requires **Node.js 18+** and a C/C++ toolchain (needed to compile the `
 
 1. Install [Node.js LTS](https://nodejs.org/) (v18 or later). During install, check **"Automatically install the necessary tools"** — this installs the Visual C++ Build Tools and Python for you.
 
-   If you already have Node.js installed without build tools, run an elevated PowerShell:
+   If you already have Node.js installed without build tools, install them separately:
 
-   ```powershell
-   npm install -g windows-build-tools
-   ```
+   - Download [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) and select the **"Desktop development with C++"** workload
+   - Install [Python 3](https://www.python.org/downloads/) (3.6 or later) if not already present
 
 2. Install [Git for Windows](https://git-scm.com/download/win) if you don't have it.
 
@@ -48,10 +47,10 @@ Bambuzle requires **Node.js 18+** and a C/C++ toolchain (needed to compile the `
    sudo dnf install nodejs
    ```
 
-2. Install the C/C++ toolchain:
+2. Install the C/C++ toolchain and Python 3:
 
    ```bash
-   # macOS — Xcode Command Line Tools
+   # macOS — Xcode Command Line Tools (includes Python 3, make, clang)
    xcode-select --install
 
    # Debian / Ubuntu
@@ -59,14 +58,16 @@ Bambuzle requires **Node.js 18+** and a C/C++ toolchain (needed to compile the `
 
    # Fedora
    sudo dnf groupinstall "Development Tools"
+   sudo dnf install python3
    ```
 
 3. Verify:
 
    ```bash
-   node --version   # v18.x or later
+   node --version     # v18.x or later
    npm --version
-   gcc --version    # or cc --version on macOS
+   python3 --version  # 3.6 or later
+   gcc --version      # or cc --version on macOS
    ```
 
 ### Raspberry Pi
@@ -116,15 +117,21 @@ cp .env.example .env
 Edit `.env` with your BambuLab credentials:
 
 ```ini
+# Option 1: Email + password login
 BAMBU_EMAIL=your@email.com
 BAMBU_PASSWORD=your_password
+
+# Option 2: Direct token (if MFA is enabled, get token from BambuLab app)
+# BAMBU_TOKEN=your_access_token
+# BAMBU_USER_ID=your_user_id
+
 BAMBU_REGION=us          # us, cn, or eu
 PORT=3000
 HOST=0.0.0.0
 LOG_LEVEL=info
 ```
 
-Alternatively, skip the `.env` file and log in through the dashboard UI on first launch.
+You can also skip the `.env` file entirely and log in through the dashboard UI on first launch.
 
 Optional tuning via `config.json` in the project root:
 
