@@ -90,11 +90,11 @@ function getSamples(deviceId, { from, to, limit } = {}) {
   const params = [deviceId];
 
   if (from) {
-    sql += ' AND ts >= ?';
+    sql += ' AND ts >= datetime(?)';
     params.push(from);
   }
   if (to) {
-    sql += ' AND ts <= ?';
+    sql += ' AND ts <= datetime(?)';
     params.push(to);
   }
 
@@ -122,11 +122,11 @@ function getEvents(deviceId, { limit, from, to } = {}) {
   const params = [deviceId];
 
   if (from) {
-    sql += ' AND ts >= ?';
+    sql += ' AND ts >= datetime(?)';
     params.push(from);
   }
   if (to) {
-    sql += ' AND ts <= ?';
+    sql += ' AND ts <= datetime(?)';
     params.push(to);
   }
 

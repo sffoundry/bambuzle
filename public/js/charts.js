@@ -64,7 +64,7 @@ export function destroyCharts() {
   liveBuffer = [];
 }
 
-export async function loadChartData(deviceId, range) {
+export async function loadChartData(deviceId, range, filters) {
   currentDeviceId = deviceId;
   currentRange = range;
   liveBuffer = [];
@@ -78,7 +78,13 @@ export async function loadChartData(deviceId, range) {
     ]);
 
     const samples = await samplesRes.json();
-    const events = await eventsRes.json();
+    let events = await eventsRes.json();
+
+    // Apply dashboard event filters to chart overlays
+    if (filters) {
+      if (filters.type) events = events.filter((e) => e.event_type === filters.type);
+      if (filters.severity) events = events.filter((e) => e.severity === filters.severity);
+    }
 
     if (samples.length === 0) {
       document.getElementById('temp-chart').innerHTML =
@@ -92,6 +98,37 @@ export async function loadChartData(deviceId, range) {
   } catch {
     document.getElementById('temp-chart').innerHTML =
       '<p style="color: var(--text-dim); text-align: center; padding: 40px; text-transform: uppercase; font-size: 11px;">FAILED TO LOAD DATA</p>';
+  }
+}
+
+/**
+ * Check whether a chart's x-axis has been zoomed in by the user.
+ * Compares current visible range against the full data range with a tolerance.
+ */
+function isChartZoomed(chart) {
+  const ts = chart.data[0];
+  if (ts.length < 2) return false;
+  const scaleX = chart.scales.x;
+  const dataMin = ts[0];
+  const dataMax = ts[ts.length - 1];
+  // Zoomed = visible range is noticeably smaller than full data range
+  return (scaleX.min > dataMin + 5) || (scaleX.max < dataMax - 5);
+}
+
+/**
+ * Update chart data, preserving user zoom if active.
+ */
+function updateChartData(chart, data) {
+  const zoomed = isChartZoomed(chart);
+  if (zoomed) {
+    const savedMin = chart.scales.x.min;
+    const savedMax = chart.scales.x.max;
+    chart.batch(() => {
+      chart.setData(data);
+      chart.setScale('x', { min: savedMin, max: savedMax });
+    });
+  } else {
+    chart.setData(data);
   }
 }
 
@@ -128,7 +165,7 @@ export function pushLivePoint(deviceId, state) {
     for (const arr of tempChart.data) arr.shift();
   }
 
-  tempChart.setData(tempChart.data);
+  updateChartData(tempChart, tempChart.data);
 
   // Append to progress chart
   if (progressChart) {
@@ -140,7 +177,7 @@ export function pushLivePoint(deviceId, state) {
       for (const arr of progressChart.data) arr.shift();
     }
 
-    progressChart.setData(progressChart.data);
+    updateChartData(progressChart, progressChart.data);
   }
 }
 

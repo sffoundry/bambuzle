@@ -11,6 +11,7 @@
 <body>
   <header>
     <h1>Bambuzle</h1>
+    <button id="config-btn" class="config-btn" title="Configuration">&#9881;</button>
     <div id="connection-status" class="status-dot disconnected" title="WebSocket disconnected"></div>
     <nav>
       <button class="nav-btn active" data-view="dashboard">Dashboard</button>
@@ -46,26 +47,62 @@
   <main>
     <!-- Dashboard view -->
     <section id="view-dashboard" class="view active">
-      <div id="printer-cards" class="printer-grid"></div>
-      <div id="chart-panel" class="chart-panel hidden">
-        <div class="chart-header">
-          <h2 id="chart-printer-name"></h2>
-          <div class="chart-controls">
-            <select id="chart-range">
-              <option value="5m">5 min</option>
-              <option value="10m">10 min</option>
-              <option value="15m">15 min</option>
-              <option value="30m">30 min</option>
-              <option value="1h">1 hour</option>
-              <option value="6h">6 hours</option>
-              <option value="24h" selected>24 hours</option>
-              <option value="7d">7 days</option>
-            </select>
-            <button id="chart-close" class="btn-close" title="Close charts">&times;</button>
+      <div id="dashboard-filters" class="dashboard-filters">
+        <select id="dash-filter-printer">
+          <option value="">All Printers</option>
+        </select>
+        <select id="dash-filter-type">
+          <option value="">All Event Types</option>
+          <option value="state_change">state_change</option>
+          <option value="hms_error">hms_error</option>
+          <option value="alert_fired">alert_fired</option>
+        </select>
+        <select id="dash-filter-severity">
+          <option value="">All Severities</option>
+          <option value="info">info</option>
+          <option value="warning">warning</option>
+          <option value="error">error</option>
+        </select>
+      </div>
+      <div class="dashboard-panes">
+        <div id="dash-left" class="dash-pane-left">
+          <div id="printer-cards" class="printer-grid"></div>
+          <div id="chart-panel" class="chart-panel">
+            <div class="chart-header">
+              <h2 id="chart-printer-name"></h2>
+              <div class="chart-controls">
+                <select id="chart-range">
+                  <option value="5m">5 min</option>
+                  <option value="10m">10 min</option>
+                  <option value="15m">15 min</option>
+                  <option value="30m">30 min</option>
+                  <option value="1h">1 hour</option>
+                  <option value="6h">6 hours</option>
+                  <option value="24h" selected>24 hours</option>
+                  <option value="7d">7 days</option>
+                </select>
+              </div>
+            </div>
+            <div id="temp-chart" class="chart-container"></div>
+            <div id="progress-chart" class="chart-container"></div>
           </div>
         </div>
-        <div id="temp-chart" class="chart-container"></div>
-        <div id="progress-chart" class="chart-container"></div>
+        <div id="dash-resize" class="dash-resize-handle"></div>
+        <div id="dash-right" class="dash-pane-right">
+          <h3 class="dash-events-title">Events</h3>
+          <table class="data-table dash-events-table" id="dash-events-table">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Printer</th>
+                <th>Type</th>
+                <th>Severity</th>
+                <th>Message</th>
+              </tr>
+            </thead>
+            <tbody id="dash-events-body"></tbody>
+          </table>
+        </div>
       </div>
     </section>
 
@@ -146,6 +183,24 @@
         </div>
       </div>
     </section>
+
+    <!-- Config modal -->
+    <div id="config-modal" class="modal hidden">
+      <div class="modal-content">
+        <h3>Configuration</h3>
+        <div class="config-group">
+          <h4>Printers</h4>
+          <div id="config-printers-list" class="config-list"></div>
+        </div>
+        <div class="config-group">
+          <h4>Charts</h4>
+          <div id="config-charts-list" class="config-list"></div>
+        </div>
+        <div class="form-actions">
+          <button type="button" id="config-close" class="btn-primary">Close</button>
+        </div>
+      </div>
+    </div>
   </main>
 
   <script type="module" src="/js/app.js"></script>

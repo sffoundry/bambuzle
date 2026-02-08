@@ -1,6 +1,7 @@
 import { renderPrinterCards, updatePrinterCard } from './dashboard.js';
 import { initCharts, loadChartData, destroyCharts, pushLivePoint } from './charts.js';
 import { initAlertsUI } from './alerts-ui.js';
+import { loadConfig, saveConfig, openConfigModal, applyVisibility } from './config-ui.js';
 
 const state = {
   printers: {},       // deviceId -> { db, live, connected }
@@ -9,7 +10,21 @@ const state = {
   reconnectTimer: null,
 };
 
-// ─── Events State ───
+// ─── Config State ───
+
+let uiConfig = loadConfig();
+
+// ─── Dashboard Filters ───
+
+const dashFilters = { printer: '', type: '', severity: '' };
+
+// ─── Dashboard Events State ───
+
+let dashEvents = [];
+let dashEventSortCol = 'ts';
+let dashEventSortDir = 'desc';
+
+// ─── Events View State ───
 
 let allEvents = [];
 let eventSortCol = 'ts';
@@ -180,13 +195,14 @@ function handleWsMessage(msg) {
       } else {
         state.printers[deviceId] = { db: null, live: printerState, connected };
       }
-      updatePrinterCard(deviceId, state.printers[deviceId]);
+      updatePrinterCard(deviceId, state.printers[deviceId], uiConfig, dashFilters);
       // Push live data into charts if they're open for this printer
       pushLivePoint(deviceId, printerState);
       break;
     }
     case 'event': {
       addEventRow(msg.data);
+      addDashEvent(msg.data);
       break;
     }
     case 'auth': {
@@ -216,28 +232,33 @@ document.querySelectorAll('.nav-btn').forEach((btn) => {
 
 // ─── Chart Panel ───
 
-document.getElementById('chart-close').addEventListener('click', () => {
-  document.getElementById('chart-panel').classList.add('hidden');
-  state.selectedPrinter = null;
-  destroyCharts();
-});
-
 document.getElementById('chart-range').addEventListener('change', () => {
   if (state.selectedPrinter) {
-    loadChartData(state.selectedPrinter, document.getElementById('chart-range').value);
+    loadChartData(state.selectedPrinter, document.getElementById('chart-range').value, dashFilters);
   }
 });
 
-export function selectPrinter(deviceId) {
+/**
+ * Auto-select which printer to chart based on the dashboard printer filter.
+ * Falls back to the first available printer when filter is "All Printers".
+ */
+function updateChartPrinter() {
+  const printerIds = Object.keys(state.printers);
+  const deviceId = dashFilters.printer || printerIds[0];
+
+  if (!deviceId) {
+    state.selectedPrinter = null;
+    destroyCharts();
+    return;
+  }
+
   state.selectedPrinter = deviceId;
   const printer = state.printers[deviceId];
   const name = printer?.db?.name || printer?.live?.subtaskName || deviceId;
-
   document.getElementById('chart-printer-name').textContent = name;
-  document.getElementById('chart-panel').classList.remove('hidden');
 
   initCharts();
-  loadChartData(deviceId, document.getElementById('chart-range').value);
+  loadChartData(deviceId, document.getElementById('chart-range').value, dashFilters);
 }
 
 // ─── Events Table ───
@@ -389,7 +410,10 @@ async function loadPrinters() {
         connected: p.connected,
       };
     }
-    renderPrinterCards(state.printers, selectPrinter);
+    renderPrinterCards(state.printers, uiConfig, dashFilters);
+    populateDashPrinterFilter();
+    loadDashEvents();
+    updateChartPrinter();
   } catch { /* ignore */ }
 }
 
@@ -409,6 +433,184 @@ function escapeHtml(str) {
 
 export { state, formatTime, escapeHtml };
 
+// ─── Dashboard Filter Bar ───
+
+function initDashFilters() {
+  const printerSel = document.getElementById('dash-filter-printer');
+  const typeSel = document.getElementById('dash-filter-type');
+  const severitySel = document.getElementById('dash-filter-severity');
+
+  function onFilterChange() {
+    dashFilters.printer = printerSel.value;
+    dashFilters.type = typeSel.value;
+    dashFilters.severity = severitySel.value;
+
+    renderPrinterCards(state.printers, uiConfig, dashFilters);
+    renderDashEvents();
+    updateChartPrinter();
+  }
+
+  printerSel.addEventListener('change', onFilterChange);
+  typeSel.addEventListener('change', onFilterChange);
+  severitySel.addEventListener('change', onFilterChange);
+}
+
+function populateDashPrinterFilter() {
+  const sel = document.getElementById('dash-filter-printer');
+  const current = sel.value;
+  const opts = ['<option value="">All Printers</option>'];
+  for (const [deviceId, printer] of Object.entries(state.printers)) {
+    const name = printer.db?.name || deviceId;
+    opts.push(`<option value="${escapeHtml(deviceId)}">${escapeHtml(name)}</option>`);
+  }
+  sel.innerHTML = opts.join('');
+  sel.value = current;
+}
+
+// ─── Dashboard Events Widget ───
+
+const DASH_EVENT_COLUMNS = ['ts', 'printer', 'event_type', 'severity', 'message'];
+
+async function loadDashEvents() {
+  try {
+    const res = await fetch('/api/events?limit=200');
+    dashEvents = await res.json();
+    renderDashEvents();
+  } catch { /* ignore */ }
+}
+
+function addDashEvent(evt) {
+  dashEvents.unshift(evt);
+  if (dashEvents.length > 200) dashEvents.length = 200;
+  renderDashEvents();
+}
+
+function renderDashEvents() {
+  const tbody = document.getElementById('dash-events-body');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  let filtered = dashEvents;
+  if (dashFilters.printer) filtered = filtered.filter((e) => e.device_id === dashFilters.printer);
+  if (dashFilters.type) filtered = filtered.filter((e) => e.event_type === dashFilters.type);
+  if (dashFilters.severity) filtered = filtered.filter((e) => e.severity === dashFilters.severity);
+
+  filtered.sort((a, b) => {
+    let cmp = 0;
+    switch (dashEventSortCol) {
+      case 'ts':
+        cmp = (a.ts || '').localeCompare(b.ts || '');
+        break;
+      case 'printer':
+        cmp = (a.printer_name || a.device_id || '').localeCompare(b.printer_name || b.device_id || '');
+        break;
+      case 'event_type':
+        cmp = (a.event_type || '').localeCompare(b.event_type || '');
+        break;
+      case 'severity':
+        cmp = (SEVERITY_ORDER[a.severity] ?? 3) - (SEVERITY_ORDER[b.severity] ?? 3);
+        break;
+      case 'message':
+        cmp = (a.message || '').localeCompare(b.message || '');
+        break;
+    }
+    return dashEventSortDir === 'asc' ? cmp : -cmp;
+  });
+
+  for (const evt of filtered) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${formatTime(evt.ts)}</td>
+      <td>${escapeHtml(evt.printer_name || evt.device_id || '')}</td>
+      <td>${escapeHtml(evt.event_type || '')}</td>
+      <td><span class="severity-${evt.severity}">${evt.severity}</span></td>
+      <td>${escapeHtml(evt.message || '')}</td>
+    `;
+    tbody.appendChild(tr);
+  }
+}
+
+function initDashEventSorting() {
+  const table = document.getElementById('dash-events-table');
+  if (!table) return;
+  const headers = table.querySelectorAll('thead th');
+  headers.forEach((th, i) => {
+    const col = DASH_EVENT_COLUMNS[i];
+    th.addEventListener('click', () => {
+      if (dashEventSortCol === col) {
+        dashEventSortDir = dashEventSortDir === 'asc' ? 'desc' : 'asc';
+      } else {
+        dashEventSortCol = col;
+        dashEventSortDir = col === 'ts' ? 'desc' : 'asc';
+      }
+      updateDashSortIndicators();
+      renderDashEvents();
+    });
+  });
+  updateDashSortIndicators();
+}
+
+function updateDashSortIndicators() {
+  const table = document.getElementById('dash-events-table');
+  if (!table) return;
+  const headers = table.querySelectorAll('thead th');
+  headers.forEach((th, i) => {
+    const col = DASH_EVENT_COLUMNS[i];
+    const base = th.textContent.replace(/[\u25B2\u25BC]\s*/g, '').trim();
+    if (col === dashEventSortCol) {
+      const arrow = dashEventSortDir === 'asc' ? '\u25B2' : '\u25BC';
+      th.textContent = `${arrow} ${base}`;
+    } else {
+      th.textContent = base;
+    }
+  });
+}
+
+// ─── Resize Handle ───
+
+function initResizeHandle() {
+  const handle = document.getElementById('dash-resize');
+  const rightPane = document.getElementById('dash-right');
+  if (!handle || !rightPane) return;
+
+  // Restore saved width
+  const saved = localStorage.getItem('bambuzle_events_width');
+  if (saved) rightPane.style.width = saved + 'px';
+
+  let dragging = false;
+
+  function onStart(e) {
+    dragging = true;
+    handle.classList.add('dragging');
+    e.preventDefault();
+  }
+
+  function onMove(e) {
+    if (!dragging) return;
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const container = handle.parentElement;
+    const containerRect = container.getBoundingClientRect();
+    const newWidth = containerRect.right - clientX;
+    const clamped = Math.max(200, Math.min(newWidth, containerRect.width * 0.6));
+    rightPane.style.width = clamped + 'px';
+  }
+
+  function onEnd() {
+    if (!dragging) return;
+    dragging = false;
+    handle.classList.remove('dragging');
+    localStorage.setItem('bambuzle_events_width', parseInt(rightPane.style.width));
+  }
+
+  handle.addEventListener('mousedown', onStart);
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onEnd);
+
+  handle.addEventListener('touchstart', onStart, { passive: false });
+  document.addEventListener('touchmove', onMove, { passive: false });
+  document.addEventListener('touchend', onEnd);
+}
+
 // ─── Boot ───
 
 setupAuthForms();
@@ -416,3 +618,16 @@ checkAuth();
 connectWs();
 initEventSorting();
 initEventFilters();
+initDashFilters();
+initDashEventSorting();
+initResizeHandle();
+applyVisibility(uiConfig);
+
+document.getElementById('config-btn').addEventListener('click', () => {
+  openConfigModal(uiConfig, state.printers, (updatedCfg) => {
+    uiConfig = updatedCfg;
+    saveConfig(uiConfig);
+    applyVisibility(uiConfig);
+    renderPrinterCards(state.printers, uiConfig, dashFilters);
+  });
+});

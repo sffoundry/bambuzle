@@ -1,43 +1,60 @@
-let onSelectPrinter = null;
-
-export function renderPrinterCards(printers, selectCallback) {
-  onSelectPrinter = selectCallback;
+export function renderPrinterCards(printers, config, dashFilters) {
   const container = document.getElementById('printer-cards');
   container.innerHTML = '';
 
+  let visibleCount = 0;
   for (const [deviceId, printer] of Object.entries(printers)) {
-    container.appendChild(createCard(deviceId, printer));
+    const configVisible = config ? config.printers[deviceId] !== false : true;
+    const filterVisible = !dashFilters || !dashFilters.printer || dashFilters.printer === deviceId;
+    const visible = configVisible && filterVisible;
+    if (visible) visibleCount++;
+    const card = createCard(deviceId, printer);
+    if (!visible) card.classList.add('cfg-hidden');
+    container.appendChild(card);
   }
 
-  if (Object.keys(printers).length === 0) {
+  const total = Object.keys(printers).length;
+  if (total === 0) {
     container.innerHTML = `
       <div class="printer-card" style="text-align: center; color: var(--text-dim); cursor: default;">
         <p>No printers found. Check your BambuLab credentials in .env</p>
       </div>
     `;
+  } else if (visibleCount === 0) {
+    const placeholder = document.createElement('div');
+    placeholder.className = 'printer-card config-placeholder';
+    placeholder.style.cssText = 'text-align: center; color: var(--text-dim); cursor: default;';
+    placeholder.innerHTML = '<p>All printers hidden — open Configuration to show them</p>';
+    container.appendChild(placeholder);
   }
 }
 
-export function updatePrinterCard(deviceId, printer) {
+export function updatePrinterCard(deviceId, printer, config, dashFilters) {
   let card = document.getElementById(`card-${deviceId}`);
   if (!card) {
     const container = document.getElementById('printer-cards');
-    // Remove "no printers" placeholder if present
+    // Remove placeholders if present
     const placeholder = container.querySelector('.printer-card[style]');
     if (placeholder) placeholder.remove();
+    const cfgPlaceholder = container.querySelector('.config-placeholder');
+    if (cfgPlaceholder) cfgPlaceholder.remove();
 
     card = createCard(deviceId, printer);
     container.appendChild(card);
   } else {
     updateCardContent(card, deviceId, printer);
   }
+
+  // Apply visibility from config and dashboard filters
+  const configHidden = config ? config.printers[deviceId] === false : false;
+  const filterHidden = dashFilters && dashFilters.printer && dashFilters.printer !== deviceId;
+  card.classList.toggle('cfg-hidden', configHidden || filterHidden);
 }
 
 function createCard(deviceId, printer) {
   const card = document.createElement('div');
   card.className = 'printer-card';
   card.id = `card-${deviceId}`;
-  card.addEventListener('click', () => onSelectPrinter?.(deviceId));
   updateCardContent(card, deviceId, printer);
   return card;
 }

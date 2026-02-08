@@ -83,10 +83,133 @@ nav {
 .nav-btn:hover { color: var(--text); background: var(--bg-hover); }
 .nav-btn.active { color: #000; background: var(--accent); border-color: var(--accent); }
 
+/* Config button */
+.config-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-dim);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: var(--radius);
+  line-height: 1;
+  transition: all 0.15s;
+}
+.config-btn:hover { color: var(--text); border-color: var(--border); }
+
+/* Config modal */
+.config-group { margin-bottom: 14px; }
+.config-group h4 {
+  font-size: 11px;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 4px;
+}
+.config-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.config-list label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--text);
+  cursor: pointer;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.config-empty {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+/* Widget visibility utility */
+.cfg-hidden { display: none !important; }
+
 /* Views */
 main { padding: 12px; }
 .view { display: none; }
 .view.active { display: block; }
+
+/* Dashboard two-pane layout */
+.dashboard-filters {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+.dashboard-filters select {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 3px 6px;
+  border-radius: var(--radius);
+  font-size: 11px;
+  font-family: var(--font);
+  text-transform: uppercase;
+}
+.dashboard-filters select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.dashboard-panes {
+  display: flex;
+  height: calc(100vh - 80px);
+  gap: 0;
+}
+
+.dash-pane-left {
+  flex: 1;
+  min-width: 300px;
+  overflow-y: auto;
+}
+
+.dash-pane-right {
+  width: 350px;
+  min-width: 200px;
+  max-width: 60vw;
+  overflow-y: auto;
+  border-left: 1px solid var(--border);
+  padding-left: 8px;
+}
+
+.dash-resize-handle {
+  width: 4px;
+  cursor: col-resize;
+  background: var(--border);
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+.dash-resize-handle:hover,
+.dash-resize-handle.dragging {
+  background: var(--accent);
+}
+
+.dash-events-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--accent);
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.dash-events-table th,
+.dash-events-table td {
+  padding: 3px 6px;
+  font-size: 11px;
+}
+.dash-events-table th {
+  font-size: 9px;
+}
 
 /* Printer Grid */
 .printer-grid {
@@ -101,10 +224,8 @@ main { padding: 12px; }
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 10px 12px;
-  cursor: pointer;
   transition: border-color 0.15s;
 }
-.printer-card:hover { border-color: var(--accent); }
 
 .printer-card .card-header {
   display: flex;
@@ -197,7 +318,7 @@ main { padding: 12px; }
   padding: 12px;
   margin-top: 8px;
 }
-.chart-panel.hidden { display: none; }
+
 
 .chart-header {
   display: flex;
@@ -560,6 +681,9 @@ main { padding: 12px; }
   .printer-grid { grid-template-columns: 1fr; }
   header { padding: 4px 8px; }
   header h1 { font-size: 14px; }
+  .dashboard-panes { flex-direction: column; height: auto; }
+  .dash-pane-right { width: 100% !important; max-width: none; border-left: none; border-top: 1px solid var(--border); padding-left: 0; padding-top: 8px; }
+  .dash-resize-handle { display: none; }
 }
 
 /* uPlot overrides for HamClock theme */
