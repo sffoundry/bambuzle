@@ -1,6 +1,7 @@
 import { renderPrinterCards, updatePrinterCard } from './dashboard.js';
-import { initCharts, loadChartData, destroyCharts, pushLivePoint } from './charts.js';
+import { initCharts, loadChartData, destroyCharts, pushLivePoint, setZoomCallback, highlightEvent } from './charts.js';
 import { initAlertsUI } from './alerts-ui.js';
+import { renderAmsWidget, updateAmsWidget } from './ams-widget.js';
 import { loadConfig, saveConfig, openConfigModal, applyVisibility } from './config-ui.js';
 
 const state = {
@@ -16,13 +17,14 @@ let uiConfig = loadConfig();
 
 // ─── Dashboard Filters ───
 
-const dashFilters = { printer: '', type: '', severity: '' };
+const dashFilters = { printer: '', type: '', severity: '', range: '24h', from: '', to: '' };
 
 // ─── Dashboard Events State ───
 
 let dashEvents = [];
 let dashEventSortCol = 'ts';
 let dashEventSortDir = 'desc';
+let selectedEventTs = null;
 
 // ─── Events View State ───
 
@@ -196,6 +198,7 @@ function handleWsMessage(msg) {
         state.printers[deviceId] = { db: null, live: printerState, connected };
       }
       updatePrinterCard(deviceId, state.printers[deviceId], uiConfig, dashFilters);
+      updateAmsWidget(deviceId, state.printers, dashFilters);
       // Push live data into charts if they're open for this printer
       pushLivePoint(deviceId, printerState);
       break;
@@ -232,12 +235,6 @@ document.querySelectorAll('.nav-btn').forEach((btn) => {
 
 // ─── Chart Panel ───
 
-document.getElementById('chart-range').addEventListener('change', () => {
-  if (state.selectedPrinter) {
-    loadChartData(state.selectedPrinter, document.getElementById('chart-range').value, dashFilters);
-  }
-});
-
 /**
  * Auto-select which printer to chart based on the dashboard printer filter.
  * Falls back to the first available printer when filter is "All Printers".
@@ -258,7 +255,7 @@ function updateChartPrinter() {
   document.getElementById('chart-printer-name').textContent = name;
 
   initCharts();
-  loadChartData(deviceId, document.getElementById('chart-range').value, dashFilters);
+  loadChartData(deviceId, dashFilters.range, dashFilters);
 }
 
 // ─── Events Table ───
@@ -411,6 +408,7 @@ async function loadPrinters() {
       };
     }
     renderPrinterCards(state.printers, uiConfig, dashFilters);
+    renderAmsWidget(state.printers, dashFilters);
     populateDashPrinterFilter();
     loadDashEvents();
     updateChartPrinter();
@@ -433,12 +431,53 @@ function escapeHtml(str) {
 
 export { state, formatTime, escapeHtml };
 
+// ─── Time Range Helpers ───
+
+const TIME_RANGE_SECS = {
+  '5m': 300, '10m': 600, '15m': 900, '30m': 1800,
+  '1h': 3600, '6h': 21600, '24h': 86400, '7d': 604800,
+};
+
+function getEffectiveTimeRange() {
+  if (dashFilters.range === 'custom') {
+    return { from: dashFilters.from, to: dashFilters.to };
+  }
+  const sec = TIME_RANGE_SECS[dashFilters.range] || 86400;
+  return { from: new Date(Date.now() - sec * 1000).toISOString(), to: '' };
+}
+
+function toLocalDatetimeString(d) {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+function onChartZoom(minSec, maxSec) {
+  const fromDate = new Date(minSec * 1000);
+  const toDate = new Date(maxSec * 1000);
+  dashFilters.range = 'custom';
+  dashFilters.from = fromDate.toISOString();
+  dashFilters.to = toDate.toISOString();
+  // Update UI
+  document.getElementById('dash-filter-range').value = 'custom';
+  const fromInput = document.getElementById('dash-filter-from');
+  const toInput = document.getElementById('dash-filter-to');
+  fromInput.classList.remove('hidden');
+  toInput.classList.remove('hidden');
+  fromInput.value = toLocalDatetimeString(fromDate);
+  toInput.value = toLocalDatetimeString(toDate);
+  // Re-render events client-side (zoomed range is subset of loaded data)
+  renderDashEvents();
+}
+
 // ─── Dashboard Filter Bar ───
 
 function initDashFilters() {
   const printerSel = document.getElementById('dash-filter-printer');
   const typeSel = document.getElementById('dash-filter-type');
   const severitySel = document.getElementById('dash-filter-severity');
+  const rangeSel = document.getElementById('dash-filter-range');
+  const fromInput = document.getElementById('dash-filter-from');
+  const toInput = document.getElementById('dash-filter-to');
 
   function onFilterChange() {
     dashFilters.printer = printerSel.value;
@@ -446,9 +485,43 @@ function initDashFilters() {
     dashFilters.severity = severitySel.value;
 
     renderPrinterCards(state.printers, uiConfig, dashFilters);
+    renderAmsWidget(state.printers, dashFilters);
     renderDashEvents();
     updateChartPrinter();
   }
+
+  function onTimeRangeChange() {
+    loadDashEvents();
+    updateChartPrinter();
+  }
+
+  function showCustomPickers(show) {
+    fromInput.classList.toggle('hidden', !show);
+    toInput.classList.toggle('hidden', !show);
+  }
+
+  rangeSel.addEventListener('change', () => {
+    dashFilters.range = rangeSel.value;
+    if (dashFilters.range === 'custom') {
+      showCustomPickers(true);
+      // Don't reload yet — wait for user to set dates
+    } else {
+      showCustomPickers(false);
+      dashFilters.from = '';
+      dashFilters.to = '';
+      onTimeRangeChange();
+    }
+  });
+
+  fromInput.addEventListener('change', () => {
+    dashFilters.from = fromInput.value ? new Date(fromInput.value).toISOString() : '';
+    onTimeRangeChange();
+  });
+
+  toInput.addEventListener('change', () => {
+    dashFilters.to = toInput.value ? new Date(toInput.value).toISOString() : '';
+    onTimeRangeChange();
+  });
 
   printerSel.addEventListener('change', onFilterChange);
   typeSel.addEventListener('change', onFilterChange);
@@ -473,7 +546,11 @@ const DASH_EVENT_COLUMNS = ['ts', 'printer', 'event_type', 'severity', 'message'
 
 async function loadDashEvents() {
   try {
-    const res = await fetch('/api/events?limit=200');
+    const { from, to } = getEffectiveTimeRange();
+    let url = '/api/events?limit=200';
+    if (from) url += `&from=${encodeURIComponent(from)}`;
+    if (to) url += `&to=${encodeURIComponent(to)}`;
+    const res = await fetch(url);
     dashEvents = await res.json();
     renderDashEvents();
   } catch { /* ignore */ }
@@ -489,11 +566,27 @@ function renderDashEvents() {
   const tbody = document.getElementById('dash-events-body');
   if (!tbody) return;
   tbody.innerHTML = '';
+  selectedEventTs = null;
+  highlightEvent(null);
 
   let filtered = dashEvents;
   if (dashFilters.printer) filtered = filtered.filter((e) => e.device_id === dashFilters.printer);
   if (dashFilters.type) filtered = filtered.filter((e) => e.event_type === dashFilters.type);
   if (dashFilters.severity) filtered = filtered.filter((e) => e.severity === dashFilters.severity);
+  if (dashFilters.from) {
+    const fromTs = new Date(dashFilters.from).getTime();
+    filtered = filtered.filter((e) => {
+      const t = new Date(e.ts.endsWith('Z') ? e.ts : e.ts + 'Z').getTime();
+      return t >= fromTs;
+    });
+  }
+  if (dashFilters.to) {
+    const toTs = new Date(dashFilters.to).getTime();
+    filtered = filtered.filter((e) => {
+      const t = new Date(e.ts.endsWith('Z') ? e.ts : e.ts + 'Z').getTime();
+      return t <= toTs;
+    });
+  }
 
   filtered.sort((a, b) => {
     let cmp = 0;
@@ -526,6 +619,18 @@ function renderDashEvents() {
       <td><span class="severity-${evt.severity}">${evt.severity}</span></td>
       <td>${escapeHtml(evt.message || '')}</td>
     `;
+    tr.addEventListener('click', () => {
+      const tsSec = new Date(evt.ts.endsWith('Z') ? evt.ts : evt.ts + 'Z').getTime() / 1000;
+      if (selectedEventTs === tsSec) {
+        selectedEventTs = null;
+        highlightEvent(null);
+      } else {
+        selectedEventTs = tsSec;
+        highlightEvent(tsSec);
+      }
+      tbody.querySelectorAll('tr.dash-event-selected').forEach(r => r.classList.remove('dash-event-selected'));
+      if (selectedEventTs === tsSec) tr.classList.add('dash-event-selected');
+    });
     tbody.appendChild(tr);
   }
 }
@@ -622,6 +727,7 @@ initDashFilters();
 initDashEventSorting();
 initResizeHandle();
 applyVisibility(uiConfig);
+setZoomCallback(onChartZoom);
 
 document.getElementById('config-btn').addEventListener('click', () => {
   openConfigModal(uiConfig, state.printers, (updatedCfg) => {

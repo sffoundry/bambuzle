@@ -140,12 +140,15 @@ function getEvents(deviceId, { limit, from, to } = {}) {
   return getDb().prepare(sql).all(...params);
 }
 
-function getRecentEvents(limit = 100) {
-  return getDb().prepare(`
-    SELECT e.*, p.name as printer_name FROM events e
-    LEFT JOIN printers p ON e.device_id = p.device_id
-    ORDER BY e.ts DESC LIMIT ?
-  `).all(limit);
+function getRecentEvents({ limit = 100, from, to } = {}) {
+  let sql = `SELECT e.*, p.name as printer_name FROM events e
+    LEFT JOIN printers p ON e.device_id = p.device_id WHERE 1=1`;
+  const params = [];
+  if (from) { sql += ' AND e.ts >= datetime(?)'; params.push(from); }
+  if (to) { sql += ' AND e.ts <= datetime(?)'; params.push(to); }
+  sql += ' ORDER BY e.ts DESC';
+  if (limit) { sql += ' LIMIT ?'; params.push(limit); }
+  return getDb().prepare(sql).all(...params);
 }
 
 // ─── Alert Rules ───
@@ -195,6 +198,30 @@ function updateAlertRuleFired(id) {
   getDb().prepare(`UPDATE alert_rules SET last_fired_at = datetime('now') WHERE id = ?`).run(id);
 }
 
+// ─── Auth Tokens ───
+
+function saveAuthToken({ token, refreshToken, userId, expiresAt, region }) {
+  return getDb().prepare(`
+    INSERT INTO auth_tokens (id, token, refresh_token, user_id, expires_at, region, updated_at)
+    VALUES (1, ?, ?, ?, ?, ?, datetime('now'))
+    ON CONFLICT(id) DO UPDATE SET
+      token = excluded.token,
+      refresh_token = excluded.refresh_token,
+      user_id = excluded.user_id,
+      expires_at = excluded.expires_at,
+      region = excluded.region,
+      updated_at = datetime('now')
+  `).run(token, refreshToken || null, userId, expiresAt, region || 'global');
+}
+
+function getAuthToken() {
+  return getDb().prepare('SELECT * FROM auth_tokens WHERE id = 1').get();
+}
+
+function deleteAuthToken() {
+  return getDb().prepare('DELETE FROM auth_tokens WHERE id = 1').run();
+}
+
 // ─── Cleanup ───
 
 function deleteOldSamples(days) {
@@ -230,4 +257,7 @@ module.exports = {
   updateAlertRuleFired,
   deleteOldSamples,
   deleteOldEvents,
+  saveAuthToken,
+  getAuthToken,
+  deleteAuthToken,
 };

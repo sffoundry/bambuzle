@@ -48,21 +48,39 @@ function extractPrinterState(merged) {
   const p = merged.print || {};
 
   // Decode dual-nozzle temps from extruder.info (H2D and similar)
+  // Top-level nozzle temps are the freshest source when present
   let nozzleTemp = p.nozzle_temper ?? null;
   let nozzleTarget = p.nozzle_target_temper ?? null;
   let nozzle2Temp = null;
   let nozzle2Target = null;
   let extruderCount = 1;
 
-  const extruderInfo = p.extruder?.info;
+  // Multi-path lookup: extruder.info lives at different paths depending on printer/firmware
+  const extruderInfo =
+    p.extruder?.info ||                  // merged.print.extruder.info (original path)
+    p.device?.extruder?.info ||          // merged.print.device.extruder.info
+    merged.device?.extruder?.info ||     // merged.device.extruder.info (top-level)
+    null;
+
+  // Extruder count from extruder.state bitmask (bits 0-3 = count)
+  const extruderState =
+    p.extruder?.state ?? p.device?.extruder?.state ?? merged.device?.extruder?.state ?? null;
+  if (extruderState != null) {
+    const count = extruderState & 0xF;
+    if (count > 0) extruderCount = count;
+  }
+
   if (Array.isArray(extruderInfo) && extruderInfo.length > 0) {
-    extruderCount = extruderInfo.length;
-    // Each entry has a temp field: packed as (target << 16) | current
+    if (extruderInfo.length > extruderCount) extruderCount = extruderInfo.length;
+
+    // Nozzle 1: use packed temp only as fallback (top-level nozzle_temper is fresher)
     const e0 = extruderInfo[0];
     if (e0 && e0.temp != null) {
-      nozzleTemp = e0.temp & 0xFFFF;
-      nozzleTarget = (e0.temp >> 16) & 0xFFFF;
+      if (nozzleTemp == null) nozzleTemp = e0.temp & 0xFFFF;
+      if (nozzleTarget == null) nozzleTarget = (e0.temp >> 16) & 0xFFFF;
     }
+
+    // Nozzle 2: always from packed (no top-level field exists for nozzle 2)
     if (extruderInfo.length > 1) {
       const e1 = extruderInfo[1];
       if (e1 && e1.temp != null) {

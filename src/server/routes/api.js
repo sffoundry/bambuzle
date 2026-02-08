@@ -85,10 +85,27 @@ function createApiRouter(printerManager) {
     res.json({ ok: sent });
   });
 
+  // GET /api/printers/:id/debug/mqtt — raw MQTT merged state for diagnostics
+  router.get('/printers/:id/debug/mqtt', (req, res) => {
+    const client = printerManager.getClient(req.params.id);
+    if (!client) {
+      return res.status(404).json({ error: 'Printer not found or not connected' });
+    }
+    res.json({
+      deviceId: req.params.id,
+      connected: client.connected,
+      mergedState: client.mergedState,
+    });
+  });
+
   // GET /api/events — recent events across all printers
   router.get('/events', (req, res) => {
-    const limit = req.query.limit ? parseInt(req.query.limit, 10) : 100;
-    const events = queries.getRecentEvents(limit);
+    const { limit, from, to } = req.query;
+    const events = queries.getRecentEvents({
+      limit: limit ? parseInt(limit, 10) : 100,
+      from: from || undefined,
+      to: to || undefined,
+    });
     res.json(events);
   });
 

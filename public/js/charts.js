@@ -2,9 +2,16 @@ let tempChart = null;
 let progressChart = null;
 let currentDeviceId = null;
 let currentRange = '24h';
+let currentFilters = null;
 
 // Live data buffers — appended from WebSocket, merged with DB data on load
 let liveBuffer = []; // { ts, nozzle_temp, nozzle_target, bed_temp, bed_target, chamber_temp, progress, layer_num }
+
+// Zoom sync state
+let zoomCallback = null;
+let highlightedEventTs = null;
+export function setZoomCallback(cb) { zoomCallback = cb; }
+let _syncingZoom = false;
 
 const COLORS = {
   nozzle: '#ff3333',
@@ -45,6 +52,20 @@ function eventsPlugin(events) {
           ctx.lineTo(x, top + height);
           ctx.stroke();
           ctx.restore();
+
+          if (highlightedEventTs != null && Math.abs(ts - highlightedEventTs) < 0.5) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.globalAlpha = 1.0;
+            ctx.shadowColor = color;
+            ctx.shadowBlur = 6;
+            ctx.moveTo(x, top);
+            ctx.lineTo(x, top + height);
+            ctx.stroke();
+            ctx.restore();
+          }
         }
       }],
     },
@@ -67,14 +88,22 @@ export function destroyCharts() {
 export async function loadChartData(deviceId, range, filters) {
   currentDeviceId = deviceId;
   currentRange = range;
+  currentFilters = filters;
   liveBuffer = [];
 
-  const from = rangeToIso(range);
+  let from;
+  if (range === 'custom' && filters?.from) {
+    from = filters.from;
+  } else {
+    from = rangeToIso(range);
+  }
 
   try {
+    const toParam = (range === 'custom' && filters?.to) ? `&to=${encodeURIComponent(filters.to)}` : '';
+    const fromParam = encodeURIComponent(from);
     const [samplesRes, eventsRes] = await Promise.all([
-      fetch(`/api/printers/${deviceId}/history?from=${from}&limit=10000`),
-      fetch(`/api/printers/${deviceId}/events?from=${from}&limit=500`),
+      fetch(`/api/printers/${deviceId}/history?from=${fromParam}&limit=10000${toParam}`),
+      fetch(`/api/printers/${deviceId}/events?from=${fromParam}&limit=500${toParam}`),
     ]);
 
     const samples = await samplesRes.json();
@@ -159,10 +188,12 @@ export function pushLivePoint(deviceId, state) {
     tempChart.data[5].push(state.chamberTemp);
   }
 
-  // Trim old points outside current range window
-  const cutoff = nowSec - rangeSec(currentRange);
-  while (tempChart.data[0].length > 1 && tempChart.data[0][0] < cutoff) {
-    for (const arr of tempChart.data) arr.shift();
+  // Trim old points outside current range window (skip for custom range)
+  const cutoff = currentRange === 'custom' ? 0 : nowSec - rangeSec(currentRange);
+  if (cutoff > 0) {
+    while (tempChart.data[0].length > 1 && tempChart.data[0][0] < cutoff) {
+      for (const arr of tempChart.data) arr.shift();
+    }
   }
 
   updateChartData(tempChart, tempChart.data);
@@ -173,8 +204,10 @@ export function pushLivePoint(deviceId, state) {
     progressChart.data[1].push(state.progress);
     progressChart.data[2].push(state.layerNum);
 
-    while (progressChart.data[0].length > 1 && progressChart.data[0][0] < cutoff) {
-      for (const arr of progressChart.data) arr.shift();
+    if (cutoff > 0) {
+      while (progressChart.data[0].length > 1 && progressChart.data[0][0] < cutoff) {
+        for (const arr of progressChart.data) arr.shift();
+      }
     }
 
     updateChartData(progressChart, progressChart.data);
@@ -230,6 +263,16 @@ function renderTempChart(samples, events) {
     width,
     height: 240,
     plugins: [eventsPlugin(events)],
+    hooks: {
+      setScale: [(u, key) => {
+        if (key !== 'x' || _syncingZoom) return;
+        _syncingZoom = true;
+        const { min, max } = u.scales.x;
+        if (progressChart) progressChart.setScale('x', { min, max });
+        if (zoomCallback) zoomCallback(min, max);
+        _syncingZoom = false;
+      }],
+    },
     cursor: { show: true, drag: { x: true, y: false } },
     scales: { x: { time: true }, y: { auto: true } },
     axes: [
@@ -260,6 +303,16 @@ function renderProgressChart(samples, events) {
     width,
     height: 180,
     plugins: [eventsPlugin(events)],
+    hooks: {
+      setScale: [(u, key) => {
+        if (key !== 'x' || _syncingZoom) return;
+        _syncingZoom = true;
+        const { min, max } = u.scales.x;
+        if (tempChart) tempChart.setScale('x', { min, max });
+        if (zoomCallback) zoomCallback(min, max);
+        _syncingZoom = false;
+      }],
+    },
     cursor: { show: true, drag: { x: true, y: false } },
     scales: {
       x: { time: true },
@@ -284,6 +337,12 @@ function renderProgressChart(samples, events) {
 function rangeToIso(range) {
   const now = new Date();
   return new Date(now.getTime() - rangeSec(range) * 1000).toISOString();
+}
+
+export function highlightEvent(ts) {
+  highlightedEventTs = ts;
+  if (tempChart) tempChart.redraw(false, false);
+  if (progressChart) progressChart.redraw(false, false);
 }
 
 function rangeSec(range) {

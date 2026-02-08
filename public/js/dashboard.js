@@ -79,6 +79,14 @@ function updateCardContent(card, deviceId, printer) {
   const totalLayers = live.totalLayers != null ? ` / ${live.totalLayers}` : '';
   const eta = live.remainingMin != null ? formatDuration(live.remainingMin) : '--';
   const wifi = live.wifiSignal != null ? `${live.wifiSignal} dBm` : '--';
+
+  // Speed level
+  const SPEED_NAMES = { 1: 'Silent', 2: 'Standard', 3: 'Sport', 4: 'Ludicrous' };
+  const speed = live.speedLevel != null ? (SPEED_NAMES[live.speedLevel] || `Lvl ${live.speedLevel}`) : '--';
+  const partFan = live.partFanSpeed != null ? `${live.partFanSpeed}%` : '--';
+  const auxFan = live.auxFanSpeed != null ? `${live.auxFanSpeed}%` : '--';
+  const chamberFan = live.chamberFanSpeed != null ? `${live.chamberFanSpeed}%` : '--';
+
   const file = live.subtaskName || live.gcodeFile || '';
 
   const nozzleRows = isDual
@@ -99,6 +107,10 @@ function updateCardContent(card, deviceId, printer) {
       <div class="stat"><span class="stat-label">Layer</span><span class="stat-value">${layer}${totalLayers}</span></div>
       <div class="stat"><span class="stat-label">ETA</span><span class="stat-value">${eta}</span></div>
       <div class="stat"><span class="stat-label">WiFi</span><span class="stat-value">${wifi}</span></div>
+      <div class="stat"><span class="stat-label">Speed</span><span class="stat-value">${speed}</span></div>
+      <div class="stat"><span class="stat-label">Part Fan</span><span class="stat-value">${partFan}</span></div>
+      <div class="stat"><span class="stat-label">Aux Fan</span><span class="stat-value">${auxFan}</span></div>
+      <div class="stat"><span class="stat-label">Cham Fan</span><span class="stat-value">${chamberFan}</span></div>
     </div>
     ${progress != null ? `
     <div class="progress-bar-container">

@@ -86,6 +86,18 @@ function runMigrations(database) {
   try { database.exec(`ALTER TABLE samples ADD COLUMN nozzle2_target REAL`); } catch { /* already exists */ }
 
   database.exec(`
+    CREATE TABLE IF NOT EXISTS auth_tokens (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      token TEXT NOT NULL,
+      refresh_token TEXT,
+      user_id TEXT NOT NULL,
+      expires_at INTEGER NOT NULL,
+      region TEXT NOT NULL DEFAULT 'global',
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
+
+  database.exec(`
     CREATE TABLE IF NOT EXISTS alert_rules (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,

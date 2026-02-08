@@ -35,6 +35,21 @@ const BAMBU_LOGIN_URL = `${BAMBU_API_BASE}/v1/user-service/user/login`;
 const BAMBU_TOKEN_URL = `${BAMBU_API_BASE}/v1/user-service/user/refreshtoken`;
 const BAMBU_DEVICES_URL = `${BAMBU_API_BASE}/v1/iot-service/api/user/bind`;
 const BAMBU_USER_INFO_URL = `${BAMBU_API_BASE}/v1/design-user-service/my/preference`;
+const BAMBU_SEND_CODE_URL = `${BAMBU_API_BASE}/v1/user-service/user/sendemail/code`;
+const BAMBU_PROFILE_URL = `${BAMBU_API_BASE}/v1/user-service/my/profile`;
+
+const BAMBU_CLIENT_HEADERS = {
+  'User-Agent': 'bambu_network_agent/01.09.05.01',
+  'X-BBL-Client-Name': 'OrcaSlicer',
+  'X-BBL-Client-Type': 'slicer',
+  'X-BBL-Client-Version': '01.09.05.51',
+  'X-BBL-Language': 'en-US',
+  'X-BBL-OS-Type': 'linux',
+  'X-BBL-OS-Version': '6.2.0',
+  'X-BBL-Agent-Version': '01.09.05.01',
+  'X-BBL-Executable-info': '{}',
+  'X-BBL-Agent-OS-Type': 'linux',
+};
 
 const PUSHALL_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes minimum between pushall
 
@@ -48,5 +63,8 @@ module.exports = {
   BAMBU_TOKEN_URL,
   BAMBU_DEVICES_URL,
   BAMBU_USER_INFO_URL,
+  BAMBU_SEND_CODE_URL,
+  BAMBU_PROFILE_URL,
+  BAMBU_CLIENT_HEADERS,
   PUSHALL_INTERVAL_MS,
 };
