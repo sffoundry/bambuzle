@@ -10,6 +10,7 @@
 
 | Developer | Feature | Branch | Completed | Notes |
 |-----------|---------|--------|-----------|-------|
+| Steven + Claude | Fix chart zoom overriding preset time range filters | main | 2026-02-07 | v0.4.1 |
 | Steven + Claude | Time range filters, chart zoom sync, auth persistence, AMS widget, fan/speed stats | main | 2026-02-07 | v0.4.0 |
 | Steven + Claude | Config modal, dashboard events widget, global filters, chart bug fixes | main | 2026-02-07 | v0.3.0 |
 | Steven + Claude | H2D dual nozzle + event sorting/filtering | main | 2026-02-06 | v0.2.0 |

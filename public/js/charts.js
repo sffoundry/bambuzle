@@ -269,7 +269,13 @@ function renderTempChart(samples, events) {
         _syncingZoom = true;
         const { min, max } = u.scales.x;
         if (progressChart) progressChart.setScale('x', { min, max });
-        if (zoomCallback) zoomCallback(min, max);
+        // Only notify app when user actually zoomed in, not on initial render
+        if (zoomCallback) {
+          const ts = u.data[0];
+          if (ts.length >= 2 && (min > ts[0] + 5 || max < ts[ts.length - 1] - 5)) {
+            zoomCallback(min, max);
+          }
+        }
         _syncingZoom = false;
       }],
     },
@@ -309,7 +315,13 @@ function renderProgressChart(samples, events) {
         _syncingZoom = true;
         const { min, max } = u.scales.x;
         if (tempChart) tempChart.setScale('x', { min, max });
-        if (zoomCallback) zoomCallback(min, max);
+        // Only notify app when user actually zoomed in, not on initial render
+        if (zoomCallback) {
+          const ts = u.data[0];
+          if (ts.length >= 2 && (min > ts[0] + 5 || max < ts[ts.length - 1] - 5)) {
+            zoomCallback(min, max);
+          }
+        }
         _syncingZoom = false;
       }],
     },
