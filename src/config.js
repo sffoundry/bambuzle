@@ -49,6 +49,22 @@ const config = {
   mqtt: {
     broker: fileConfig.mqtt?.broker || null, // null = use default from constants
   },
+
+  // Anomaly detection thresholds
+  anomaly: {
+    deviationDeg: {
+      nozzle: fileConfig.anomaly?.deviationDeg?.nozzle ?? 8,
+      nozzle2: fileConfig.anomaly?.deviationDeg?.nozzle2 ?? 8,
+      bed: fileConfig.anomaly?.deviationDeg?.bed ?? 5,
+      chamber: fileConfig.anomaly?.deviationDeg?.chamber ?? 10,
+    },
+    rateDegPerSec: {
+      nozzle: fileConfig.anomaly?.rateDegPerSec?.nozzle ?? 2.0,
+      nozzle2: fileConfig.anomaly?.rateDegPerSec?.nozzle2 ?? 2.0,
+      bed: fileConfig.anomaly?.rateDegPerSec?.bed ?? 0.5,
+      chamber: fileConfig.anomaly?.rateDegPerSec?.chamber ?? 0.3,
+    },
+  },
 };
 
 module.exports = config;

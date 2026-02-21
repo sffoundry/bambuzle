@@ -47,6 +47,24 @@ function createApiRouter(printerManager) {
     res.json(events);
   });
 
+  // GET /api/printers/:id/jobs/:jobId/layers — layer transitions for a job
+  router.get('/printers/:id/jobs/:jobId/layers', (req, res) => {
+    const layers = queries.getLayerTransitions(parseInt(req.params.jobId, 10));
+    res.json(layers);
+  });
+
+  // GET /api/printers/:id/jobs/:jobId/anomalies — temp anomalies for a job
+  router.get('/printers/:id/jobs/:jobId/anomalies', (req, res) => {
+    const anomalies = queries.getTempAnomalies(parseInt(req.params.jobId, 10));
+    res.json(anomalies);
+  });
+
+  // GET /api/printers/:id/jobs/:jobId/pauses — pause records for a job
+  router.get('/printers/:id/jobs/:jobId/pauses', (req, res) => {
+    const pauses = queries.getJobPauses(parseInt(req.params.jobId, 10));
+    res.json(pauses);
+  });
+
   // GET /api/printers/:id/jobs — print job history
   router.get('/printers/:id/jobs', (req, res) => {
     const limit = req.query.limit ? parseInt(req.query.limit, 10) : 50;

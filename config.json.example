@@ -12,5 +12,19 @@
   },
   "log": {
     "level": "info"
+  },
+  "anomaly": {
+    "deviationDeg": {
+      "nozzle": 8,
+      "nozzle2": 8,
+      "bed": 5,
+      "chamber": 10
+    },
+    "rateDegPerSec": {
+      "nozzle": 2.0,
+      "nozzle2": 2.0,
+      "bed": 0.5,
+      "chamber": 0.3
+    }
   }
 }

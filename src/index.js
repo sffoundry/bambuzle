@@ -13,6 +13,7 @@ const queries = require('./db/queries');
 const { createApp } = require('./server/app');
 const { createWebSocket, broadcast, closeWebSocket } = require('./server/websocket');
 const { AlertEngine } = require('./alerts/engine');
+const { AnomalyDetector } = require('./anomaly/detector');
 
 const log = pino({ level: config.log.level });
 
@@ -23,6 +24,7 @@ const liveStates = {};    // deviceId -> extracted state
 const lastSampleTs = {};  // deviceId -> timestamp of last sample write
 let currentAuth = null;
 let alertEngine = null;
+let anomalyDetector = null;
 let cronJobs = [];
 
 const printerManager = {
@@ -43,6 +45,9 @@ async function main() {
   // Alert engine
   alertEngine = new AlertEngine(log);
   alertEngine.ensureDefaults();
+
+  // Anomaly detector
+  anomalyDetector = new AnomalyDetector(log, config);
 
   // Start HTTP server unconditionally so the dashboard is always reachable
   const app = createApp(printerManager, { onAuthenticated });
@@ -153,7 +158,16 @@ function startCronJobs(auth) {
     log.info({ days }, 'Running data retention cleanup');
     const samplesDeleted = queries.deleteOldSamples(days);
     const eventsDeleted = queries.deleteOldEvents(days);
-    log.info({ samplesDeleted: samplesDeleted.changes, eventsDeleted: eventsDeleted.changes }, 'Cleanup complete');
+    const layersDeleted = queries.deleteOldLayerTransitions(days);
+    const anomaliesDeleted = queries.deleteOldTempAnomalies(days);
+    const pausesDeleted = queries.deleteOldJobPauses(days);
+    log.info({
+      samplesDeleted: samplesDeleted.changes,
+      eventsDeleted: eventsDeleted.changes,
+      layersDeleted: layersDeleted.changes,
+      anomaliesDeleted: anomaliesDeleted.changes,
+      pausesDeleted: pausesDeleted.changes,
+    }, 'Cleanup complete');
   });
 
   const tokenRefreshJob = new Cron('0 */12 * * *', async () => {
@@ -189,10 +203,14 @@ function connectPrinter(device, auth) {
 
     broadcast('state', { deviceId, state, connected: true });
     handleJobTransition(deviceId, state, prevState);
-    maybeSample(deviceId, state);
+
+    const activeJob = queries.getActiveJob(deviceId);
+    maybeSample(deviceId, state, activeJob);
+    anomalyDetector.checkLayerTransition(deviceId, state, activeJob);
+    anomalyDetector.checkTemperatureAnomalies(deviceId, state, activeJob);
 
     if (state.hmsErrors?.length > 0) {
-      handleHmsErrors(deviceId, state.hmsErrors);
+      handleHmsErrors(deviceId, state.hmsErrors, activeJob);
     }
 
     const printer = queries.getPrinter(deviceId);
@@ -247,7 +265,16 @@ function handleJobTransition(deviceId, state, prevState) {
         gcodeFile: state.gcodeFile,
       });
       log.info({ deviceId, jobId }, 'New print job started');
+      anomalyDetector.resetDevice(deviceId);
     }
+  }
+
+  // Pause/resume detection
+  if (curr === GCODE_STATE.PAUSE && prev === GCODE_STATE.RUNNING) {
+    anomalyDetector.handlePause(deviceId, state);
+  }
+  if (curr === GCODE_STATE.RUNNING && prev === GCODE_STATE.PAUSE) {
+    anomalyDetector.handleResume(deviceId);
   }
 
   if ((prev === GCODE_STATE.RUNNING || prev === GCODE_STATE.PAUSE) &&
@@ -261,7 +288,7 @@ function handleJobTransition(deviceId, state, prevState) {
 
 // ─── Sampling ───
 
-function maybeSample(deviceId, state) {
+function maybeSample(deviceId, state, activeJob) {
   const now = Date.now();
   const last = lastSampleTs[deviceId] || 0;
   const isActive = state.gcodeState === GCODE_STATE.RUNNING || state.gcodeState === GCODE_STATE.PREPARE;
@@ -272,7 +299,6 @@ function maybeSample(deviceId, state) {
   if (now - last < interval) return;
   lastSampleTs[deviceId] = now;
 
-  const activeJob = queries.getActiveJob(deviceId);
   queries.insertSample({
     deviceId,
     jobId: activeJob?.id || null,
@@ -300,14 +326,13 @@ function maybeSample(deviceId, state) {
 
 const recentHmsCodes = {};
 
-function handleHmsErrors(deviceId, hmsRaw) {
+function handleHmsErrors(deviceId, hmsRaw, activeJob) {
   const parsed = parseHmsErrors(hmsRaw);
   const prev = recentHmsCodes[deviceId] || new Set();
   const current = new Set(parsed.map((e) => e.key));
 
   for (const entry of parsed) {
     if (!prev.has(entry.key)) {
-      const activeJob = queries.getActiveJob(deviceId);
       queries.insertEvent({
         deviceId,
         jobId: activeJob?.id || null,
@@ -329,6 +354,10 @@ function handleHmsErrors(deviceId, hmsRaw) {
   }
 
   recentHmsCodes[deviceId] = current;
+
+  if (parsed.length > 0) {
+    anomalyDetector.trackJobHmsErrors(deviceId, parsed, activeJob);
+  }
 }
 
 // ─── Start ───

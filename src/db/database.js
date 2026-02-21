@@ -85,6 +85,64 @@ function runMigrations(database) {
   try { database.exec(`ALTER TABLE samples ADD COLUMN nozzle2_temp REAL`); } catch { /* already exists */ }
   try { database.exec(`ALTER TABLE samples ADD COLUMN nozzle2_target REAL`); } catch { /* already exists */ }
 
+  // ─── Anomaly data collection tables ───
+
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS layer_transitions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      device_id TEXT NOT NULL REFERENCES printers(device_id),
+      job_id INTEGER REFERENCES print_jobs(id),
+      layer_num INTEGER NOT NULL,
+      ts TEXT NOT NULL DEFAULT (datetime('now')),
+      duration_sec REAL,
+      nozzle_temp REAL,
+      nozzle_target REAL,
+      bed_temp REAL,
+      bed_target REAL,
+      chamber_temp REAL,
+      speed_level INTEGER,
+      progress REAL
+    );
+    CREATE INDEX IF NOT EXISTS idx_layer_trans_job ON layer_transitions(job_id);
+    CREATE INDEX IF NOT EXISTS idx_layer_trans_device_ts ON layer_transitions(device_id, ts);
+
+    CREATE TABLE IF NOT EXISTS temp_anomalies (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      device_id TEXT NOT NULL REFERENCES printers(device_id),
+      job_id INTEGER REFERENCES print_jobs(id),
+      ts TEXT NOT NULL DEFAULT (datetime('now')),
+      sensor TEXT NOT NULL,
+      actual_temp REAL NOT NULL,
+      target_temp REAL,
+      deviation REAL,
+      rate_of_change REAL,
+      layer_num INTEGER,
+      anomaly_type TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_temp_anom_job ON temp_anomalies(job_id);
+    CREATE INDEX IF NOT EXISTS idx_temp_anom_device_ts ON temp_anomalies(device_id, ts);
+
+    CREATE TABLE IF NOT EXISTS job_pauses (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      device_id TEXT NOT NULL REFERENCES printers(device_id),
+      job_id INTEGER NOT NULL REFERENCES print_jobs(id),
+      paused_at TEXT NOT NULL DEFAULT (datetime('now')),
+      resumed_at TEXT,
+      pause_source TEXT,
+      layer_num INTEGER,
+      progress REAL,
+      hms_codes TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_job_pauses_job ON job_pauses(job_id);
+  `);
+
+  // Add anomaly columns to print_jobs
+  try { database.exec('ALTER TABLE print_jobs ADD COLUMN pause_count INTEGER NOT NULL DEFAULT 0'); } catch { /* already exists */ }
+  try { database.exec('ALTER TABLE print_jobs ADD COLUMN total_pause_sec REAL NOT NULL DEFAULT 0'); } catch { /* already exists */ }
+  try { database.exec('ALTER TABLE print_jobs ADD COLUMN anomaly_count INTEGER NOT NULL DEFAULT 0'); } catch { /* already exists */ }
+  try { database.exec('ALTER TABLE print_jobs ADD COLUMN hms_codes TEXT'); } catch { /* already exists */ }
+  try { database.exec('ALTER TABLE print_jobs ADD COLUMN total_layers INTEGER'); } catch { /* already exists */ }
+
   database.exec(`
     CREATE TABLE IF NOT EXISTS auth_tokens (
       id INTEGER PRIMARY KEY CHECK (id = 1),
