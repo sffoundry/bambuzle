@@ -3,7 +3,7 @@
 
 const STORAGE_KEY = 'bambuzle_widget_config';
 
-const DEFAULTS = { printers: {}, tempChart: true, progressChart: true, eventsWidget: true, amsWidget: true };
+const DEFAULTS = { printers: {}, tempChart: true, eventsWidget: true, amsWidget: true };
 
 export function loadConfig() {
   try {
@@ -30,14 +30,10 @@ export function isPrinterVisible(cfg, deviceId) {
 
 export function applyVisibility(cfg) {
   const chartPanel = document.getElementById('chart-panel');
-  const tempChart = document.getElementById('temp-chart');
-  const progressChart = document.getElementById('progress-chart');
   const dashRight = document.getElementById('dash-right');
   const dashResize = document.getElementById('dash-resize');
   const amsWidget = document.getElementById('ams-widget');
-  if (chartPanel) chartPanel.classList.toggle('cfg-hidden', !cfg.tempChart && !cfg.progressChart);
-  if (tempChart) tempChart.classList.toggle('cfg-hidden', !cfg.tempChart);
-  if (progressChart) progressChart.classList.toggle('cfg-hidden', !cfg.progressChart);
+  if (chartPanel) chartPanel.classList.toggle('cfg-hidden', !cfg.tempChart);
   // Hide right pane only if both events and AMS are hidden
   const rightPaneHidden = !cfg.eventsWidget && !cfg.amsWidget;
   if (dashRight) dashRight.classList.toggle('cfg-hidden', rightPaneHidden);
@@ -76,7 +72,7 @@ export function openConfigModal(cfg, printers, onChanged) {
 
   // ── Chart toggles ──
   chartsList.innerHTML = '';
-  for (const [key, label] of [['tempChart', 'Temperature Chart'], ['progressChart', 'Progress Chart'], ['eventsWidget', 'Events Widget'], ['amsWidget', 'AMS Widget']]) {
+  for (const [key, label] of [['tempChart', 'Temperature Chart'], ['eventsWidget', 'Events Widget'], ['amsWidget', 'AMS Widget']]) {
     const el = document.createElement('label');
     el.innerHTML = `
       <span class="toggle">

@@ -2,10 +2,34 @@ export function renderPrinterCards(printers, config, dashFilters) {
   const container = document.getElementById('printer-cards');
   container.innerHTML = '';
 
+  const total = Object.keys(printers).length;
+
+  if (total === 0) {
+    container.innerHTML = `
+      <div class="printer-card" style="text-align: center; color: var(--text-dim); cursor: default;">
+        <p>No printers found. Check your BambuLab credentials in .env</p>
+      </div>
+    `;
+    return;
+  }
+
+  // No printer selected (initial state) — show prompt
+  const filterVal = dashFilters?.printer;
+  if (!filterVal) {
+    container.innerHTML = `
+      <div class="printer-card" style="text-align: center; color: var(--text-dim); cursor: default;">
+        <p>Select a printer from the dropdown above</p>
+      </div>
+    `;
+    return;
+  }
+
+  const showAll = filterVal === '__all__';
+
   let visibleCount = 0;
   for (const [deviceId, printer] of Object.entries(printers)) {
     const configVisible = config ? config.printers[deviceId] !== false : true;
-    const filterVisible = !dashFilters || !dashFilters.printer || dashFilters.printer === deviceId;
+    const filterVisible = showAll || filterVal === deviceId;
     const visible = configVisible && filterVisible;
     if (visible) visibleCount++;
     const card = createCard(deviceId, printer);
@@ -13,14 +37,7 @@ export function renderPrinterCards(printers, config, dashFilters) {
     container.appendChild(card);
   }
 
-  const total = Object.keys(printers).length;
-  if (total === 0) {
-    container.innerHTML = `
-      <div class="printer-card" style="text-align: center; color: var(--text-dim); cursor: default;">
-        <p>No printers found. Check your BambuLab credentials in .env</p>
-      </div>
-    `;
-  } else if (visibleCount === 0) {
+  if (visibleCount === 0) {
     const placeholder = document.createElement('div');
     placeholder.className = 'printer-card config-placeholder';
     placeholder.style.cssText = 'text-align: center; color: var(--text-dim); cursor: default;';
@@ -47,7 +64,8 @@ export function updatePrinterCard(deviceId, printer, config, dashFilters) {
 
   // Apply visibility from config and dashboard filters
   const configHidden = config ? config.printers[deviceId] === false : false;
-  const filterHidden = dashFilters && dashFilters.printer && dashFilters.printer !== deviceId;
+  const fp = dashFilters?.printer;
+  const filterHidden = !fp || (fp !== '__all__' && fp !== deviceId);
   card.classList.toggle('cfg-hidden', configHidden || filterHidden);
 }
 
@@ -57,6 +75,31 @@ function createCard(deviceId, printer) {
   card.id = `card-${deviceId}`;
   updateCardContent(card, deviceId, printer);
   return card;
+}
+
+function renderSemiGauge(value, max, label, sublabel, color) {
+  const pct = max > 0 ? Math.min(value / max, 1) : 0;
+  const radius = 40;
+  const circumference = Math.PI * radius; // semicircle
+  const offset = circumference * (1 - pct);
+
+  return `
+    <div class="semi-gauge">
+      <svg viewBox="0 0 100 60" class="semi-gauge-svg">
+        <path d="M 10 55 A 40 40 0 0 1 90 55"
+              fill="none" stroke="var(--border)" stroke-width="6"
+              stroke-linecap="round"/>
+        <path d="M 10 55 A 40 40 0 0 1 90 55"
+              fill="none" stroke="${color}" stroke-width="6"
+              stroke-linecap="round"
+              stroke-dasharray="${circumference}"
+              stroke-dashoffset="${offset}"
+              class="semi-gauge-fill"/>
+      </svg>
+      <div class="semi-gauge-value">${label}</div>
+      <div class="semi-gauge-label">${sublabel}</div>
+    </div>
+  `;
 }
 
 function updateCardContent(card, deviceId, printer) {
@@ -94,6 +137,22 @@ function updateCardContent(card, deviceId, printer) {
       <div class="stat"><span class="stat-label">Nozzle R</span><span class="stat-value">${nozzle2}${nozzle2Target}</span></div>`
     : `<div class="stat"><span class="stat-label">Nozzle</span><span class="stat-value">${nozzle}${nozzleTarget}</span></div>`;
 
+  const isRunning = gcodeState === 'RUNNING' || gcodeState === 'PREPARE' || gcodeState === 'PAUSE';
+  const gaugeHtml = isRunning ? `
+    <div class="gauge-section">
+      <div class="gauge-row">
+        ${renderSemiGauge(progress || 0, 100, `${progress || 0}%`, 'PROGRESS', '#00cc66')}
+        ${renderSemiGauge(live.layerNum || 0, live.totalLayers || 1,
+          `${layer}${totalLayers}`, 'LAYER', '#00ff44')}
+      </div>
+      <div class="gauge-eta">
+        <span class="gauge-eta-icon">&#9202;</span>
+        <span class="gauge-eta-value">${eta}</span> remaining
+        ${file ? `<div class="gauge-file">${escapeHtml(file)}</div>` : ''}
+      </div>
+    </div>
+  ` : (file ? `<div class="card-file">${escapeHtml(file)}</div>` : '');
+
   card.innerHTML = `
     <div class="card-header">
       <span class="printer-name">${escapeHtml(db.name || deviceId)}</span>
@@ -104,20 +163,13 @@ function updateCardContent(card, deviceId, printer) {
       ${nozzleRows}
       <div class="stat"><span class="stat-label">Bed</span><span class="stat-value">${bed}${bedTarget}</span></div>
       <div class="stat"><span class="stat-label">Chamber</span><span class="stat-value">${chamber}</span></div>
-      <div class="stat"><span class="stat-label">Layer</span><span class="stat-value">${layer}${totalLayers}</span></div>
-      <div class="stat"><span class="stat-label">ETA</span><span class="stat-value">${eta}</span></div>
       <div class="stat"><span class="stat-label">WiFi</span><span class="stat-value">${wifi}</span></div>
       <div class="stat"><span class="stat-label">Speed</span><span class="stat-value">${speed}</span></div>
       <div class="stat"><span class="stat-label">Part Fan</span><span class="stat-value">${partFan}</span></div>
       <div class="stat"><span class="stat-label">Aux Fan</span><span class="stat-value">${auxFan}</span></div>
       <div class="stat"><span class="stat-label">Cham Fan</span><span class="stat-value">${chamberFan}</span></div>
     </div>
-    ${progress != null ? `
-    <div class="progress-bar-container">
-      <div class="progress-bar" style="width: ${progress}%"></div>
-    </div>
-    <div class="card-file">${progress}% — ${escapeHtml(file)}</div>
-    ` : file ? `<div class="card-file">${escapeHtml(file)}</div>` : ''}
+    ${gaugeHtml}
   `;
 }
 

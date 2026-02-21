@@ -240,8 +240,18 @@ document.querySelectorAll('.nav-btn').forEach((btn) => {
  * Falls back to the first available printer when filter is "All Printers".
  */
 function updateChartPrinter() {
-  const printerIds = Object.keys(state.printers);
-  const deviceId = dashFilters.printer || printerIds[0];
+  const filterVal = document.getElementById('dash-filter-printer').value;
+
+  // No printer selected — clear charts
+  if (!filterVal) {
+    state.selectedPrinter = null;
+    destroyCharts();
+    document.getElementById('chart-printer-name').textContent = '';
+    return;
+  }
+
+  // "All Printers" — chart first available printer
+  const deviceId = filterVal === '__all__' ? Object.keys(state.printers)[0] : filterVal;
 
   if (!deviceId) {
     state.selectedPrinter = null;
@@ -407,11 +417,13 @@ async function loadPrinters() {
         connected: p.connected,
       };
     }
+    populateDashPrinterFilter();
     renderPrinterCards(state.printers, uiConfig, dashFilters);
     renderAmsWidget(state.printers, dashFilters);
-    populateDashPrinterFilter();
     loadDashEvents();
-    updateChartPrinter();
+    // Don't auto-select a printer — wait for user to choose from dropdown
+    const sel = document.getElementById('dash-filter-printer');
+    if (sel.value && sel.value !== '') updateChartPrinter();
   } catch { /* ignore */ }
 }
 
@@ -531,13 +543,17 @@ function initDashFilters() {
 function populateDashPrinterFilter() {
   const sel = document.getElementById('dash-filter-printer');
   const current = sel.value;
-  const opts = ['<option value="">All Printers</option>'];
+  const opts = [
+    '<option value="" disabled>Select a printer...</option>',
+    '<option value="__all__">All Printers</option>',
+  ];
   for (const [deviceId, printer] of Object.entries(state.printers)) {
     const name = printer.db?.name || deviceId;
     opts.push(`<option value="${escapeHtml(deviceId)}">${escapeHtml(name)}</option>`);
   }
   sel.innerHTML = opts.join('');
-  sel.value = current;
+  // Restore previous selection, or keep unselected
+  if (current && current !== '') sel.value = current;
 }
 
 // ─── Dashboard Events Widget ───
@@ -570,7 +586,7 @@ function renderDashEvents() {
   highlightEvent(null);
 
   let filtered = dashEvents;
-  if (dashFilters.printer) filtered = filtered.filter((e) => e.device_id === dashFilters.printer);
+  if (dashFilters.printer && dashFilters.printer !== '__all__') filtered = filtered.filter((e) => e.device_id === dashFilters.printer);
   if (dashFilters.type) filtered = filtered.filter((e) => e.event_type === dashFilters.type);
   if (dashFilters.severity) filtered = filtered.filter((e) => e.severity === dashFilters.severity);
   if (dashFilters.from) {

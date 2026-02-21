@@ -1,5 +1,4 @@
 let tempChart = null;
-let progressChart = null;
 let currentDeviceId = null;
 let currentRange = '24h';
 let currentFilters = null;
@@ -78,9 +77,7 @@ export function initCharts() {
 
 export function destroyCharts() {
   if (tempChart) { tempChart.destroy(); tempChart = null; }
-  if (progressChart) { progressChart.destroy(); progressChart = null; }
   document.getElementById('temp-chart').innerHTML = '';
-  document.getElementById('progress-chart').innerHTML = '';
   currentDeviceId = null;
   liveBuffer = [];
 }
@@ -118,12 +115,10 @@ export async function loadChartData(deviceId, range, filters) {
     if (samples.length === 0) {
       document.getElementById('temp-chart').innerHTML =
         '<p style="color: var(--text-dim); text-align: center; padding: 40px; text-transform: uppercase; letter-spacing: 1px; font-size: 11px;">NO DATA FOR THIS RANGE</p>';
-      document.getElementById('progress-chart').innerHTML = '';
       return;
     }
 
     renderTempChart(samples, events);
-    renderProgressChart(samples, events);
   } catch {
     document.getElementById('temp-chart').innerHTML =
       '<p style="color: var(--text-dim); text-align: center; padding: 40px; text-transform: uppercase; font-size: 11px;">FAILED TO LOAD DATA</p>';
@@ -197,21 +192,6 @@ export function pushLivePoint(deviceId, state) {
   }
 
   updateChartData(tempChart, tempChart.data);
-
-  // Append to progress chart
-  if (progressChart) {
-    progressChart.data[0].push(nowSec);
-    progressChart.data[1].push(state.progress);
-    progressChart.data[2].push(state.layerNum);
-
-    if (cutoff > 0) {
-      while (progressChart.data[0].length > 1 && progressChart.data[0][0] < cutoff) {
-        for (const arr of progressChart.data) arr.shift();
-      }
-    }
-
-    updateChartData(progressChart, progressChart.data);
-  }
 }
 
 function renderTempChart(samples, events) {
@@ -261,14 +241,13 @@ function renderTempChart(samples, events) {
   const opts = {
     title: 'TEMPERATURE',
     width,
-    height: 240,
+    height: 380,
     plugins: [eventsPlugin(events)],
     hooks: {
       setScale: [(u, key) => {
         if (key !== 'x' || _syncingZoom) return;
         _syncingZoom = true;
         const { min, max } = u.scales.x;
-        if (progressChart) progressChart.setScale('x', { min, max });
         // Only notify app when user actually zoomed in, not on initial render
         if (zoomCallback) {
           const ts = u.data[0];
@@ -292,60 +271,6 @@ function renderTempChart(samples, events) {
   tempChart._isDual = isDual;
 }
 
-function renderProgressChart(samples, events) {
-  document.getElementById('progress-chart').innerHTML = '';
-
-  const timestamps = samples.map((s) => new Date(s.ts.endsWith('Z') ? s.ts : s.ts + 'Z').getTime() / 1000);
-  const progress = samples.map((s) => s.progress);
-  const layerNum = samples.map((s) => s.layer_num);
-
-  const data = [timestamps, progress, layerNum];
-
-  const container = document.getElementById('progress-chart');
-  const width = container.clientWidth || 800;
-
-  const opts = {
-    title: 'PROGRESS',
-    width,
-    height: 180,
-    plugins: [eventsPlugin(events)],
-    hooks: {
-      setScale: [(u, key) => {
-        if (key !== 'x' || _syncingZoom) return;
-        _syncingZoom = true;
-        const { min, max } = u.scales.x;
-        if (tempChart) tempChart.setScale('x', { min, max });
-        // Only notify app when user actually zoomed in, not on initial render
-        if (zoomCallback) {
-          const ts = u.data[0];
-          if (ts.length >= 2 && (min > ts[0] + 5 || max < ts[ts.length - 1] - 5)) {
-            zoomCallback(min, max);
-          }
-        }
-        _syncingZoom = false;
-      }],
-    },
-    cursor: { show: true, drag: { x: true, y: false } },
-    scales: {
-      x: { time: true },
-      y: { auto: true, range: [0, 100] },
-      layer: { auto: true },
-    },
-    axes: [
-      { stroke: '#338855', grid: { stroke: '#1a4a2a44' }, font: '10px Courier New', ticks: { stroke: '#1a4a2a' } },
-      { stroke: '#338855', grid: { stroke: '#1a4a2a44' }, label: 'PCT', font: '10px Courier New', labelFont: '10px Courier New', ticks: { stroke: '#1a4a2a' } },
-      { side: 1, stroke: '#338855', grid: { show: false }, label: 'LAYER', scale: 'layer', font: '10px Courier New', labelFont: '10px Courier New', ticks: { stroke: '#1a4a2a' } },
-    ],
-    series: [
-      {},
-      { label: 'Progress', stroke: COLORS.progress, width: 2, scale: 'y' },
-      { label: 'Layer', stroke: COLORS.layer, width: 1, scale: 'layer' },
-    ],
-  };
-
-  progressChart = new uPlot(opts, data, container);
-}
-
 function rangeToIso(range) {
   const now = new Date();
   return new Date(now.getTime() - rangeSec(range) * 1000).toISOString();
@@ -354,7 +279,6 @@ function rangeToIso(range) {
 export function highlightEvent(ts) {
   highlightedEventTs = ts;
   if (tempChart) tempChart.redraw(false, false);
-  if (progressChart) progressChart.redraw(false, false);
 }
 
 function rangeSec(range) {

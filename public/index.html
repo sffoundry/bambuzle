@@ -49,7 +49,8 @@
     <section id="view-dashboard" class="view active">
       <div id="dashboard-filters" class="dashboard-filters">
         <select id="dash-filter-printer">
-          <option value="">All Printers</option>
+          <option value="" disabled selected>Select a printer...</option>
+          <option value="__all__">All Printers</option>
         </select>
         <select id="dash-filter-type">
           <option value="">All Event Types</option>
@@ -85,7 +86,6 @@
               <h2 id="chart-printer-name"></h2>
             </div>
             <div id="temp-chart" class="chart-container"></div>
-            <div id="progress-chart" class="chart-container"></div>
           </div>
         </div>
         <div id="dash-resize" class="dash-resize-handle"></div>
