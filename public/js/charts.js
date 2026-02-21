@@ -2,6 +2,7 @@ let tempChart = null;
 let currentDeviceId = null;
 let currentRange = '24h';
 let currentFilters = null;
+let chartResizeObserver = null;
 
 // Live data buffers — appended from WebSocket, merged with DB data on load
 let liveBuffer = []; // { ts, nozzle_temp, nozzle_target, bed_temp, bed_target, chamber_temp, progress, layer_num }
@@ -76,6 +77,7 @@ export function initCharts() {
 }
 
 export function destroyCharts() {
+  if (chartResizeObserver) { chartResizeObserver.disconnect(); chartResizeObserver = null; }
   if (tempChart) { tempChart.destroy(); tempChart = null; }
   document.getElementById('temp-chart').innerHTML = '';
   currentDeviceId = null;
@@ -269,6 +271,17 @@ function renderTempChart(samples, events) {
 
   tempChart = new uPlot(opts, data, container);
   tempChart._isDual = isDual;
+
+  // Resize chart when container width changes (drag handle, window resize)
+  if (chartResizeObserver) chartResizeObserver.disconnect();
+  chartResizeObserver = new ResizeObserver(() => {
+    if (!tempChart) return;
+    const newWidth = container.clientWidth;
+    if (newWidth > 0 && newWidth !== tempChart.width) {
+      tempChart.setSize({ width: newWidth, height: tempChart.height });
+    }
+  });
+  chartResizeObserver.observe(container);
 }
 
 function rangeToIso(range) {
