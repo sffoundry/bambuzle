@@ -72,16 +72,24 @@ function extractPrinterState(merged) {
 
   if (Array.isArray(extruderInfo) && extruderInfo.length > 0) {
     if (extruderInfo.length > extruderCount) extruderCount = extruderInfo.length;
+    const isDualNozzle = extruderInfo.length > 1;
 
-    // Nozzle 1: use packed temp only as fallback (top-level nozzle_temper is fresher)
+    // Nozzle 1: on dual-nozzle printers (H2D), always use packed extruder value —
+    // top-level nozzle_temper reports the idle nozzle, not necessarily extruder 0.
+    // On single-nozzle printers, top-level is fresher and preferred.
     const e0 = extruderInfo[0];
     if (e0 && e0.temp != null) {
-      if (nozzleTemp == null) nozzleTemp = e0.temp & 0xFFFF;
-      if (nozzleTarget == null) nozzleTarget = (e0.temp >> 16) & 0xFFFF;
+      if (isDualNozzle) {
+        nozzleTemp = e0.temp & 0xFFFF;
+        nozzleTarget = (e0.temp >> 16) & 0xFFFF;
+      } else {
+        if (nozzleTemp == null) nozzleTemp = e0.temp & 0xFFFF;
+        if (nozzleTarget == null) nozzleTarget = (e0.temp >> 16) & 0xFFFF;
+      }
     }
 
     // Nozzle 2: always from packed (no top-level field exists for nozzle 2)
-    if (extruderInfo.length > 1) {
+    if (isDualNozzle) {
       const e1 = extruderInfo[1];
       if (e1 && e1.temp != null) {
         nozzle2Temp = e1.temp & 0xFFFF;
