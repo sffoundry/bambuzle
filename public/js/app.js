@@ -235,11 +235,17 @@ document.querySelectorAll('.nav-btn').forEach((btn) => {
 
 // ─── Chart Panel ───
 
+let chartRefreshInterval = null;
+const CHART_REFRESH_MS = 60_000;
+
 /**
  * Auto-select which printer to chart based on the dashboard printer filter.
  * Falls back to the first available printer when filter is "All Printers".
  */
 function updateChartPrinter() {
+  clearInterval(chartRefreshInterval);
+  chartRefreshInterval = null;
+
   const filterVal = document.getElementById('dash-filter-printer').value;
 
   // No printer selected — clear charts
@@ -266,6 +272,13 @@ function updateChartPrinter() {
 
   initCharts();
   loadChartData(deviceId, dashFilters.range, dashFilters);
+
+  // Auto-refresh chart data every 60s for clean time-series updates
+  chartRefreshInterval = setInterval(() => {
+    if (state.selectedPrinter) {
+      loadChartData(state.selectedPrinter, dashFilters.range, dashFilters);
+    }
+  }, CHART_REFRESH_MS);
 }
 
 // ─── Events Table ───
