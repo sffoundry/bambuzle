@@ -72,7 +72,7 @@ export function openConfigModal(cfg, printers, onChanged) {
 
   // ── Chart toggles ──
   chartsList.innerHTML = '';
-  for (const [key, label] of [['tempChart', 'Temperature Chart'], ['eventsWidget', 'Events Widget'], ['amsWidget', 'AMS Widget']]) {
+  for (const [key, label] of [['tempChart', 'Charts Panel'], ['eventsWidget', 'Events Widget'], ['amsWidget', 'AMS Widget']]) {
     const el = document.createElement('label');
     el.innerHTML = `
       <span class="toggle">

@@ -362,6 +362,84 @@ paths:
                 items:
                   $ref: '#/components/schemas/JobPause'
 
+  /api/printers/{deviceId}/anomalies:
+    get:
+      tags: [Anomalies]
+      summary: Get temperature anomalies in a time window
+      description: |
+        Returns temperature anomalies for a printer within a time window, regardless of job.
+        Useful for anomaly overlay when browsing arbitrary time ranges.
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+          description: Start of time window (ISO 8601)
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+          description: End of time window (ISO 8601)
+      responses:
+        '200':
+          description: Array of temperature anomalies ordered by timestamp
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TempAnomaly'
+        '400':
+          description: Missing required query parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/printers/{deviceId}/pauses:
+    get:
+      tags: [Anomalies]
+      summary: Get job pauses in a time window
+      description: |
+        Returns pause records for a printer within a time window, regardless of job.
+        Useful for pause band overlay when browsing arbitrary time ranges.
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+          description: Start of time window (ISO 8601)
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+          description: End of time window (ISO 8601)
+      responses:
+        '200':
+          description: Array of pause records ordered by pause time
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/JobPause'
+        '400':
+          description: Missing required query parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   # ─── Commands ───
 
   /api/printers/{deviceId}/command:

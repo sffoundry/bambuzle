@@ -65,6 +65,26 @@ function createApiRouter(printerManager) {
     res.json(pauses);
   });
 
+  // GET /api/printers/:id/anomalies — temp anomalies in time window
+  router.get('/printers/:id/anomalies', (req, res) => {
+    const { from, to } = req.query;
+    if (!from || !to) {
+      return res.status(400).json({ error: 'Both from and to query params are required' });
+    }
+    const anomalies = queries.getTempAnomaliesInWindow(req.params.id, from, to);
+    res.json(anomalies);
+  });
+
+  // GET /api/printers/:id/pauses — job pauses in time window
+  router.get('/printers/:id/pauses', (req, res) => {
+    const { from, to } = req.query;
+    if (!from || !to) {
+      return res.status(400).json({ error: 'Both from and to query params are required' });
+    }
+    const pauses = queries.getJobPausesInWindow(req.params.id, from, to);
+    res.json(pauses);
+  });
+
   // GET /api/printers/:id/jobs — print job history
   router.get('/printers/:id/jobs', (req, res) => {
     const limit = req.query.limit ? parseInt(req.query.limit, 10) : 50;

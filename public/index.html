@@ -84,8 +84,23 @@
           <div id="chart-panel" class="chart-panel">
             <div class="chart-header">
               <h2 id="chart-printer-name"></h2>
+              <div class="chart-toggles" id="chart-toggles">
+                <button class="chart-toggle-btn active" data-chart="temp" title="Temperature">TEMP</button>
+                <button class="chart-toggle-btn active" data-chart="fan" title="Fan Speeds">FAN</button>
+                <button class="chart-toggle-btn" data-chart="speed" title="Speed Level">SPD</button>
+                <button class="chart-toggle-btn" data-chart="progress" title="Progress & ETA">PROG</button>
+                <button class="chart-toggle-btn" data-chart="wifi" title="WiFi Signal">WIFI</button>
+                <button class="chart-toggle-btn" data-chart="layer" title="Layer Duration">LYR</button>
+                <button class="chart-toggle-btn" data-chart="efficiency" title="Print Efficiency">EFF</button>
+              </div>
             </div>
             <div id="temp-chart" class="chart-container"></div>
+            <div id="fan-chart" class="chart-container chart-container-sm" style="display:none"></div>
+            <div id="speed-chart" class="chart-container chart-container-sm" style="display:none"></div>
+            <div id="progress-chart" class="chart-container chart-container-sm" style="display:none"></div>
+            <div id="wifi-chart" class="chart-container chart-container-sm" style="display:none"></div>
+            <div id="layer-chart" class="chart-container chart-container-sm" style="display:none"></div>
+            <div id="efficiency-chart" class="chart-container chart-container-sm" style="display:none"></div>
           </div>
         </div>
         <div id="dash-resize" class="dash-resize-handle"></div>

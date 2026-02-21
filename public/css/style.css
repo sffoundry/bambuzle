@@ -429,6 +429,28 @@ main { padding: 12px; }
   text-overflow: ellipsis;
 }
 
+/* Toggle buttons in chart header */
+.chart-toggles { display: flex; gap: 2px; flex-wrap: wrap; }
+.chart-toggle-btn {
+  background: transparent; border: 1px solid var(--border);
+  color: var(--text-dim); padding: 2px 8px; border-radius: var(--radius);
+  cursor: pointer; font-size: 9px; font-family: var(--font);
+  text-transform: uppercase; letter-spacing: 0.5px; transition: all 0.15s;
+}
+.chart-toggle-btn:hover { color: var(--text); border-color: var(--accent); }
+.chart-toggle-btn.active { color: #000; background: var(--accent); border-color: var(--accent); }
+
+/* Compact secondary charts */
+.chart-container-sm { min-height: 160px; }
+
+/* Efficiency bar (HTML/CSS, not uPlot) */
+.efficiency-bar { padding: 8px 0; }
+.efficiency-label { font-size: 10px; letter-spacing: 1px; color: var(--accent); margin-bottom: 6px; text-transform: uppercase; }
+.efficiency-track { display: flex; height: 20px; border-radius: 3px; overflow: hidden; background: var(--border); }
+.efficiency-fill-active { background: #00cc66; }
+.efficiency-fill-pause { background: #cccc00; }
+.efficiency-legend { display: flex; gap: 16px; font-size: 10px; margin-top: 4px; font-family: 'Courier New', monospace; text-transform: uppercase; }
+
 /* Chart Panel */
 .chart-panel {
   background: var(--bg-card);

@@ -297,6 +297,14 @@ function getJobPauses(jobId) {
   return getDb().prepare('SELECT * FROM job_pauses WHERE job_id = ? ORDER BY paused_at ASC').all(jobId);
 }
 
+function getJobPausesInWindow(deviceId, from, to) {
+  return getDb().prepare(`
+    SELECT * FROM job_pauses WHERE device_id = ?
+      AND paused_at >= datetime(?) AND paused_at <= datetime(?)
+    ORDER BY paused_at ASC
+  `).all(deviceId, from, to);
+}
+
 // ─── Job Updates (anomaly counters) ───
 
 function incrementJobAnomalyCount(jobId) {
@@ -392,6 +400,7 @@ module.exports = {
   resumeJobPause,
   getOpenPause,
   getJobPauses,
+  getJobPausesInWindow,
   incrementJobAnomalyCount,
   incrementJobPauseCount,
   addJobPauseDuration,
