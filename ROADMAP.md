@@ -37,6 +37,48 @@ Aggregate stats across print jobs — total print hours, filament usage, success
 ### Filament Inventory Tracking
 Track filament spool usage across prints. Estimate remaining filament based on AMS tray data and job consumption.
 
+**Data already available from MQTT (per AMS tray):**
+- `remain` — percentage remaining (0-100)
+- `tray_weight` — spool weight in grams (e.g. "1000")
+- `tray_type` — material (PLA, PETG, ABS, TPU, etc.)
+- `tray_sub_brands` — specific variant (PLA Basic, PLA Glow, etc.)
+- `tray_color` — hex color code
+- `tray_uuid` — unique spool identifier (changes when a new spool is loaded)
+- `tag_uid` — RFID tag ID (BBL spools only)
+- `tray_id_name` — spool SKU (e.g. "A00-R0", "A12-B0")
+
+**Database changes:**
+- New `filament_spools` table — tracks each unique spool seen:
+  - `id`, `tray_uuid`, `tag_uid`, `tray_type`, `tray_sub_brands`, `tray_color`, `tray_weight`, `tray_id_name`
+  - `first_seen`, `last_seen`, `initial_remain`, `current_remain`
+- New `filament_usage` table — per-job consumption:
+  - `id`, `spool_id` (FK), `job_id` (FK), `device_id`
+  - `remain_before`, `remain_after`, `grams_used` (computed from remain delta × tray_weight)
+  - `timestamp`
+
+**Backend changes:**
+- Detect spool changes via `tray_uuid` diff on each MQTT update — upsert into `filament_spools`
+- On job start: snapshot `remain` for all active trays → `remain_before`
+- On job end: snapshot `remain` again → compute delta, insert `filament_usage` row
+- New endpoints:
+  - `GET /api/filament/spools` — all known spools with current remain
+  - `GET /api/filament/spools/:id/history` — usage history for a spool
+  - `GET /api/filament/usage` — usage log across all spools (filterable by printer, material, date)
+  - `GET /api/filament/stats` — aggregate stats (total grams used by material, by printer, by time period)
+
+**Frontend — new Filament Inventory view:**
+- Spool cards showing color swatch, material, brand, current remain %, estimated grams left
+- Group by AMS unit/slot or by material type
+- Usage timeline chart (grams consumed per day/week)
+- Per-spool history: which prints consumed how much
+- Low filament warnings (configurable threshold, e.g. < 15%)
+
+**Edge cases:**
+- Spool swaps mid-print (tray_uuid changes during a job) — split the usage record
+- Non-BBL spools (no RFID) — `tag_uid` may be empty, rely on `tray_uuid` only
+- Manual tray loads without AMS — `remain` may not be reported
+- Multiple printers sharing a spool (physically moved between AMS units) — match by `tray_uuid`
+
 ---
 
 ### Mobile-Friendly Layout
