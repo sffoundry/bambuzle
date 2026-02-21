@@ -1,0 +1,987 @@
+openapi: 3.0.3
+info:
+  title: Bambuzle API
+  description: |
+    REST API for the Bambuzle 3D printer monitoring dashboard.
+
+    Bambuzle connects to BambuLab printers via MQTT, collects telemetry (temperatures, layer progress, fan speeds),
+    tracks print jobs, detects anomalies, and provides real-time state via WebSocket.
+
+    ## Authentication
+    The API uses session-based authentication against BambuLab Cloud. Use the `/api/auth/login` endpoint
+    to authenticate, then all printer data endpoints become available.
+
+    ## Real-time Data
+    For live updates, connect to the WebSocket endpoint at `ws://<host>:<port>/ws`.
+    Messages are JSON with `{ type, data }` format. Types include `state`, `event`, and `auth`.
+  version: 0.4.1
+  contact:
+    name: Bambuzle
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:3000
+    description: Local development
+
+tags:
+  - name: Auth
+    description: BambuLab Cloud authentication
+  - name: Printers
+    description: Printer listing and live state
+  - name: History
+    description: Time-series samples and events
+  - name: Jobs
+    description: Print job tracking and history
+  - name: Anomalies
+    description: Anomaly data collection — layer transitions, temperature anomalies, job pauses
+  - name: Alerts
+    description: Alert rule management
+  - name: Commands
+    description: Send commands to printers via MQTT
+  - name: Debug
+    description: Diagnostic endpoints
+
+paths:
+  # ─── Auth ───
+
+  /api/auth/status:
+    get:
+      tags: [Auth]
+      summary: Get authentication status
+      responses:
+        '200':
+          description: Current auth state
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [authenticated, needs_login, needs_verification]
+
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: Login with BambuLab credentials
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Login result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [authenticated, needs_verification]
+                  message:
+                    type: string
+        '400':
+          description: Missing credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/auth/verify:
+    post:
+      tags: [Auth]
+      summary: Complete login with verification code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code:
+                  type: string
+                  description: Verification code sent to email
+      responses:
+        '200':
+          description: Verification successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: authenticated
+        '401':
+          description: Invalid code
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Clear authentication
+      responses:
+        '200':
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: needs_login
+
+  # ─── Printers ───
+
+  /api/printers:
+    get:
+      tags: [Printers]
+      summary: List all printers with live state
+      description: Returns all registered printers with their database info, live MQTT state, and connection status.
+      responses:
+        '200':
+          description: Array of printers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Printer'
+
+  # ─── History ───
+
+  /api/printers/{deviceId}/history:
+    get:
+      tags: [History]
+      summary: Get temperature/progress samples
+      description: Time-series telemetry samples for a printer. Defaults to most recent 5000 samples.
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Start of time window (ISO 8601)
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: End of time window (ISO 8601)
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 5000
+          description: Maximum number of samples to return
+      responses:
+        '200':
+          description: Array of samples
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Sample'
+
+  /api/printers/{deviceId}/events:
+    get:
+      tags: [History]
+      summary: Get events for a printer
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 200
+      responses:
+        '200':
+          description: Array of events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Event'
+
+  /api/events:
+    get:
+      tags: [History]
+      summary: Get recent events across all printers
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Array of events with printer names
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  allOf:
+                    - $ref: '#/components/schemas/Event'
+                    - type: object
+                      properties:
+                        printer_name:
+                          type: string
+
+  # ─── Jobs ───
+
+  /api/printers/{deviceId}/jobs:
+    get:
+      tags: [Jobs]
+      summary: Get print job history
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: Array of print jobs (newest first)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PrintJob'
+
+  # ─── Anomalies ───
+
+  /api/printers/{deviceId}/jobs/{jobId}/layers:
+    get:
+      tags: [Anomalies]
+      summary: Get layer transitions for a job
+      description: |
+        One row per layer change detected at MQTT-message granularity.
+        Includes a snapshot of temperatures, speed, and progress at each layer transition,
+        plus the duration since the previous layer.
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Array of layer transitions ordered by layer number
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LayerTransition'
+
+  /api/printers/{deviceId}/jobs/{jobId}/anomalies:
+    get:
+      tags: [Anomalies]
+      summary: Get temperature anomalies for a job
+      description: |
+        Only stores anomalous readings where deviation from target exceeds the configured
+        threshold OR rate of change exceeds the configured threshold. Normal readings stay
+        in the samples table.
+
+        Deviation is signed: negative = undershoot, positive = overshoot.
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Array of temperature anomalies ordered by timestamp
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TempAnomaly'
+
+  /api/printers/{deviceId}/jobs/{jobId}/pauses:
+    get:
+      tags: [Anomalies]
+      summary: Get pause records for a job
+      description: |
+        Individual pause records with context about what caused the pause.
+        Tracks both user-initiated pauses and error-induced pauses (when HMS errors are active).
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Array of pause records ordered by pause time
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/JobPause'
+
+  # ─── Commands ───
+
+  /api/printers/{deviceId}/command:
+    post:
+      tags: [Commands]
+      summary: Send command to printer
+      description: Sends a command to the printer via MQTT. The printer must be connected.
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [command]
+              properties:
+                command:
+                  type: string
+                  enum: [pause, resume, stop, set_speed]
+                param:
+                  description: Command parameter (e.g. speed level 1-4 for set_speed)
+                  oneOf:
+                    - type: string
+                    - type: integer
+      responses:
+        '200':
+          description: Command sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+        '400':
+          description: Unknown command
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Printer not found or not connected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ─── Alerts ───
+
+  /api/alerts:
+    get:
+      tags: [Alerts]
+      summary: List all alert rules
+      responses:
+        '200':
+          description: Array of alert rules
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AlertRule'
+    post:
+      tags: [Alerts]
+      summary: Create an alert rule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlertRuleInput'
+      responses:
+        '201':
+          description: Created alert rule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertRule'
+        '400':
+          description: Missing required fields
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/alerts/{alertId}:
+    get:
+      tags: [Alerts]
+      summary: Get a single alert rule
+      parameters:
+        - name: alertId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Alert rule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertRule'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    put:
+      tags: [Alerts]
+      summary: Update an alert rule
+      parameters:
+        - name: alertId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlertRuleInput'
+      responses:
+        '200':
+          description: Updated alert rule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertRule'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      tags: [Alerts]
+      summary: Delete an alert rule
+      parameters:
+        - name: alertId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ─── Debug ───
+
+  /api/printers/{deviceId}/debug/mqtt:
+    get:
+      tags: [Debug]
+      summary: Get raw MQTT merged state
+      description: Returns the full merged MQTT state object for diagnostics. This is the raw data before extraction.
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      responses:
+        '200':
+          description: Raw MQTT state
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deviceId:
+                    type: string
+                  connected:
+                    type: boolean
+                  mergedState:
+                    type: object
+                    description: Full raw MQTT merged state (printer-dependent structure)
+        '404':
+          description: Printer not found or not connected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  parameters:
+    DeviceId:
+      name: deviceId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Printer device ID
+    JobId:
+      name: jobId
+      in: path
+      required: true
+      schema:
+        type: integer
+      description: Print job ID
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+
+    Printer:
+      type: object
+      properties:
+        device_id:
+          type: string
+        name:
+          type: string
+        model:
+          type: string
+        nozzle_diameter:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        connected:
+          type: boolean
+        live:
+          nullable: true
+          $ref: '#/components/schemas/LiveState'
+
+    LiveState:
+      type: object
+      description: Extracted printer state from MQTT
+      properties:
+        gcodeState:
+          type: string
+          enum: [IDLE, RUNNING, PAUSE, FINISH, FAILED, PREPARE, SLICING, UNKNOWN]
+        gcodeFile:
+          type: string
+        subtaskName:
+          type: string
+        taskId:
+          type: string
+        progress:
+          type: number
+          nullable: true
+          description: Print progress percentage (0-100)
+        remainingMin:
+          type: integer
+          nullable: true
+          description: Estimated remaining time in minutes
+        layerNum:
+          type: integer
+          nullable: true
+        totalLayers:
+          type: integer
+          nullable: true
+        nozzleTemp:
+          type: number
+          nullable: true
+        nozzleTarget:
+          type: number
+          nullable: true
+        nozzle2Temp:
+          type: number
+          nullable: true
+          description: Second nozzle temperature (H2D dual-nozzle printers)
+        nozzle2Target:
+          type: number
+          nullable: true
+        extruderCount:
+          type: integer
+        bedTemp:
+          type: number
+          nullable: true
+        bedTarget:
+          type: number
+          nullable: true
+        chamberTemp:
+          type: number
+          nullable: true
+        partFanSpeed:
+          type: integer
+          nullable: true
+          description: Part cooling fan speed (0-100%)
+        auxFanSpeed:
+          type: integer
+          nullable: true
+          description: Auxiliary fan speed (0-100%)
+        chamberFanSpeed:
+          type: integer
+          nullable: true
+          description: Chamber fan speed (0-100%)
+        speedLevel:
+          type: integer
+          nullable: true
+          description: "Speed preset: 1=Silent, 2=Standard, 3=Sport, 4=Ludicrous"
+        wifiSignal:
+          type: integer
+          nullable: true
+          description: WiFi signal strength (dBm)
+        hmsErrors:
+          type: array
+          items:
+            type: object
+        ams:
+          type: object
+          nullable: true
+          description: AMS (Automatic Material System) state
+
+    Sample:
+      type: object
+      properties:
+        id:
+          type: integer
+        device_id:
+          type: string
+        job_id:
+          type: integer
+          nullable: true
+        ts:
+          type: string
+          format: date-time
+        bed_temp:
+          type: number
+          nullable: true
+        bed_target:
+          type: number
+          nullable: true
+        nozzle_temp:
+          type: number
+          nullable: true
+        nozzle_target:
+          type: number
+          nullable: true
+        nozzle2_temp:
+          type: number
+          nullable: true
+        nozzle2_target:
+          type: number
+          nullable: true
+        chamber_temp:
+          type: number
+          nullable: true
+        part_fan_speed:
+          type: integer
+          nullable: true
+        aux_fan_speed:
+          type: integer
+          nullable: true
+        chamber_fan_speed:
+          type: integer
+          nullable: true
+        progress:
+          type: number
+          nullable: true
+        layer_num:
+          type: integer
+          nullable: true
+        total_layers:
+          type: integer
+          nullable: true
+        remaining_min:
+          type: integer
+          nullable: true
+        gcode_state:
+          type: string
+        speed_level:
+          type: integer
+          nullable: true
+        wifi_signal:
+          type: integer
+          nullable: true
+
+    Event:
+      type: object
+      properties:
+        id:
+          type: integer
+        device_id:
+          type: string
+        job_id:
+          type: integer
+          nullable: true
+        ts:
+          type: string
+          format: date-time
+        event_type:
+          type: string
+          enum: [state_change, hms_error]
+        severity:
+          type: string
+          enum: [info, error]
+        code:
+          type: string
+          nullable: true
+          description: HMS error code (for hms_error events)
+        message:
+          type: string
+
+    PrintJob:
+      type: object
+      properties:
+        id:
+          type: integer
+        device_id:
+          type: string
+        task_id:
+          type: string
+          nullable: true
+        subtask_name:
+          type: string
+          nullable: true
+        gcode_file:
+          type: string
+          nullable: true
+        started_at:
+          type: string
+          format: date-time
+        ended_at:
+          type: string
+          format: date-time
+          nullable: true
+        end_state:
+          type: string
+          nullable: true
+          enum: [FINISH, FAILED, IDLE]
+        progress_pct:
+          type: number
+          nullable: true
+        pause_count:
+          type: integer
+          description: Number of times the job was paused
+        total_pause_sec:
+          type: number
+          description: Total seconds spent paused
+        anomaly_count:
+          type: integer
+          description: Number of temperature anomalies detected during this job
+        hms_codes:
+          type: string
+          nullable: true
+          description: JSON array of HMS error codes seen during this job
+        total_layers:
+          type: integer
+          nullable: true
+          description: Total layer count for the print
+
+    LayerTransition:
+      type: object
+      properties:
+        id:
+          type: integer
+        device_id:
+          type: string
+        job_id:
+          type: integer
+          nullable: true
+        layer_num:
+          type: integer
+        ts:
+          type: string
+          format: date-time
+        duration_sec:
+          type: number
+          nullable: true
+          description: Seconds since previous layer transition (null for first layer)
+        nozzle_temp:
+          type: number
+          nullable: true
+        nozzle_target:
+          type: number
+          nullable: true
+        bed_temp:
+          type: number
+          nullable: true
+        bed_target:
+          type: number
+          nullable: true
+        chamber_temp:
+          type: number
+          nullable: true
+        speed_level:
+          type: integer
+          nullable: true
+        progress:
+          type: number
+          nullable: true
+
+    TempAnomaly:
+      type: object
+      properties:
+        id:
+          type: integer
+        device_id:
+          type: string
+        job_id:
+          type: integer
+          nullable: true
+        ts:
+          type: string
+          format: date-time
+        sensor:
+          type: string
+          enum: [nozzle, nozzle2, bed, chamber]
+        actual_temp:
+          type: number
+        target_temp:
+          type: number
+          nullable: true
+        deviation:
+          type: number
+          nullable: true
+          description: "Signed deviation from target (actual - target). Negative = undershoot, positive = overshoot."
+        rate_of_change:
+          type: number
+          nullable: true
+          description: Temperature change rate in degrees per second
+        layer_num:
+          type: integer
+          nullable: true
+        anomaly_type:
+          type: string
+          enum: [deviation, rate, both]
+          description: What triggered this anomaly record
+
+    JobPause:
+      type: object
+      properties:
+        id:
+          type: integer
+        device_id:
+          type: string
+        job_id:
+          type: integer
+        paused_at:
+          type: string
+          format: date-time
+        resumed_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Null if still paused or job ended while paused
+        pause_source:
+          type: string
+          enum: [user, error, unknown]
+          description: "What caused the pause: 'error' if HMS errors were active, 'user' otherwise"
+        layer_num:
+          type: integer
+          nullable: true
+        progress:
+          type: number
+          nullable: true
+        hms_codes:
+          type: string
+          nullable: true
+          description: JSON array of HMS code strings active at pause time
+
+    AlertRule:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        enabled:
+          type: integer
+          description: "1 = enabled, 0 = disabled"
+        device_id:
+          type: string
+          nullable: true
+          description: Null = applies to all printers
+        condition_type:
+          type: string
+        condition_config:
+          type: object
+        notify_via:
+          type: string
+        notify_config:
+          type: object
+        cooldown_sec:
+          type: integer
+        last_fired_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    AlertRuleInput:
+      type: object
+      required: [name, conditionType]
+      properties:
+        name:
+          type: string
+        deviceId:
+          type: string
+          nullable: true
+        conditionType:
+          type: string
+        conditionConfig:
+          type: object
+        notifyVia:
+          type: string
+          default: console
+        notifyConfig:
+          type: object
+        cooldownSec:
+          type: integer
+          default: 300
