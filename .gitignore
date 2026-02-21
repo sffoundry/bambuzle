@@ -4,3 +4,4 @@ bambuzle.db
 bambuzle.db-wal
 bambuzle.db-shm
 *.log
+config.json
