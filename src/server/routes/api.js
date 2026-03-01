@@ -3,6 +3,7 @@
 const express = require('express');
 const queries = require('../../db/queries');
 const { buildPause, buildResume, buildStop, buildSetSpeed } = require('../../bambu/commands');
+const { getAuthStatus } = require('../../bambu/auth');
 
 /**
  * Create API router.
@@ -92,8 +93,12 @@ function createApiRouter(printerManager) {
     res.json(jobs);
   });
 
-  // POST /api/printers/:id/command — send command to printer
+  // POST /api/printers/:id/command — send command to printer (requires auth)
   router.post('/printers/:id/command', (req, res) => {
+    if (getAuthStatus() !== 'authenticated') {
+      return res.status(401).json({ error: 'Not authenticated — please log in first' });
+    }
+
     const { command, param } = req.body;
     const client = printerManager.getClient(req.params.id);
 
