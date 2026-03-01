@@ -3,6 +3,24 @@
 const express = require('express');
 const { login, verifyLogin, getAuthStatus, clearAuth } = require('../../bambu/auth');
 
+// Simple in-memory rate limiter for auth endpoints
+const AUTH_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
+const AUTH_MAX_ATTEMPTS = 10;
+const authAttempts = new Map(); // ip -> [timestamps]
+
+function checkAuthRate(req, res) {
+  const ip = req.ip || req.connection.remoteAddress;
+  const now = Date.now();
+  const attempts = (authAttempts.get(ip) || []).filter((t) => now - t < AUTH_WINDOW_MS);
+  authAttempts.set(ip, attempts);
+  if (attempts.length >= AUTH_MAX_ATTEMPTS) {
+    res.status(429).json({ error: 'Too many attempts — try again later' });
+    return false;
+  }
+  attempts.push(now);
+  return true;
+}
+
 /**
  * Create auth router.
  * @param {object} callbacks
@@ -18,6 +36,7 @@ function createAuthRouter(callbacks) {
 
   // POST /api/auth/login — start login with email + password
   router.post('/login', async (req, res) => {
+    if (!checkAuthRate(req, res)) return;
     const { email, password } = req.body;
     if (!email || !password) {
       return res.status(400).json({ error: 'email and password are required' });
@@ -43,6 +62,7 @@ function createAuthRouter(callbacks) {
 
   // POST /api/auth/verify — complete login with emailed verification code
   router.post('/verify', async (req, res) => {
+    if (!checkAuthRate(req, res)) return;
     const { code } = req.body;
     if (!code) {
       return res.status(400).json({ error: 'code is required' });
