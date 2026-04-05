@@ -93,3 +93,20 @@ H2D dual nozzle columns: `samples.nozzle2_temp`, `samples.nozzle2_target` (added
 ## Version Scheme
 
 Semver 0.x (pre-1.0). Bump minor for features, patch for fixes. Tag every release.
+
+## Coordination CLI
+
+Use the `aiw` CLI for coordination operations (preferred over manual bash commands):
+
+```bash
+aiw work claim <project> "<desc>" [branch]   # Claim work
+aiw work release "<search>"                   # Release claim
+aiw research register <PREFIX> "<summary>" --project <proj>  # Register research
+aiw quality log <ID> <partner> <type> <outcome> <score> <rework>  # Log quality
+aiw session start                             # Pre-flight checklist
+aiw session end                               # Post-flight cleanup
+```
+
+Install: `pip install -e ~/sffoundry/ai-workflows/tools/aiw`
+Full reference: `aiw --help` or `~/sffoundry/ai-workflows/tools/aiw/README.md`
+
