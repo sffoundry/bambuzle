@@ -1,0 +1,58 @@
+{
+  "schema_version": "1.0.0",
+  "identity": {
+    "org": "sffoundry",
+    "name": "bambuzle",
+    "description": "Self-hosted BambuLab 3D printer monitoring dashboard — MQTT, SQLite, real-time web UI",
+    "type": "app",
+    "language": "JavaScript",
+    "framework": "Node.js + Express + better-sqlite3 + uPlot",
+    "default_branch": "main"
+  },
+  "purpose": "Connects to BambuLab Cloud via MQTT, stores telemetry in SQLite, and serves a real-time web dashboard with printer cards, historical charts, event log, configurable alerts, and multi-printer/H2D dual-nozzle support.",
+  "status": {
+    "phase": "Pre-1.0 (0.x)",
+    "health": "green",
+    "summary": "Working dashboard with real-time MQTT, SQLite storage, uPlot charts, alert engine, H2D dual-nozzle support."
+  },
+  "owners": {
+    "product": ["Francisco Peebles"],
+    "technical": ["Francisco Peebles"]
+  },
+  "structure": {
+    "src/": "Backend — MQTT client, message parser, job tracking, alert engine, Express server, WebSocket broadcast",
+    "public/": "Frontend — single-page dashboard HTML, vanilla JS (app, dashboard, charts, alerts-ui)",
+    "src/db/": "SQLite schema, migrations, queries"
+  },
+  "build": {
+    "runtime": ["Node.js 18+", "C/C++ toolchain (for better-sqlite3)"],
+    "commands": {
+      "install": "npm install",
+      "start": "npm start"
+    },
+    "artifacts": {}
+  },
+  "interfaces": [
+    { "type": "http", "name": "REST API", "summary": "Auth, printers, events, alerts CRUD at /api/*" },
+    { "type": "websocket", "name": "Live dashboard", "summary": "Real-time state broadcast to browser clients" }
+  ],
+  "relationships": {
+    "sffoundry/bambu-farm-card": "HA card that ports key algorithms from this project"
+  },
+  "conventions": [
+    "Backend: CommonJS, strict mode",
+    "Frontend: ES modules",
+    "camelCase in JS, snake_case in SQL columns",
+    "HamClock theme (green-on-black, monospace)"
+  ],
+  "hard_rules": [
+    "BambuLab credentials in .env only (gitignored)",
+    "No eval, no innerHTML with raw data",
+    "SQLite parameterized queries throughout",
+    "Idempotent ALTER TABLE migrations wrapped in try/catch"
+  ],
+  "last_verified": {
+    "at": "2026-04-11T23:30:00Z",
+    "by": "claude"
+  }
+}
