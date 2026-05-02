@@ -5,3 +5,4 @@ bambuzle.db-wal
 bambuzle.db-shm
 *.log
 config.json
+.aiw/
