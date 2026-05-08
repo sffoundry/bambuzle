@@ -1,5 +1,33 @@
 # Bambuzle Roadmap
 
+## Legend
+
+> Canonical taxonomy per `sffoundry/ai-workflows/reference/project-standards.md` § Roadmap Format Standard. This roadmap is not yet an `aiw feature` adoption surface — content remains in bullet form. Promote to ID-tagged feature tables when work becomes ticket-grain.
+
+### Status
+
+| Symbol | Meaning |
+|---|---|
+| ✅ | Implemented — complete and shipped |
+| 🟡 | Partially implemented — core works, some aspects missing |
+| 🔵 | Alternative approach — different from what was requested |
+| ❌ | Not implemented — planned but not built |
+| ➖ | Not applicable — won't ship |
+| 📅 | Scheduled — committed to a specific phase |
+| 🔥 | High demand (annotation, not a state — compose with the actual state) |
+
+### Effort
+
+| Size | Tokens / scope |
+|---|---|
+| **XS** | < 5K tokens — typo, config tweak, one-liner |
+| **S** | 5-15K — 1-2 file edits, config or fix |
+| **M** | 20-40K — new endpoint + UI, 3-5 files |
+| **L** | 40-70K — new widget / overlay / subsystem, 5-10 files |
+| **XL** | 70-120K — multi-component feature, new architectural pattern |
+
+---
+
 ## Planned
 
 ### Live Camera Feed
