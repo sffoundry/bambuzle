@@ -1,8 +1,15 @@
 # Bambuzle Roadmap
 
+> **Mission:** Self-hosted monitoring dashboard for BambuLab 3D printers. Connects to BambuLab Cloud via MQTT, stores telemetry in SQLite, and serves a real-time web dashboard.
+> **Adoption surface for `aiw feature adopt BAM-<N>`.**
+
+**Last updated:** 2026-05-07
+
+---
+
 ## Legend
 
-> Canonical taxonomy per `sffoundry/ai-workflows/reference/project-standards.md` § Roadmap Format Standard. This roadmap is not yet an `aiw feature` adoption surface — content remains in bullet form. Promote to ID-tagged feature tables when work becomes ticket-grain.
+> Canonical taxonomy per `sffoundry/ai-workflows/reference/project-standards.md` § Roadmap Format Standard.
 
 ### Status
 
@@ -28,9 +35,51 @@
 
 ---
 
-## Planned
+## Phase 0: Foundation — ✅ COMPLETE
 
-### Live Camera Feed
+Core dashboard with real-time MQTT, SQLite persistence, web UI, and multi-printer + multi-AMS support.
+
+| ID | Feature | Status | Effort | Notes |
+|---|---|---|---|---|
+| BAM-1 |Real-time printer status cards (temps, progress, fans, ETA)|✅|L||
+| BAM-2 |Historical temperature and progress charts|✅|M||
+| BAM-3 |Event log with sorting and filtering|✅|M||
+| BAM-4 |Configurable alert rules|✅|M|Webhook delivery|
+| BAM-5 |Multi-printer support|✅|L||
+| BAM-6 |H2D dual-nozzle support|✅|M||
+| BAM-7 |BambuLab Cloud MQTT integration|✅|L||
+| BAM-8 |SQLite telemetry persistence|✅|M||
+
+---
+
+## Phase 1: Planned features
+
+| ID | Feature | Status | Priority | Effort | Notes |
+|---|---|---|---|---|---|
+| BAM-9 |Live camera feed (LAN-only, MJPEG/WS)|❌|HIGH|XL|See § "Live camera feed" below for full spec|
+| BAM-10 |Print job statistics (totals, success rates, by-material)|❌|MEDIUM|M|Aggregations across `prints` table|
+| BAM-11 |Filament inventory tracking (per-spool usage)|❌|HIGH|XL|See § "Filament inventory tracking" below for full spec — schema + backend + UI changes|
+| BAM-12 |Mobile-friendly responsive layout|❌|MEDIUM|M|Phone/tablet viewing of the dashboard|
+
+---
+
+## Ideas (unprioritized backlog)
+
+| ID | Feature | Status | Effort | Notes |
+|---|---|---|---|---|
+| BAM-13 |Timelapse assembly from camera frames|❌|M|Depends on camera-feed feature shipping first|
+| BAM-14 |OctoPrint-style GCode viewer|❌|L|Render G-code path with toolhead position|
+| BAM-15 |Push notifications (Pushover, ntfy, Telegram) in addition to webhook alerts|❌|M|New alert delivery channels|
+| BAM-16 |Multi-user auth (currently single-session)|❌|L|Foundational for any shared deployment|
+| BAM-17 |Print queue / job scheduling|❌|XL|Submit jobs from bambuzle to printer|
+| BAM-18 |Power consumption tracking (smart plug integration)|❌|M|Match printer-on intervals against smart-plug telemetry|
+
+---
+
+## Detailed specs
+
+### Live camera feed
+
 Embed the printer's camera stream in the dashboard when a print is active.
 
 **Requirements:**
@@ -57,12 +106,8 @@ Embed the printer's camera stream in the dashboard when a print is active.
 
 ---
 
-### Print Job Statistics
-Aggregate stats across print jobs — total print hours, filament usage, success/failure rates, average print times by material.
+### Filament inventory tracking
 
----
-
-### Filament Inventory Tracking
 Track filament spool usage across prints. Estimate remaining filament based on AMS tray data and job consumption.
 
 **Data already available from MQTT (per AMS tray):**
@@ -106,19 +151,3 @@ Track filament spool usage across prints. Estimate remaining filament based on A
 - Non-BBL spools (no RFID) — `tag_uid` may be empty, rely on `tray_uuid` only
 - Manual tray loads without AMS — `remain` may not be reported
 - Multiple printers sharing a spool (physically moved between AMS units) — match by `tray_uuid`
-
----
-
-### Mobile-Friendly Layout
-Responsive CSS for phone/tablet viewing of the dashboard.
-
----
-
-## Ideas (Unprioritized)
-
-- Timelapse assembly from camera frames
-- OctoPrint-style GCode viewer
-- Push notifications (Pushover, ntfy, Telegram) in addition to webhook alerts
-- Multi-user auth (currently single-session)
-- Print queue / job scheduling
-- Power consumption tracking (smart plug integration)
