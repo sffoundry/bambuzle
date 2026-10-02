@@ -3,7 +3,7 @@
 > **Mission:** Self-hosted monitoring dashboard for BambuLab 3D printers. Connects to BambuLab Cloud via MQTT, stores telemetry in SQLite, and serves a real-time web dashboard.
 > **Adoption surface for `aiw feature adopt BAM-<N>`.**
 
-**Last updated:** 2026-05-07
+**Last updated:** 2026-10-02 (backfilled v0.3.0–v0.4.1 shipped work as BAM-19..29; flagged requester-auth gap on BAM-16/BAM-28; added BAM-30..46 proposals from enhancement xval)
 
 ---
 
@@ -50,6 +50,24 @@ Core dashboard with real-time MQTT, SQLite persistence, web UI, and multi-printe
 | BAM-7 |BambuLab Cloud MQTT integration|✅|L||
 | BAM-8 |SQLite telemetry persistence|✅|M||
 
+### P0.2: Post-foundation additions (v0.3.0–v0.4.1) — backfilled 2026-10-02
+
+Shipped Feb 2026 but never recorded on the roadmap. Effort sizes are retrospective estimates.
+
+| ID | Feature | Status | Effort | Notes |
+|---|---|---|---|---|
+| BAM-19 |Dashboard config modal + two-pane layout with events widget|✅|M|v0.3.0 (`be1960e`)|
+| BAM-20 |Global filters + time-range presets with chart zoom sync|✅|M|v0.4.0–v0.4.1 (`64b9ed8`, `6d07207`)|
+| BAM-21 |Auth session persistence across restarts|✅|S|v0.4.0 (`64b9ed8`) — persists the server's Bambu Cloud session, not dashboard users|
+| BAM-22 |AMS widget|✅|M|v0.4.0 (`64b9ed8`)|
+| BAM-23 |Fan and print-speed stats|✅|S|v0.4.0 (`64b9ed8`)|
+| BAM-24 |Progress semicircle gauges + printer selection prompt|✅|S|`efe242d`|
+| BAM-25 |Anomaly capture: layer transitions, temp anomalies, job pauses|✅|L|`abaa82d` — `src/anomaly/detector.js`; capture + REST API, no triage view yet|
+| BAM-26 |Swagger UI API docs at `/api/docs`|✅|S|`fee6e55` — `openapi.yaml`|
+| BAM-27 |Multi-chart MQTT visualization (6 chart types) with 60s auto-refresh|✅|L|`f896538`, `aa1b0fd`|
+| BAM-28 |Printer control API (pause / resume / stop / speed)|🟡|M|`POST /api/printers/:id/command`. API only — no UI. **No requester auth:** the check (`273a9fb`) only verifies the server's Bambu Cloud login, so any LAN client can stop a print. See BAM-16 and `code-review/2026-10-02-manual-review.md`|
+| BAM-29 |Rate limiting on auth login/verify endpoints|✅|S|`89148c5`|
+
 ---
 
 ## Phase 1: Planned features
@@ -58,7 +76,7 @@ Core dashboard with real-time MQTT, SQLite persistence, web UI, and multi-printe
 |---|---|---|---|---|---|
 | BAM-9 |Live camera feed (LAN-only, MJPEG/WS)|❌|HIGH|XL|See § "Live camera feed" below for full spec|
 | BAM-10 |Print job statistics (totals, success rates, by-material)|❌|MEDIUM|M|Aggregations across `prints` table|
-| BAM-11 |Filament inventory tracking (per-spool usage)|❌|HIGH|XL|See § "Filament inventory tracking" below for full spec — schema + backend + UI changes|
+| BAM-11 |Filament inventory tracking (per-spool usage)|❌|HIGH|XL|See § "Filament inventory tracking" below for full spec — schema + backend + UI changes. 2026-10-02 xval: both partners recommend re-scoping to Spoolman integration (BAM-38)|
 | BAM-12 |Mobile-friendly responsive layout|❌|MEDIUM|M|Phone/tablet viewing of the dashboard|
 
 ---
@@ -67,12 +85,38 @@ Core dashboard with real-time MQTT, SQLite persistence, web UI, and multi-printe
 
 | ID | Feature | Status | Effort | Notes |
 |---|---|---|---|---|
-| BAM-13 |Timelapse assembly from camera frames|❌|M|Depends on camera-feed feature shipping first|
+| BAM-13 |Timelapse assembly from camera frames|❌|M|Depends on camera-feed feature shipping first. 2026-10-02 xval: printers already record MP4 timelapses to SD — see BAM-44|
 | BAM-14 |OctoPrint-style GCode viewer|❌|L|Render G-code path with toolhead position|
 | BAM-15 |Push notifications (Pushover, ntfy, Telegram) in addition to webhook alerts|❌|M|New alert delivery channels|
-| BAM-16 |Multi-user auth (currently single-session)|❌|L|Foundational for any shared deployment|
-| BAM-17 |Print queue / job scheduling|❌|XL|Submit jobs from bambuzle to printer|
-| BAM-18 |Power consumption tracking (smart plug integration)|❌|M|Match printer-on intervals against smart-plug telemetry|
+| BAM-16 |Multi-user auth (currently single-session)|❌|L|Foundational for any shared deployment. **Security-relevant now:** dashboard has no requester auth, so the BAM-28 control API and all telemetry are open to the LAN — candidate for promotion to Phase 1 (pending CODEX-SF371 × AGY-SF002 merge)|
+| BAM-17 |Print queue / job scheduling|❌|XL|Submit jobs from bambuzle to printer. 2026-10-02 xval: both partners say blocked — print start is authorization-gated (Jan 2025 firmware) and Bambu Farm Manager (free, local) already queues|
+| BAM-18 |Power consumption tracking (smart plug integration)|❌|M|Match printer-on intervals against smart-plug telemetry. 2026-10-02 xval: start advisory-only (draw, cost, circuit-limit alerts); no plug switching before BAM-16|
+
+---
+
+## Proposed: enhancement discovery (2026-10-02, pending owner review)
+
+From the CODEX-SF371 × AGY-SF002 blind xval, merged and verified in `research/claude/2026-10-02-claude-bambuzle-enhancement-xval-merge.md`. Strategy both partners reached independently: a local-first **observability** appliance — reliability and data surfacing before more control features. Suggested first tranche: BAM-30 → BAM-31/32 → BAM-33/34 → BAM-10 (as S) → BAM-38.
+
+| ID | Feature | Status | Priority | Effort | Depends on | Notes |
+|---|---|---|---|---|---|---|
+| BAM-30 |Interim requester auth (admin token on mutating routes) + query `limit` caps|❌|HIGH|S|—|Interim split of BAM-16; closes code-review 2026-10-02 H1/H2/M1/M3|
+| BAM-31 |Full HMS code dictionary with wiki links|❌|HIGH|S|—|Only 25 codes hardcoded today (`src/utils/hms-codes.js`)|
+| BAM-32 |Surface unused MQTT fields: xcam AI flags, nozzle type/diameter, upgrade state, network|❌|HIGH|M|—|Received but not parsed (`src/bambu/message-parser.js`)|
+| BAM-33 |Docker/Compose packaging (amd64 + arm64)|❌|HIGH|S|—|No container today; better-sqlite3 needs a toolchain|
+| BAM-34 |Health/readiness endpoints + SQLite backup & restore|❌|HIGH|M|—|Unattended-operation baseline|
+| BAM-35 |Per-printer connection capability matrix (cloud / LAN / Dev Mode / camera)|❌|MEDIUM|M|—|Gate for BAM-9, BAM-44 and any LAN adapter|
+| BAM-36 |Telemetry rollups and tiered retention|❌|MEDIUM|L|BAM-34|Raw samples today: 5s active / 30s idle, 90-day delete|
+| BAM-37 |Prometheus `/metrics` (incl. MQTT connection count, last-message age)|❌|MEDIUM|S|BAM-34|Bambu bans accounts with >50 concurrent MQTT connections|
+| BAM-38 |Spoolman integration|❌|MEDIUM|M|—|Proposed to supersede bespoke BAM-11 inventory|
+| BAM-39 |Maintenance ledger (print hours, service intervals, repeat HMS)|❌|MEDIUM|M|BAM-10||
+| BAM-40 |Print-failure triage timeline (anomalies + xcam + HMS)|❌|MEDIUM|M|BAM-32|Builds on BAM-25 anomaly capture|
+| BAM-41 |Operator audit trail (auth, config, command attempts)|❌|MEDIUM|M|BAM-30||
+| BAM-42 |Home Assistant MQTT discovery bridge (read-only)|❌|LOW|M|BAM-34|Overlaps sibling `bambu-farm-card`|
+| BAM-43 |AMS humidity / desiccant trend + alert|❌|LOW|S|—|Raw `ams` humidity already reaches the client|
+| BAM-44 |SD-card timelapse/file harvester over FTPS|❌|LOW|M|BAM-35|Proposed replacement for BAM-13's frame-stitching approach|
+| BAM-45 |Compact fleet matrix view (read-only)|❌|LOW|M|—|No control buttons until BAM-30|
+| BAM-46 |Job data export (CSV/JSON + data dictionary)|❌|LOW|S|BAM-10||
 
 ---
 

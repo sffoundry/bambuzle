@@ -51,8 +51,8 @@ Track research lifecycle: from Codex completion → Claude consumption → imple
 
 ## CODEX-SF371 — [prompt] Bambuzle enhancement discovery beyond BAM-18 — ecosystem/firmware risk,
 - **Research completed:** 2026-10-02 22:43 UTC
-- **Consumed:**
-- **Overall status:** submitted
+- **Consumed:** 2026-10-02
+- **Overall status:** consumed
 
 | Phase | Description | Status | Implemented In | Notes |
 |-------|-------------|--------|---------------|-------|
@@ -60,9 +60,18 @@ Track research lifecycle: from Codex completion → Claude consumption → imple
 
 ## AGY-SF002 — [prompt] Bambuzle enhancement discovery beyond BAM-18 — ecosystem/firmware risk,
 - **Research completed:** 2026-10-02 22:43 UTC
+- **Consumed:** 2026-10-02
+- **Overall status:** consumed
+
+| Phase | Description | Status | Implemented In | Notes |
+|-------|-------------|--------|---------------|-------|
+| 1 | [prompt] Bambuzle enhancement discovery beyond BAM-18 — ecosystem/firmware risk, competitor deltas,  | new | | File: `research/2026-10-02-01-prompt-bambuzle-enhancement-discovery.md` |
+
+## CLAUDE-SF025 — [xval merge] Bambuzle enhancement discovery — CODEX-SF371 × AGY-SF002. 6 confirm
+- **Research completed:** 2026-10-02 23:27 UTC
 - **Consumed:**
 - **Overall status:** submitted
 
 | Phase | Description | Status | Implemented In | Notes |
 |-------|-------------|--------|---------------|-------|
-| 1 | [prompt] Bambuzle enhancement discovery beyond BAM-18 — ecosystem/firmware risk, competitor deltas,  | new | | File: `research/2026-10-02-01-prompt-bambuzle-enhancement-discovery.md` |
+| 1 | [xval merge] Bambuzle enhancement discovery — CODEX-SF371 × AGY-SF002. 6 confirmed-by-both themes, 6 | new | | File: `research/claude/2026-10-02-claude-bambuzle-enhancement-xval-merge.md` |

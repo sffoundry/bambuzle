@@ -12,7 +12,7 @@ The service architecture is clean and operationally practical, but API-side auth
 
 ### Critical
 
-- [x] **Printer command endpoint lacks authentication/authorization** — src/server/routes/api.js:96 — Anyone with network access can issue pause/resume/stop/speed commands to printers.
+- [ ] **Printer command endpoint lacks authentication/authorization** — src/server/routes/api.js:96 — Anyone with network access can issue pause/resume/stop/speed commands to printers. _(Reopened 2026-10-02: `273a9fb` checks the server's Bambu Cloud login, not the requester — see `code-review/2026-10-02-manual-review.md` H1.)_
 
 ### High
 
