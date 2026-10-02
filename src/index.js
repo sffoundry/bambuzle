@@ -347,9 +347,12 @@ function handleHmsErrors(deviceId, hmsRaw, activeJob) {
         severity: 'error',
         code: entry.key,
         message: entry.description,
+        hms_severity: entry.severity,
+        subsystem: entry.subsystem,
+        wiki_url: entry.wikiUrl,
         ts: new Date().toISOString(),
       });
-      log.warn({ deviceId, code: entry.key }, `HMS Error: ${entry.description}`);
+      log.warn({ deviceId, code: entry.key, hmsSeverity: entry.severity, subsystem: entry.subsystem }, `HMS Error: ${entry.description}`);
     }
   }
 
