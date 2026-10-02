@@ -4,11 +4,12 @@ const http = require('http');
 const pino = require('pino');
 const { Cron } = require('croner');
 const config = require('./config');
-const { getAuth, refreshAuth, getDevices } = require('./bambu/auth');
+const { getAuth, refreshAuth, getDevices, getAuthStatus } = require('./bambu/auth');
 const { MqttPrinterClient } = require('./bambu/mqtt-client');
 const { parseHmsErrors } = require('./utils/hms-codes');
 const { GCODE_STATE } = require('./utils/constants');
 const { getDb, closeDb } = require('./db/database');
+const { createBackupService } = require('./db/backup');
 const queries = require('./db/queries');
 const { createApp } = require('./server/app');
 const { createAdminAuth } = require('./server/admin-auth');
@@ -27,6 +28,7 @@ let currentAuth = null;
 let alertEngine = null;
 let anomalyDetector = null;
 let cronJobs = [];
+let backupService = null;
 
 const printerManager = {
   getLiveStates: () => liveStates,
@@ -43,6 +45,11 @@ async function main() {
   getDb();
   log.info('Database initialized');
 
+  // Scheduled online backups (BAM-34). Independent of Bambu auth — startCronJobs() only runs
+  // after login, but a never-authenticated install still has alert rules worth keeping.
+  backupService = createBackupService({ getDb, backup: config.backup, log });
+  backupService.start();
+
   // Alert engine
   alertEngine = new AlertEngine(log);
   alertEngine.ensureDefaults();
@@ -52,7 +59,11 @@ async function main() {
 
   // Start HTTP server unconditionally so the dashboard is always reachable
   const adminAuth = createAdminAuth({ auth: config.auth, dataDir: config.dataDir, log });
-  const app = createApp(printerManager, { onAuthenticated }, adminAuth);
+  const app = createApp(printerManager, { onAuthenticated }, adminAuth, {
+    backupService,
+    getCloudAuthStatus: getAuthStatus,
+    dataDir: config.dataDir,
+  });
   const server = http.createServer(app);
   createWebSocket(server, log, { verifyRequest: adminAuth.verifyWsRequest });
 
@@ -83,6 +94,7 @@ async function main() {
     log.info({ signal }, 'Shutting down');
 
     for (const job of cronJobs) job.stop();
+    await backupService.stop(); // waits for an in-flight backup before the DB closes
 
     for (const client of Object.values(mqttClients)) {
       client.destroy();

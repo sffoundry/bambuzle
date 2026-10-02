@@ -38,11 +38,12 @@ async function startServer({
   printerManager = fakePrinterManager(),
   authCallbacks = { onAuthenticated() {} },
   auth = { mode: 'on', adminToken: TEST_TOKEN, publicRead: false },
+  deps = {},
 } = {}) {
   getDb();
   const log = pino({ level: 'silent' });
   const adminAuth = createAdminAuth({ auth, dataDir, log });
-  const app = createApp(printerManager, authCallbacks, adminAuth);
+  const app = createApp(printerManager, authCallbacks, adminAuth, deps);
   const server = http.createServer(app);
   createWebSocket(server, log, { verifyRequest: adminAuth.verifyWsRequest });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));

@@ -183,4 +183,4 @@ function closeDb() {
   }
 }
 
-module.exports = { getDb, closeDb };
+module.exports = { getDb, closeDb, DB_PATH };

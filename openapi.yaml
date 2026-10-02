@@ -10,7 +10,7 @@ info:
     ## Authentication
     Two separate layers:
     1. **Dashboard admin token** (who may use this API). Every `/api/*` route and the WebSocket require it, except
-       `/api/session`, `/api/spec` and `/api/docs`. Send `Authorization: Bearer <token>`, or exchange the token for an
+       `/api/session`, `/api/spec` and `/api/docs` (and the `/healthz` / `/readyz` probes, which live outside `/api`). Send `Authorization: Bearer <token>`, or exchange the token for an
        HttpOnly session cookie via `POST /api/session`. `BAMBUZLE_PUBLIC_READ=true` opens GETs and the WebSocket;
        `BAMBUZLE_AUTH=off` disables the check entirely.
     2. **BambuLab Cloud login** (the server's own connection to your printers), via `/api/auth/login`.
@@ -33,6 +33,10 @@ security:
   - sessionCookie: []
 
 tags:
+  - name: Health
+    description: Public liveness/readiness probes (no device details)
+  - name: System
+    description: Version, database stats, backups
   - name: Session
     description: Dashboard admin-token session
   - name: Auth
@@ -53,6 +57,123 @@ tags:
     description: Diagnostic endpoints
 
 paths:
+  # ─── Health (public probes) ───
+
+  /healthz:
+    get:
+      tags: [Health]
+      summary: Liveness — the process can query SQLite
+      security: []
+      responses:
+        '200':
+          description: Alive
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, enum: [ok] }
+        '503':
+          description: Database query failed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, enum: [error] }
+
+  /readyz:
+    get:
+      tags: [Health]
+      summary: 'Readiness — DB ok; Bambu Cloud / printer / backup problems report `degraded` (still 200)'
+      security: []
+      responses:
+        '200':
+          description: Ready (`ok`) or serving with problems (`degraded`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Readiness'
+        '503':
+          description: 'Database unavailable (`status: unavailable`, only `checks.db` present)'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Readiness'
+
+  # ─── System ───
+
+  /api/system:
+    get:
+      tags: [System]
+      summary: Version, uptime, database size/row counts, backup schedule and last result
+      responses:
+        '200':
+          description: System info
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  version: { type: string }
+                  node: { type: string }
+                  uptimeSec: { type: integer }
+                  dataDir: { type: string }
+                  db:
+                    type: object
+                    properties:
+                      path: { type: string }
+                      sizeBytes: { type: integer }
+                      walBytes: { type: integer }
+                      rowCounts:
+                        type: object
+                        properties:
+                          samples: { type: integer }
+                          events: { type: integer }
+                          print_jobs: { type: integer }
+                  backup:
+                    type: object
+                    properties:
+                      schedule:
+                        type: object
+                        properties:
+                          enabled: { type: boolean }
+                          cron: { type: string }
+                          dir: { type: string }
+                          keep: { type: integer }
+                          nextRun: { type: string, format: date-time, nullable: true }
+                      last:
+                        nullable: true
+                        $ref: '#/components/schemas/BackupResult'
+        '401':
+          description: Admin token required
+
+  /api/system/backup:
+    post:
+      tags: [System]
+      summary: Run a verified online backup now
+      description: |
+        Writes `bambuzle-YYYYMMDD-HHMMSS.db` (UTC) via the SQLite online-backup API, verifies it with
+        `PRAGMA integrity_check`, writes a `.sha256` sidecar and prunes to `backup.keep`.
+        Concurrent requests share the in-flight run.
+      responses:
+        '200':
+          description: Backup succeeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackupResult'
+        '401':
+          description: Admin token required
+        '500':
+          description: 'Backup failed (`ok: false`, `error`)'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackupResult'
+        '503':
+          description: Backups not configured
+
   # ─── Session (dashboard admin token) ───
 
   /api/session:
@@ -722,6 +843,48 @@ components:
       properties:
         error:
           type: string
+
+    Readiness:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded, unavailable]
+        checks:
+          type: object
+          properties:
+            db:
+              type: object
+              properties:
+                ok: { type: boolean }
+            cloudAuth:
+              type: object
+              properties:
+                status: { type: string, enum: [authenticated, needs_login, needs_verification, unknown] }
+            printers:
+              type: object
+              properties:
+                configured: { type: integer }
+                connected: { type: integer }
+            backup:
+              type: object
+              properties:
+                enabled: { type: boolean }
+                lastOk: { type: boolean, nullable: true, description: null if none yet or only found on disk after a restart }
+                lastAgeSec: { type: integer, nullable: true }
+
+    BackupResult:
+      type: object
+      properties:
+        ok: { type: boolean, nullable: true }
+        path: { type: string, nullable: true }
+        time: { type: string, format: date-time }
+        size: { type: integer, nullable: true }
+        sha256: { type: string }
+        durationMs: { type: integer }
+        pruned: { type: integer }
+        error: { type: string }
+        source: { type: string, enum: [disk], description: Present when seeded from the newest file on disk at startup }
 
     Printer:
       type: object

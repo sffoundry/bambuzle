@@ -17,9 +17,18 @@ try {
 
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 
+// Directory for the SQLite database and other runtime state (Docker: mount a volume here)
+const dataDir = path.resolve(process.env.BAMBUZLE_DATA_DIR || fileConfig.dataDir || PROJECT_ROOT);
+
+function envBool(value, fallback) {
+  if (value === undefined || value === null || value === '') return fallback;
+  return !['false', '0', 'no', 'off'].includes(String(value).toLowerCase());
+}
+
+const backupKeep = parseInt(process.env.BAMBUZLE_BACKUP_KEEP ?? fileConfig.backup?.keep ?? 7, 10);
+
 const config = {
-  // Directory for the SQLite database and other runtime state (Docker: mount a volume here)
-  dataDir: path.resolve(process.env.BAMBUZLE_DATA_DIR || fileConfig.dataDir || PROJECT_ROOT),
+  dataDir,
 
   // BambuLab credentials (from .env)
   bambu: {
@@ -44,6 +53,14 @@ const config = {
     mode: (process.env.BAMBUZLE_AUTH || fileConfig.auth?.mode || 'on').toLowerCase() === 'off' ? 'off' : 'on',
     adminToken: process.env.BAMBUZLE_ADMIN_TOKEN || fileConfig.auth?.adminToken || '',
     publicRead: (process.env.BAMBUZLE_PUBLIC_READ ?? String(fileConfig.auth?.publicRead ?? 'false')).toLowerCase() === 'true',
+  },
+
+  // SQLite online backups (BAM-34) — see src/db/backup.js
+  backup: {
+    enabled: envBool(process.env.BAMBUZLE_BACKUP_ENABLED, fileConfig.backup?.enabled ?? true),
+    cron: fileConfig.backup?.cron || '30 3 * * *', // daily, after the 03:00 retention cleanup
+    dir: path.resolve(dataDir, process.env.BAMBUZLE_BACKUP_DIR || fileConfig.backup?.dir || 'backups'),
+    keep: Number.isFinite(backupKeep) && backupKeep >= 1 ? backupKeep : 7,
   },
 
   // HTTP server

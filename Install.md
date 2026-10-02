@@ -257,7 +257,7 @@ Find the generated token with `docker compose logs bambuzle | grep -i token`, or
 
 ### Health check
 
-The image has a built-in `HEALTHCHECK` (Node's built-in `fetch`, no curl) against `GET /api/spec`. Check it with:
+The image has a built-in `HEALTHCHECK` (Node's built-in `fetch`, no curl) against `GET /healthz` (liveness: process up and SQLite answering). Check it with:
 
 ```bash
 docker inspect -f '{{.State.Health.Status}}' bambuzle   # starting -> healthy
@@ -284,6 +284,27 @@ docker buildx build --platform linux/amd64,linux/arm64 -t <registry>/bambuzle:la
 ```
 
 A multi-platform build must be pushed to a registry (or exported with `--output`); use `--platform linux/arm64 --load` to load a single-arch image locally. Emulated arm64 builds compile `better-sqlite3` slowly if no prebuilt binary matches — expect several minutes. 32-bit Pi OS (armv7) is not a tested target.
+
+## Backup & restore
+
+Bambuzle backs up its SQLite database automatically using SQLite's online-backup API (safe while the server is running — never copy `bambuzle.db` by hand while it runs).
+
+- **When / where:** daily at 03:30 to `backups/` in the data directory, keeping the 7 newest. Files are named `bambuzle-YYYYMMDD-HHMMSS.db` (UTC), each with a `.sha256` sidecar, and are only kept if `PRAGMA integrity_check` passes.
+- **Configure:** `config.json` → `"backup": { "enabled": true, "cron": "30 3 * * *", "dir": "backups", "keep": 7 }`, or env `BAMBUZLE_BACKUP_ENABLED=false`, `BAMBUZLE_BACKUP_DIR=/path`, `BAMBUZLE_BACKUP_KEEP=14`. A relative `dir` is resolved against the data directory.
+- **Back up now:** `curl -X POST -H "Authorization: Bearer <admin token>" http://localhost:3000/api/system/backup`. `GET /api/system` shows the last result and next scheduled run.
+- **Off-box copies:** backups live next to the database, so copy the `backups/` folder somewhere else (NAS, rsync, cloud) if you want protection against disk loss. Backups contain your BambuLab Cloud token — treat them like `.env` (they are written with `0600` permissions).
+
+**To restore:**
+
+1. Stop Bambuzle (`sudo systemctl stop bambuzle`, or Ctrl+C). The restore script refuses to run while anything is listening on `PORT`.
+2. Run the restore with the backup you want:
+   ```bash
+   npm run backup:restore -- backups/bambuzle-20261002-033000.db
+   ```
+   It checks `integrity_check` and the `.sha256` sidecar (if present), moves the current `bambuzle.db` (and `-wal` / `-shm`) aside to `bambuzle.db.pre-restore-<timestamp>`, and copies the backup into place. Use the same `BAMBUZLE_DATA_DIR` / `PORT` as the server.
+3. Start Bambuzle again. Once you're happy, delete the `*.pre-restore-*` files; to undo, stop the server and rename them back.
+
+Health probes for monitoring: `GET /healthz` (liveness) and `GET /readyz` (readiness; returns `degraded` until BambuLab login completes and printers connect) need no token and expose no printer details.
 
 ## Troubleshooting
 
