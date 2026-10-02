@@ -260,11 +260,17 @@ function handleJobTransition(deviceId, state, prevState) {
   if ((curr === GCODE_STATE.RUNNING || curr === GCODE_STATE.PREPARE) &&
       (!prev || prev === GCODE_STATE.IDLE || prev === GCODE_STATE.FINISH || prev === GCODE_STATE.FAILED)) {
     if (!activeJob) {
+      // BAM-10: record the active AMS tray's filament for per-material stats.
+      // Required here (not at the top) to keep this change confined to handleJobTransition.
+      const { getActiveTrayMaterial } = require('./utils/material');
+      const { material, color } = getActiveTrayMaterial(state.ams);
       const jobId = queries.startJob({
         deviceId,
         taskId: state.taskId,
         subtaskName: state.subtaskName,
         gcodeFile: state.gcodeFile,
+        material,
+        materialColor: color,
       });
       log.info({ deviceId, jobId }, 'New print job started');
       anomalyDetector.resetDevice(deviceId);

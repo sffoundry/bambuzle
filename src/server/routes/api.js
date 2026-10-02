@@ -15,6 +15,37 @@ function clampLimit(raw, def, max) {
   return Math.min(n, max);
 }
 
+// Strict ISO 8601 date / date-time (BAM-10 /api/stats). Date.parse alone accepts too much.
+const ISO_DATE_RE = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,3})?)?(Z|[+-]\d{2}:?\d{2})?)?$/;
+const STATS_DEFAULT_DAYS = 30;
+
+/**
+ * Parse an ISO date or date-time query value. A bare date as `to` means the end of that (UTC) day.
+ * @returns {Date|null} null when missing; throws on garbage
+ */
+function parseIsoParam(raw, { endOfDay = false } = {}) {
+  if (raw === undefined || raw === '') return null;
+  const m = typeof raw === 'string' ? ISO_DATE_RE.exec(raw) : null;
+  if (!m) throw new Error('invalid');
+  const dateOnly = m[4] === undefined;
+  // Bare dates and offset-less date-times are treated as UTC (matching how SQLite stores timestamps).
+  const normalized = dateOnly
+    ? `${raw}T${endOfDay ? '23:59:59.999' : '00:00:00.000'}Z`
+    : (m[7] ? raw.replace(' ', 'T') : `${raw.replace(' ', 'T')}Z`);
+  const d = new Date(normalized);
+  if (Number.isNaN(d.getTime())) throw new Error('invalid');
+  // Reject roll-over calendar dates like 2026-02-31 and out-of-range times like 25:00.
+  const cal = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+  if (cal.getUTCFullYear() !== +m[1] || cal.getUTCMonth() + 1 !== +m[2] || cal.getUTCDate() !== +m[3]) throw new Error('invalid');
+  if (!dateOnly && (+m[4] > 23 || +m[5] > 59 || (m[6] !== undefined && +m[6] > 59))) throw new Error('invalid');
+  return d;
+}
+
+/** SQLite datetime() form: 'YYYY-MM-DD HH:MM:SS' (UTC). */
+function toSqlDatetime(d) {
+  return d.toISOString().slice(0, 19).replace('T', ' ');
+}
+
 /**
  * Create API router.
  * @param {object} printerManager — object with getLiveStates(), getClient(deviceId) methods
@@ -151,6 +182,31 @@ function createApiRouter(printerManager) {
     });
   });
 
+  // GET /api/stats — print job statistics (BAM-10). Default window: last 30 days.
+  router.get('/stats', (req, res) => {
+    const { printer } = req.query;
+    let from;
+    let to;
+    try {
+      from = parseIsoParam(req.query.from);
+      to = parseIsoParam(req.query.to, { endOfDay: true });
+    } catch {
+      return res.status(400).json({ error: 'from/to must be ISO 8601 dates (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ)' });
+    }
+    if (printer !== undefined && (typeof printer !== 'string' || printer.length > 128)) {
+      return res.status(400).json({ error: 'Invalid printer' });
+    }
+    if (!to) to = new Date();
+    if (!from) from = new Date(to.getTime() - STATS_DEFAULT_DAYS * 86400 * 1000);
+    if (from > to) {
+      return res.status(400).json({ error: 'from must be before to' });
+    }
+
+    const window = { from: toSqlDatetime(from), to: toSqlDatetime(to) };
+    const stats = queries.getJobStats({ deviceId: printer || undefined, ...window });
+    res.json({ window: { ...window, printer: printer || null }, ...stats });
+  });
+
   // GET /api/events — recent events across all printers
   router.get('/events', (req, res) => {
     const { limit, from, to } = req.query;
@@ -165,4 +221,4 @@ function createApiRouter(printerManager) {
   return router;
 }
 
-module.exports = { createApiRouter, clampLimit };
+module.exports = { createApiRouter, clampLimit, parseIsoParam };

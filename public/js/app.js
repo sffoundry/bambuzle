@@ -1,6 +1,7 @@
 import { renderPrinterCards, updatePrinterCard } from './dashboard.js';
 import { initCharts, loadChartData, destroyCharts, pushLivePoint, setZoomCallback, highlightEvent } from './charts.js';
 import { initAlertsUI } from './alerts-ui.js';
+import { initStatsUI } from './stats.js';
 import { renderAmsWidget, updateAmsWidget } from './ams-widget.js';
 import { loadConfig, saveConfig, openConfigModal, applyVisibility } from './config-ui.js';
 
@@ -286,6 +287,7 @@ document.querySelectorAll('.nav-btn').forEach((btn) => {
 
     if (btn.dataset.view === 'events') loadEvents();
     if (btn.dataset.view === 'alerts') initAlertsUI(state);
+    if (btn.dataset.view === 'stats') initStatsUI(state);
   });
 });
 

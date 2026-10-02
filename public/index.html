@@ -17,6 +17,7 @@
       <button class="nav-btn active" data-view="dashboard">Dashboard</button>
       <button class="nav-btn" data-view="events">Events</button>
       <button class="nav-btn" data-view="alerts">Alerts</button>
+      <button class="nav-btn" data-view="stats">Stats</button>
     </nav>
   </header>
 
@@ -207,6 +208,53 @@
               <button type="button" id="btn-cancel-alert" class="btn-secondary">Cancel</button>
             </div>
           </form>
+        </div>
+      </div>
+    </section>
+
+    <!-- Stats view (BAM-10) -->
+    <section id="view-stats" class="view">
+      <div class="stats-header">
+        <h2>Print Statistics</h2>
+        <div class="event-filters stats-filters">
+          <select id="stats-filter-printer">
+            <option value="">All Printers</option>
+          </select>
+          <div id="stats-range" class="stats-range" role="group" aria-label="Time range">
+            <button type="button" class="stats-range-btn" data-range="7d">7d</button>
+            <button type="button" class="stats-range-btn active" data-range="30d">30d</button>
+            <button type="button" class="stats-range-btn" data-range="90d">90d</button>
+            <button type="button" class="stats-range-btn" data-range="all">All</button>
+          </div>
+          <span id="stats-status" class="stats-status"></span>
+        </div>
+      </div>
+      <div id="stats-tiles" class="stats-tiles"></div>
+      <h3 class="dash-section-title">Jobs per day</h3>
+      <div class="stats-legend">
+        <span class="stats-key seg-finished"></span>finished
+        <span class="stats-key seg-failed"></span>failed
+        <span class="stats-key seg-cancelled"></span>cancelled
+      </div>
+      <div id="stats-days" class="stats-days"></div>
+      <div class="stats-tables">
+        <div class="stats-table-wrap">
+          <h3 class="dash-section-title">By printer</h3>
+          <table class="data-table stats-table">
+            <thead>
+              <tr><th>Printer</th><th>Jobs</th><th>OK</th><th>Fail</th><th>Cancel</th><th>Success</th><th>Hours</th><th>Avg</th></tr>
+            </thead>
+            <tbody id="stats-printer-body"></tbody>
+          </table>
+        </div>
+        <div class="stats-table-wrap">
+          <h3 class="dash-section-title">By material</h3>
+          <table class="data-table stats-table">
+            <thead>
+              <tr><th>Material</th><th>Jobs</th><th>OK</th><th>Fail</th><th>Cancel</th><th>Success</th><th>Hours</th><th>Avg</th></tr>
+            </thead>
+            <tbody id="stats-material-body"></tbody>
+          </table>
         </div>
       </div>
     </section>

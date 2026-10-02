@@ -352,6 +352,47 @@ paths:
                 items:
                   $ref: '#/components/schemas/PrintJob'
 
+  /api/stats:
+    get:
+      tags: [Jobs]
+      summary: Print job statistics (totals, success rates, by printer / material / day)
+      description: |
+        Aggregates print jobs whose `started_at` falls within [from, to]. Defaults to the last 30 days.
+        Cancelled = end_state `IDLE`. `successRate` = finished / (finished + failed + cancelled), null when 0.
+        Durations are wall-clock (pauses included); rows without `duration_sec` fall back to ended_at − started_at.
+        Days in `byDay` are UTC.
+      parameters:
+        - name: printer
+          in: query
+          description: Restrict to one printer (device ID)
+          schema:
+            type: string
+        - name: from
+          in: query
+          description: Window start (ISO 8601 date or date-time; offset-less values are UTC). Default now − 30 days.
+          schema:
+            type: string
+            example: '2026-09-01'
+        - name: to
+          in: query
+          description: Window end (ISO 8601; a bare date means the end of that UTC day). Default now.
+          schema:
+            type: string
+            example: '2026-10-01T12:00:00Z'
+      responses:
+        '200':
+          description: Job statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobStats'
+        '400':
+          description: Invalid from/to (not ISO 8601, impossible date, or from after to)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   # ─── Anomalies ───
 
   /api/printers/{deviceId}/jobs/{jobId}/layers:
@@ -964,6 +1005,96 @@ components:
           type: integer
           nullable: true
           description: Total layer count for the print
+        material:
+          type: string
+          nullable: true
+          description: Active AMS tray filament type at job start (null if unknown / external spool)
+        material_color:
+          type: string
+          nullable: true
+          description: Active AMS tray colour (RRGGBBAA hex) at job start
+        duration_sec:
+          type: integer
+          nullable: true
+          description: Wall-clock job duration, set when the job ends
+
+    JobStatCounters:
+      type: object
+      properties:
+        jobs:
+          type: integer
+        finished:
+          type: integer
+        failed:
+          type: integer
+        cancelled:
+          type: integer
+          description: Jobs that ended in IDLE (cancelled/aborted)
+        running:
+          type: integer
+          description: Jobs with no end yet
+        successRate:
+          type: number
+          nullable: true
+          description: finished / (finished + failed + cancelled); null when no completed jobs
+        totalPrintHours:
+          type: number
+        avgDurationMin:
+          type: number
+          nullable: true
+          description: Mean duration of ended jobs, minutes
+
+    JobStats:
+      type: object
+      properties:
+        window:
+          type: object
+          properties:
+            from:
+              type: string
+              description: UTC, 'YYYY-MM-DD HH:MM:SS'
+            to:
+              type: string
+            printer:
+              type: string
+              nullable: true
+        overall:
+          $ref: '#/components/schemas/JobStatCounters'
+        byPrinter:
+          type: array
+          items:
+            allOf:
+              - type: object
+                properties:
+                  deviceId:
+                    type: string
+                  name:
+                    type: string
+              - $ref: '#/components/schemas/JobStatCounters'
+        byMaterial:
+          type: array
+          items:
+            allOf:
+              - type: object
+                properties:
+                  material:
+                    type: string
+                    description: Filament type (e.g. PLA), or 'Unknown'
+              - $ref: '#/components/schemas/JobStatCounters'
+        byDay:
+          type: array
+          items:
+            type: object
+            properties:
+              date:
+                type: string
+                format: date
+              finished:
+                type: integer
+              failed:
+                type: integer
+              cancelled:
+                type: integer
 
     LayerTransition:
       type: object

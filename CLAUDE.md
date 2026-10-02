@@ -19,6 +19,7 @@ Browser
   └─> public/js/app.js — main entry, WebSocket handler, event table
         ├─> public/js/dashboard.js — printer cards
         ├─> public/js/charts.js — uPlot temperature/progress charts
+        ├─> public/js/stats.js — Stats view (job totals, by printer/material/day)
         └─> public/js/alerts-ui.js — alert rules CRUD
 ```
 
@@ -43,6 +44,8 @@ Browser
 | `public/js/app.js` | Frontend entry — auth, WS, views, events |
 | `public/js/dashboard.js` | Printer card rendering |
 | `public/js/charts.js` | uPlot chart rendering |
+| `public/js/stats.js` | Stats view — job statistics (`/api/stats`) |
+| `src/utils/material.js` | Active AMS tray → filament type/colour (job material capture) |
 
 ## API Endpoints
 
@@ -64,6 +67,9 @@ Every other `/api/*` route and `/ws` is guarded by `src/server/admin-auth.js` (B
 - `GET /api/printers/:id/history` — sample history (query: from, to, limit)
 - `GET /api/printers/:id/events` — events for printer (query: from, to, limit)
 - `GET /api/printers/:id/jobs` — print job history
+
+### Stats
+- `GET /api/stats` — print job statistics: totals, success rate, by printer / material / day (query: printer, from, to; default last 30 days; bad dates → 400)
 - `POST /api/printers/:id/command` — send command to printer via MQTT
 
 ### Events
@@ -96,6 +102,8 @@ Every other `/api/*` route and `/ws` is guarded by `src/server/admin-auth.js` (B
 ## Database Schema
 
 Tables: `printers`, `print_jobs`, `samples`, `events`, `alert_rules`
+
+Job stats columns (BAM-10): `print_jobs.material`, `print_jobs.material_color`, `print_jobs.duration_sec` (nullable; added via migration).
 
 H2D dual nozzle columns: `samples.nozzle2_temp`, `samples.nozzle2_target` (added via migration in v0.2.0)
 
