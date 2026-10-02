@@ -8,13 +8,17 @@ info:
     tracks print jobs, detects anomalies, and provides real-time state via WebSocket.
 
     ## Authentication
-    The API uses session-based authentication against BambuLab Cloud. Use the `/api/auth/login` endpoint
-    to authenticate, then all printer data endpoints become available.
+    Two separate layers:
+    1. **Dashboard admin token** (who may use this API). Every `/api/*` route and the WebSocket require it, except
+       `/api/session`, `/api/spec` and `/api/docs`. Send `Authorization: Bearer <token>`, or exchange the token for an
+       HttpOnly session cookie via `POST /api/session`. `BAMBUZLE_PUBLIC_READ=true` opens GETs and the WebSocket;
+       `BAMBUZLE_AUTH=off` disables the check entirely.
+    2. **BambuLab Cloud login** (the server's own connection to your printers), via `/api/auth/login`.
 
     ## Real-time Data
     For live updates, connect to the WebSocket endpoint at `ws://<host>:<port>/ws`.
     Messages are JSON with `{ type, data }` format. Types include `state`, `event`, and `auth`.
-  version: 0.4.1
+  version: 0.5.0
   contact:
     name: Bambuzle
   license:
@@ -24,7 +28,13 @@ servers:
   - url: http://localhost:3000
     description: Local development
 
+security:
+  - bearerAuth: []
+  - sessionCookie: []
+
 tags:
+  - name: Session
+    description: Dashboard admin-token session
   - name: Auth
     description: BambuLab Cloud authentication
   - name: Printers
@@ -43,6 +53,52 @@ tags:
     description: Diagnostic endpoints
 
 paths:
+  # ─── Session (dashboard admin token) ───
+
+  /api/session:
+    get:
+      tags: [Session]
+      summary: Whether this client must enter the admin token
+      security: []
+      responses:
+        '200':
+          description: Session state
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  required: { type: boolean }
+                  authenticated: { type: boolean }
+                  publicRead: { type: boolean }
+    post:
+      tags: [Session]
+      summary: Exchange the admin token for a session cookie
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string }
+      responses:
+        '200':
+          description: Signed in; sets the `bambuzle_session` HttpOnly cookie
+        '401':
+          description: Invalid admin token
+        '429':
+          description: Too many attempts
+    delete:
+      tags: [Session]
+      summary: Sign this browser out
+      security: []
+      responses:
+        '200':
+          description: Cookie cleared
+
   # ─── Auth ───
 
   /api/auth/status:
@@ -635,6 +691,15 @@ paths:
                 $ref: '#/components/schemas/Error'
 
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Dashboard admin token (BAMBUZLE_ADMIN_TOKEN or <data dir>/admin-token)
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: bambuzle_session
   parameters:
     DeviceId:
       name: deviceId

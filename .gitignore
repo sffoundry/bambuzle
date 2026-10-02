@@ -6,3 +6,4 @@ bambuzle.db-shm
 *.log
 config.json
 .aiw/
+admin-token

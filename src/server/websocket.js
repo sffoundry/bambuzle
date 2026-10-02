@@ -6,10 +6,15 @@ let wss = null;
 
 /**
  * Attach a WebSocket server to an existing HTTP server.
+ * `verifyRequest(req)` gates the upgrade (dashboard admin auth, BAM-30).
  * Returns the WSS instance.
  */
-function createWebSocket(httpServer, logger) {
-  wss = new WebSocketServer({ server: httpServer, path: '/ws' });
+function createWebSocket(httpServer, logger, { verifyRequest } = {}) {
+  wss = new WebSocketServer({
+    server: httpServer,
+    path: '/ws',
+    verifyClient: verifyRequest ? ({ req }) => verifyRequest(req) : undefined,
+  });
   const log = logger.child({ component: 'websocket' });
 
   wss.on('connection', (ws) => {

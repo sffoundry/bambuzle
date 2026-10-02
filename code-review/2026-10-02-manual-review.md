@@ -3,7 +3,7 @@
 > **Reviewer:** Claude (Steve-claude pair)
 > **Scope:** HTTP/WebSocket access control, `src/server/**`
 > **High:** 2 | **Medium:** 3 | **Low:** 0
-> **Status:** unresolved
+> **Status:** resolved 2026-10-02 by BAM-30 (H1, H2, M1, M2, M3). M2 reopens only if an operator opts into `BAMBUZLE_PUBLIC_READ=true`, which is read-only by design.
 
 ## Context
 

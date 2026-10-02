@@ -65,7 +65,7 @@ Shipped Feb 2026 but never recorded on the roadmap. Effort sizes are retrospecti
 | BAM-25 |Anomaly capture: layer transitions, temp anomalies, job pauses|✅|L|`abaa82d` — `src/anomaly/detector.js`; capture + REST API, no triage view yet|
 | BAM-26 |Swagger UI API docs at `/api/docs`|✅|S|`fee6e55` — `openapi.yaml`|
 | BAM-27 |Multi-chart MQTT visualization (6 chart types) with 60s auto-refresh|✅|L|`f896538`, `aa1b0fd`|
-| BAM-28 |Printer control API (pause / resume / stop / speed)|🟡|M|`POST /api/printers/:id/command`. API only — no UI. **No requester auth:** the check (`273a9fb`) only verifies the server's Bambu Cloud login, so any LAN client can stop a print. See BAM-16 and `code-review/2026-10-02-manual-review.md`|
+| BAM-28 |Printer control API (pause / resume / stop / speed)|🟡|M|`POST /api/printers/:id/command`. API only — no UI. Guarded by the BAM-30 admin token since v0.5.0 (previously open to any LAN client)|
 | BAM-29 |Rate limiting on auth login/verify endpoints|✅|S|`89148c5`|
 
 ---
@@ -100,7 +100,7 @@ From the CODEX-SF371 × AGY-SF002 blind xval, merged and verified in `research/c
 
 | ID | Feature | Status | Priority | Effort | Depends on | Notes |
 |---|---|---|---|---|---|---|
-| BAM-30 |Interim requester auth (admin token on mutating routes) + query `limit` caps|❌|HIGH|S|—|Interim split of BAM-16; closes code-review 2026-10-02 H1/H2/M1/M3|
+| BAM-30 |Interim requester auth (shared admin token on all `/api` + `/ws`) + query `limit` caps|✅|HIGH|S|—|v0.5.0. Generated token or `BAMBUZLE_ADMIN_TOKEN`; `BAMBUZLE_PUBLIC_READ`, `BAMBUZLE_AUTH=off`. Closes code-review 2026-10-02 H1/H2/M1/M2/M3|
 | BAM-31 |Full HMS code dictionary with wiki links|❌|HIGH|S|—|Only 25 codes hardcoded today (`src/utils/hms-codes.js`)|
 | BAM-32 |Surface unused MQTT fields: xcam AI flags, nozzle type/diameter, upgrade state, network|❌|HIGH|M|—|Received but not parsed (`src/bambu/message-parser.js`)|
 | BAM-33 |Docker/Compose packaging (amd64 + arm64)|❌|HIGH|S|—|No container today; better-sqlite3 needs a toolchain|

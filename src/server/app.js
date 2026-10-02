@@ -8,12 +8,14 @@ const YAML = require('js-yaml');
 const { createApiRouter } = require('./routes/api');
 const { createAlertsRouter } = require('./routes/alerts');
 const { createAuthRouter } = require('./routes/auth');
+const { createSessionRouter } = require('./routes/session');
 
 /**
  * @param {object} printerManager
  * @param {object} authCallbacks — { onAuthenticated(auth) }
+ * @param {object} adminAuth — dashboard requester auth from createAdminAuth()
  */
-function createApp(printerManager, authCallbacks) {
+function createApp(printerManager, authCallbacks, adminAuth) {
   const app = express();
 
   app.use(express.json());
@@ -37,6 +39,10 @@ function createApp(printerManager, authCallbacks) {
     customSiteTitle: 'Bambuzle API Documentation',
   }));
   app.get('/api/spec', (req, res) => res.json(openapiSpec));
+
+  // Dashboard session (token entry) is reachable without a session; everything else under /api is guarded
+  app.use('/api/session', createSessionRouter(adminAuth));
+  app.use('/api', adminAuth.requireAdmin);
 
   // API routes
   app.use('/api/auth', createAuthRouter(authCallbacks));

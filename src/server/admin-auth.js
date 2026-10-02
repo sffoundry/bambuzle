@@ -1,0 +1,121 @@
+'use strict';
+
+// Dashboard requester authentication (BAM-30 — interim single shared admin token).
+//
+// This is distinct from src/bambu/auth.js, which is the *server's* Bambu Cloud session.
+// Before BAM-30 any LAN client could stop prints, re-point the cloud login, or add
+// webhook rules; now every /api route and the WebSocket require the admin token unless
+// auth is explicitly disabled.
+//
+// Token resolution: BAMBUZLE_ADMIN_TOKEN env → <dataDir>/admin-token file → generated on
+// first start (written 0600 and logged once). Browsers get a stateless session cookie
+// derived from the token, so rotating the token revokes every session.
+
+const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
+
+const COOKIE_NAME = 'bambuzle_session';
+const COOKIE_MAX_AGE_SEC = 30 * 24 * 60 * 60;
+const TOKEN_FILE = 'admin-token';
+
+function sessionValueFor(token) {
+  return crypto.createHmac('sha256', token).update('bambuzle-session-v1').digest('base64url');
+}
+
+function safeEqual(a, b) {
+  const ab = Buffer.from(String(a));
+  const bb = Buffer.from(String(b));
+  return ab.length === bb.length && crypto.timingSafeEqual(ab, bb);
+}
+
+function parseCookies(header) {
+  const out = {};
+  if (!header) return out;
+  for (const part of header.split(';')) {
+    const idx = part.indexOf('=');
+    if (idx < 0) continue;
+    out[part.slice(0, idx).trim()] = decodeURIComponent(part.slice(idx + 1).trim());
+  }
+  return out;
+}
+
+function resolveToken(authConfig, dataDir, log) {
+  if (authConfig.adminToken) return authConfig.adminToken;
+
+  const tokenPath = path.join(dataDir, TOKEN_FILE);
+  try {
+    const existing = fs.readFileSync(tokenPath, 'utf8').trim();
+    if (existing) {
+      log.info({ tokenPath }, 'Dashboard admin token loaded from data dir');
+      return existing;
+    }
+  } catch {
+    // Not created yet
+  }
+
+  const token = crypto.randomBytes(18).toString('base64url');
+  fs.mkdirSync(dataDir, { recursive: true });
+  fs.writeFileSync(tokenPath, token + '\n', { mode: 0o600 });
+  log.warn({ tokenPath, token }, 'Generated dashboard admin token (first start) — enter it in the dashboard; set BAMBUZLE_ADMIN_TOKEN to override');
+  return token;
+}
+
+/**
+ * @param {object} opts
+ * @param {object} opts.auth — config.auth: { mode: 'on'|'off', adminToken, publicRead }
+ * @param {string} opts.dataDir
+ * @param {object} opts.log — pino logger
+ */
+function createAdminAuth({ auth, dataDir, log }) {
+  const enabled = auth.mode !== 'off';
+  const publicRead = Boolean(auth.publicRead);
+  const token = enabled ? resolveToken(auth, dataDir, log) : null;
+  const sessionValue = token ? sessionValueFor(token) : null;
+
+  if (!enabled) {
+    log.warn('Dashboard auth DISABLED (BAMBUZLE_AUTH=off) — any client that can reach this server can control printers');
+  }
+
+  /** True if the request carries a valid session cookie or bearer token. */
+  function isAuthorized(req) {
+    if (!enabled) return true;
+    const bearer = /^Bearer\s+(.+)$/i.exec(req.headers.authorization || '');
+    if (bearer && safeEqual(bearer[1], token)) return true;
+    const cookie = parseCookies(req.headers.cookie)[COOKIE_NAME];
+    return Boolean(cookie) && safeEqual(cookie, sessionValue);
+  }
+
+  function isReadOnly(req) {
+    return req.method === 'GET' || req.method === 'HEAD';
+  }
+
+  /** Express middleware guarding /api. */
+  function requireAdmin(req, res, next) {
+    if (isAuthorized(req)) return next();
+    if (publicRead && isReadOnly(req)) return next();
+    res.status(401).json({ error: 'admin_auth_required' });
+  }
+
+  /** ws `verifyClient` hook — the dashboard WebSocket is read-only telemetry. */
+  function verifyWsRequest(req) {
+    return isAuthorized(req) || publicRead;
+  }
+
+  function checkToken(candidate) {
+    return enabled && typeof candidate === 'string' && safeEqual(candidate, token);
+  }
+
+  function sessionCookie(req) {
+    const secure = req.secure ? '; Secure' : '';
+    return `${COOKIE_NAME}=${sessionValue}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${COOKIE_MAX_AGE_SEC}${secure}`;
+  }
+
+  function clearCookie() {
+    return `${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`;
+  }
+
+  return { enabled, publicRead, isAuthorized, requireAdmin, verifyWsRequest, checkToken, sessionCookie, clearCookie };
+}
+
+module.exports = { createAdminAuth, COOKIE_NAME };

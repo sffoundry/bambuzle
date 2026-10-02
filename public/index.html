@@ -27,6 +27,13 @@
       <p id="login-subtitle" class="login-subtitle">Sign in with your BambuLab account</p>
       <div id="login-error" class="login-error hidden"></div>
 
+      <!-- Step 0: Dashboard admin token (BAM-30) -->
+      <form id="admin-form" class="hidden">
+        <p class="verify-hint">This dashboard is protected. The admin token is in the server log on first start, in <code>&lt;data dir&gt;/admin-token</code>, or set via <code>BAMBUZLE_ADMIN_TOKEN</code>.</p>
+        <label>Admin Token <input type="password" name="token" required autocomplete="current-password"></label>
+        <button type="submit" class="btn-primary login-btn">Unlock</button>
+      </form>
+
       <!-- Step 1: Email + Password -->
       <form id="login-form">
         <label>Email <input type="email" name="email" required autocomplete="username"></label>

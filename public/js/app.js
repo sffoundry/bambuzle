@@ -32,6 +32,31 @@ let allEvents = [];
 let eventSortCol = 'ts';
 let eventSortDir = 'desc';
 
+// ─── Dashboard session (BAM-30 admin token) ───
+
+/** Resolves true when this browser may use the API; otherwise shows the token form. */
+async function ensureDashboardSession() {
+  try {
+    const res = await fetch('/api/session');
+    const { required, authenticated } = await res.json();
+    if (!required || authenticated) return true;
+  } catch {
+    return false;
+  }
+  document.getElementById('login-overlay').classList.remove('hidden');
+  document.getElementById('admin-form').classList.remove('hidden');
+  document.getElementById('login-form').classList.add('hidden');
+  document.getElementById('verify-form').classList.add('hidden');
+  document.getElementById('login-subtitle').textContent = 'Enter the dashboard admin token';
+  return false;
+}
+
+async function startDashboard() {
+  if (!(await ensureDashboardSession())) return;
+  checkAuth();
+  if (!state.ws) connectWs();
+}
+
 // ─── Auth ───
 
 async function checkAuth() {
@@ -66,6 +91,7 @@ async function checkAuth() {
 }
 
 function setupAuthForms() {
+  const adminForm = document.getElementById('admin-form');
   const loginForm = document.getElementById('login-form');
   const verifyForm = document.getElementById('verify-form');
   const errorEl = document.getElementById('login-error');
@@ -77,6 +103,32 @@ function setupAuthForms() {
   function clearError() {
     errorEl.classList.add('hidden');
   }
+
+  adminForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    clearError();
+    const btn = adminForm.querySelector('button[type="submit"]');
+    btn.disabled = true;
+    try {
+      const res = await fetch('/api/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: adminForm.token.value }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showError(data.error || 'Invalid admin token');
+        return;
+      }
+      adminForm.reset();
+      adminForm.classList.add('hidden');
+      startDashboard();
+    } catch {
+      showError('Network error — is the server running?');
+    } finally {
+      btn.disabled = false;
+    }
+  });
 
   loginForm.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -174,7 +226,11 @@ function connectWs() {
   state.ws.onclose = () => {
     document.getElementById('connection-status').className = 'status-dot disconnected';
     document.getElementById('connection-status').title = 'WebSocket disconnected';
-    state.reconnectTimer = setTimeout(connectWs, 3000);
+    state.reconnectTimer = setTimeout(async () => {
+      // A rejected upgrade looks like a plain close — re-check the dashboard session first
+      if (await ensureDashboardSession()) connectWs();
+      else state.ws = null;
+    }, 3000);
   };
 
   state.ws.onerror = () => {};
@@ -748,8 +804,7 @@ function initResizeHandle() {
 // ─── Boot ───
 
 setupAuthForms();
-checkAuth();
-connectWs();
+startDashboard();
 initEventSorting();
 initEventFilters();
 initDashFilters();

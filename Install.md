@@ -147,6 +147,16 @@ Optional tuning via `config.json` in the project root:
 }
 ```
 
+### Dashboard access (admin token)
+
+The dashboard and API are protected by a single shared **admin token**. Without it, anyone who can reach the server could stop prints, change alert webhooks, or log the server out of BambuLab Cloud.
+
+- **First start:** if `BAMBUZLE_ADMIN_TOKEN` isn't set, Bambuzle generates a token, saves it to `admin-token` in the data directory (the project root unless `BAMBUZLE_DATA_DIR` is set), and prints it once in the log. Enter it in the dashboard; the browser then stays signed in for 30 days.
+- **Choose your own:** set `BAMBUZLE_ADMIN_TOKEN=...` in `.env`. Changing it signs out every browser.
+- **Scripts / API clients:** send `Authorization: Bearer <token>`.
+- **Wall displays:** `BAMBUZLE_PUBLIC_READ=true` lets anyone view (read-only API and live updates) without the token. Changes still require it.
+- **Opt out:** `BAMBUZLE_AUTH=off` restores the old fully open behavior. Only do this on a network you fully trust.
+
 ## Run
 
 ```bash

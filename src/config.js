@@ -39,6 +39,13 @@ const config = {
     days: fileConfig.retention?.days ?? 90,
   },
 
+  // Dashboard requester auth (BAM-30) — see src/server/admin-auth.js
+  auth: {
+    mode: (process.env.BAMBUZLE_AUTH || fileConfig.auth?.mode || 'on').toLowerCase() === 'off' ? 'off' : 'on',
+    adminToken: process.env.BAMBUZLE_ADMIN_TOKEN || fileConfig.auth?.adminToken || '',
+    publicRead: (process.env.BAMBUZLE_PUBLIC_READ ?? String(fileConfig.auth?.publicRead ?? 'false')).toLowerCase() === 'true',
+  },
+
   // HTTP server
   server: {
     port: parseInt(process.env.PORT, 10) || fileConfig.server?.port || 3000,

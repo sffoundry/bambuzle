@@ -11,6 +11,7 @@ const { GCODE_STATE } = require('./utils/constants');
 const { getDb, closeDb } = require('./db/database');
 const queries = require('./db/queries');
 const { createApp } = require('./server/app');
+const { createAdminAuth } = require('./server/admin-auth');
 const { createWebSocket, broadcast, closeWebSocket } = require('./server/websocket');
 const { AlertEngine } = require('./alerts/engine');
 const { AnomalyDetector } = require('./anomaly/detector');
@@ -50,9 +51,10 @@ async function main() {
   anomalyDetector = new AnomalyDetector(log, config);
 
   // Start HTTP server unconditionally so the dashboard is always reachable
-  const app = createApp(printerManager, { onAuthenticated });
+  const adminAuth = createAdminAuth({ auth: config.auth, dataDir: config.dataDir, log });
+  const app = createApp(printerManager, { onAuthenticated }, adminAuth);
   const server = http.createServer(app);
-  createWebSocket(server, log);
+  createWebSocket(server, log, { verifyRequest: adminAuth.verifyWsRequest });
 
   server.listen(config.server.port, config.server.host, () => {
     log.info({ port: config.server.port, host: config.server.host }, 'HTTP server listening');

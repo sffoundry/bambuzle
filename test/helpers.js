@@ -14,7 +14,11 @@ process.env.LOG_LEVEL = process.env.LOG_LEVEL || 'silent';
 const pino = require('pino');
 const { getDb, closeDb } = require('../src/db/database');
 const { createApp } = require('../src/server/app');
+const { createAdminAuth } = require('../src/server/admin-auth');
 const { createWebSocket, closeWebSocket } = require('../src/server/websocket');
+
+const TEST_TOKEN = 'test-admin-token';
+const authHeaders = { Authorization: `Bearer ${TEST_TOKEN}` };
 
 /** Minimal stand-in for the printer manager in src/index.js. */
 function fakePrinterManager({ liveStates = {}, clients = {} } = {}) {
@@ -27,13 +31,20 @@ function fakePrinterManager({ liveStates = {}, clients = {} } = {}) {
 
 /**
  * Start the Express app + WebSocket on an ephemeral port.
+ * Auth defaults to ON with TEST_TOKEN; send `authHeaders` to pass the admin guard.
  * @returns {Promise<{ baseUrl: string, server: http.Server, close: () => Promise<void> }>}
  */
-async function startServer({ printerManager = fakePrinterManager(), authCallbacks = { onAuthenticated() {} } } = {}) {
+async function startServer({
+  printerManager = fakePrinterManager(),
+  authCallbacks = { onAuthenticated() {} },
+  auth = { mode: 'on', adminToken: TEST_TOKEN, publicRead: false },
+} = {}) {
   getDb();
-  const app = createApp(printerManager, authCallbacks);
+  const log = pino({ level: 'silent' });
+  const adminAuth = createAdminAuth({ auth, dataDir, log });
+  const app = createApp(printerManager, authCallbacks, adminAuth);
   const server = http.createServer(app);
-  createWebSocket(server, pino({ level: 'silent' }));
+  createWebSocket(server, log, { verifyRequest: adminAuth.verifyWsRequest });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const { port } = server.address();
   return {
@@ -51,4 +62,4 @@ function cleanup() {
   fs.rmSync(dataDir, { recursive: true, force: true });
 }
 
-module.exports = { dataDir, fakePrinterManager, startServer, cleanup };
+module.exports = { dataDir, TEST_TOKEN, authHeaders, fakePrinterManager, startServer, cleanup };

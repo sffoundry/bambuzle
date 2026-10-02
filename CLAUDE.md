@@ -46,7 +46,14 @@ Browser
 
 ## API Endpoints
 
-### Auth
+### Session (dashboard admin token, BAM-30)
+- `GET /api/session` — is the token required / is this client signed in
+- `POST /api/session` — exchange token for HttpOnly cookie
+- `DELETE /api/session` — sign out
+
+Every other `/api/*` route and `/ws` is guarded by `src/server/admin-auth.js` (Bearer token or session cookie).
+
+### Auth (server's BambuLab Cloud login)
 - `GET /api/auth/status` — check auth state
 - `POST /api/auth/login` — email/password login
 - `POST /api/auth/verify` — verification code
@@ -80,6 +87,8 @@ Browser
 ## Security Notes
 
 - BambuLab credentials stored in `.env` (gitignored)
+- Dashboard requester auth: shared admin token (`BAMBUZLE_ADMIN_TOKEN` or generated `<data dir>/admin-token`); env `BAMBUZLE_PUBLIC_READ`, `BAMBUZLE_AUTH=off`. Never add an `/api` route outside the guard without a reason.
+- `?limit=` params are clamped (`clampLimit` in `routes/api.js`)
 - Frontend uses `escapeHtml()` (via textContent) for all user-visible strings
 - No eval, no innerHTML with raw data
 - SQLite parameterized queries throughout

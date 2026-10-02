@@ -12,16 +12,16 @@ The service architecture is clean and operationally practical, but API-side auth
 
 ### Critical
 
-- [ ] **Printer command endpoint lacks authentication/authorization** — src/server/routes/api.js:96 — Anyone with network access can issue pause/resume/stop/speed commands to printers. _(Reopened 2026-10-02: `273a9fb` checks the server's Bambu Cloud login, not the requester — see `code-review/2026-10-02-manual-review.md` H1.)_
+- [x] **Printer command endpoint lacks authentication/authorization** — src/server/routes/api.js:96 — Anyone with network access can issue pause/resume/stop/speed commands to printers. _(Reopened 2026-10-02: `273a9fb` checks the server's Bambu Cloud login, not the requester — see `code-review/2026-10-02-manual-review.md` H1.)_
 
 ### High
 
-- [ ] **Operational telemetry APIs exposed without auth** — src/server/routes/api.js:15 — Full printer state/history/events are accessible without access control, leaking operational data.
-- [ ] **Login and verification routes have no rate limiting** — src/server/routes/auth.js:20 — Credential and verification-code endpoints can be brute-forced without server-side throttling.
+- [x] **Operational telemetry APIs exposed without auth** — src/server/routes/api.js:15 — Full printer state/history/events are accessible without access control, leaking operational data.
+- [x] **Login and verification routes have no rate limiting** — src/server/routes/auth.js:20 — Credential and verification-code endpoints can be brute-forced without server-side throttling.
 
 ### Medium
 
-- [ ] **User-controlled history limit is not capped** — src/server/routes/api.js:34 — Large `limit` values can trigger heavy DB reads and large JSON responses, increasing latency and memory use.
+- [x] **User-controlled history limit is not capped** — src/server/routes/api.js:34 — Large `limit` values can trigger heavy DB reads and large JSON responses, increasing latency and memory use.
 - [ ] **WebSocket broadcast lacks backpressure handling** — src/server/websocket.js:41 — Slow clients can increase send queue/memory since broadcasts do not gate on socket buffer state.
 
 ### Low
@@ -36,3 +36,5 @@ The service architecture is clean and operationally practical, but API-side auth
 
 - Query layer consistently uses parameterized SQL values.
 - Shutdown path explicitly stops cron jobs, MQTT clients, WebSocket server, and DB.
+
+> **2026-10-02:** Critical, both Highs and the limit Medium are closed by BAM-30 (admin-token guard on all `/api` + `/ws`, `clampLimit`) and `89148c5` (auth rate limiting). See `code-review/2026-10-02-manual-review.md`.

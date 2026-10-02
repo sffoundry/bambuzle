@@ -5,6 +5,16 @@ const queries = require('../../db/queries');
 const { buildPause, buildResume, buildStop, buildSetSpeed } = require('../../bambu/commands');
 const { getAuthStatus } = require('../../bambu/auth');
 
+// Upper bounds for ?limit= (BAM-30 / code-review 2026-10-02 M3). The charts request 10000 samples.
+const MAX_LIMIT = { samples: 20000, events: 2000, jobs: 500 };
+
+/** Parse a ?limit= value, falling back to `def` and clamping to [1, max]. */
+function clampLimit(raw, def, max) {
+  const n = parseInt(raw, 10);
+  if (!Number.isFinite(n) || n < 1) return def;
+  return Math.min(n, max);
+}
+
 /**
  * Create API router.
  * @param {object} printerManager — object with getLiveStates(), getClient(deviceId) methods
@@ -32,7 +42,7 @@ function createApiRouter(printerManager) {
     const samples = queries.getSamples(req.params.id, {
       from: from || undefined,
       to: to || undefined,
-      limit: limit ? parseInt(limit, 10) : 5000,
+      limit: clampLimit(limit, 5000, MAX_LIMIT.samples),
     });
     res.json(samples);
   });
@@ -43,7 +53,7 @@ function createApiRouter(printerManager) {
     const events = queries.getEvents(req.params.id, {
       from: from || undefined,
       to: to || undefined,
-      limit: limit ? parseInt(limit, 10) : 200,
+      limit: clampLimit(limit, 200, MAX_LIMIT.events),
     });
     res.json(events);
   });
@@ -88,7 +98,7 @@ function createApiRouter(printerManager) {
 
   // GET /api/printers/:id/jobs — print job history
   router.get('/printers/:id/jobs', (req, res) => {
-    const limit = req.query.limit ? parseInt(req.query.limit, 10) : 50;
+    const limit = clampLimit(req.query.limit, 50, MAX_LIMIT.jobs);
     const jobs = queries.getJobs(req.params.id, limit);
     res.json(jobs);
   });
@@ -145,7 +155,7 @@ function createApiRouter(printerManager) {
   router.get('/events', (req, res) => {
     const { limit, from, to } = req.query;
     const events = queries.getRecentEvents({
-      limit: limit ? parseInt(limit, 10) : 100,
+      limit: clampLimit(limit, 100, MAX_LIMIT.events),
       from: from || undefined,
       to: to || undefined,
     });
@@ -155,4 +165,4 @@ function createApiRouter(printerManager) {
   return router;
 }
 
-module.exports = { createApiRouter };
+module.exports = { createApiRouter, clampLimit };

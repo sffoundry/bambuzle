@@ -8,3 +8,5 @@
 
 ## Log
 - Foundation: `BAMBUZLE_DATA_DIR` (DB location, Docker volume target) + `node:test` harness (`npm test`, no new deps).
+- Sub-agents: worktree isolation cuts from the session cwd (ai-workflows), not bambuzle — first BAM-31/33 launches got the wrong repo. Relaunched against manually created bambuzle worktrees (`auto/bam-31-hms-codes`, `auto/bam-33-docker`).
+- BAM-30 done: `src/server/admin-auth.js` + `routes/session.js`; guard on all `/api` (except session/spec/docs) and `/ws`; HMAC session cookie (HttpOnly, SameSite=Strict, 30d); generated 0600 token file; `clampLimit`. 9 tests pass; verified live server (401 unauth / 200 bearer / token logged once). Frontend token form syntax-checked but NOT browser-verified (no headless browser on this machine). Version → 0.5.0.
