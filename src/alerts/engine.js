@@ -4,13 +4,17 @@ const queries = require('../db/queries');
 const { GCODE_STATE } = require('../utils/constants');
 const { createConsoleNotifier } = require('./notifiers/console');
 const { createWebhookNotifier } = require('./notifiers/webhook');
+const { createNtfyNotifier, createPushoverNotifier, createTelegramNotifier } = require('./notifiers/push');
 
 class AlertEngine {
-  constructor(logger) {
+  constructor(logger, { notifiers } = {}) {
     this.log = logger.child({ component: 'alerts' });
-    this.notifiers = {
+    this.notifiers = notifiers || {
       console: createConsoleNotifier(logger),
       webhook: createWebhookNotifier(logger),
+      ntfy: createNtfyNotifier(logger),
+      pushover: createPushoverNotifier(logger),
+      telegram: createTelegramNotifier(logger),
     };
     // Track previous state per printer for transition detection
     this.prevStates = {};
@@ -74,6 +78,8 @@ class AlertEngine {
         return this._checkTempThreshold(state, config);
       case 'progress_stall':
         return this._checkProgressStall(deviceId, state, config);
+      case 'print_error':
+        return this._checkPrintError(state, prev);
       default:
         return null;
     }
@@ -98,6 +104,14 @@ class AlertEngine {
       severity: 'error',
       message: `HMS error(s) detected: ${state.hmsErrors.length} active`,
     };
+  }
+
+  /** BAM-15: fires when print_error changes to a real fault (user cancel excluded). */
+  _checkPrintError(state, prev) {
+    const curr = state.diagnostics?.printError;
+    if (!curr?.active) return null;
+    if (prev.diagnostics?.printError?.code === curr.code) return null;
+    return { severity: 'error', message: `Printer reported error ${curr.hex}` };
   }
 
   _checkTempAnomaly(state, config) {

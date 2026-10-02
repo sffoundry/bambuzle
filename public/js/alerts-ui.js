@@ -217,7 +217,7 @@ function updateNotifyFields(via, config) {
 
   if (via === 'webhook') {
     container.innerHTML = `
-      <label>Webhook URL <input type="url" name="nc_url" value="${config.url || ''}" placeholder="https://hooks.slack.com/..."></label>
+      <label>Webhook URL <input type="url" name="nc_url" value="${escapeHtml(config.url || '')}" placeholder="https://hooks.slack.com/..."></label>
       <label>Format
         <select name="nc_format">
           <option value="generic" ${config.format === 'generic' || !config.format ? 'selected' : ''}>Generic JSON</option>
@@ -225,6 +225,22 @@ function updateNotifyFields(via, config) {
           <option value="discord" ${config.format === 'discord' ? 'selected' : ''}>Discord</option>
         </select>
       </label>
+    `;
+  } else if (via === 'ntfy') {
+    container.innerHTML = `
+      <label>Server <input type="url" name="nc_server" value="${escapeHtml(config.server || 'https://ntfy.sh')}"></label>
+      <label>Topic <input type="text" name="nc_topic" value="${escapeHtml(config.topic || '')}" placeholder="pick-something-unguessable" required></label>
+      <label>Access token (optional) <input type="password" name="nc_token" value="${escapeHtml(config.token || '')}" autocomplete="off"></label>
+    `;
+  } else if (via === 'pushover') {
+    container.innerHTML = `
+      <label>App token <input type="password" name="nc_appToken" value="${escapeHtml(config.appToken || '')}" autocomplete="off" required></label>
+      <label>User key <input type="password" name="nc_userKey" value="${escapeHtml(config.userKey || '')}" autocomplete="off" required></label>
+    `;
+  } else if (via === 'telegram') {
+    container.innerHTML = `
+      <label>Bot token <input type="password" name="nc_botToken" value="${escapeHtml(config.botToken || '')}" autocomplete="off" required></label>
+      <label>Chat ID <input type="text" name="nc_chatId" value="${escapeHtml(config.chatId || '')}" required></label>
     `;
   } else {
     container.innerHTML = '';
@@ -252,13 +268,18 @@ function getConditionConfig(form) {
 }
 
 function getNotifyConfig(form) {
-  if (form.notifyVia.value === 'webhook') {
-    return {
-      url: form.nc_url?.value || '',
-      format: form.nc_format?.value || 'generic',
-    };
+  switch (form.notifyVia.value) {
+    case 'webhook':
+      return { url: form.nc_url?.value || '', format: form.nc_format?.value || 'generic' };
+    case 'ntfy':
+      return { server: form.nc_server?.value || 'https://ntfy.sh', topic: form.nc_topic?.value || '', token: form.nc_token?.value || '' };
+    case 'pushover':
+      return { appToken: form.nc_appToken?.value || '', userKey: form.nc_userKey?.value || '' };
+    case 'telegram':
+      return { botToken: form.nc_botToken?.value || '', chatId: form.nc_chatId?.value || '' };
+    default:
+      return {};
   }
-  return {};
 }
 
 function describeCondition(type, config) {
@@ -274,6 +295,8 @@ function describeCondition(type, config) {
       return `${config.sensor || '?'} ${config.operator || '?'} ${config.value || '?'}°C`;
     case 'progress_stall':
       return `Stall > ${config.minutes || 15} min`;
+    case 'print_error':
+      return 'Printer error (print_error)';
     default:
       return type;
   }

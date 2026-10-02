@@ -1069,10 +1069,10 @@ components:
           format: date-time
         event_type:
           type: string
-          enum: [state_change, hms_error]
+          enum: [state_change, hms_error, print_error, alert_fired]
         severity:
           type: string
-          enum: [info, error]
+          enum: [info, warning, error]
         code:
           type: string
           nullable: true
@@ -1281,13 +1281,18 @@ components:
           nullable: true
         conditionType:
           type: string
+          enum: [state_change, hms_error, temp_anomaly, temp_threshold, progress_stall, print_error]
         conditionConfig:
           type: object
         notifyVia:
           type: string
+          enum: [console, webhook, ntfy, pushover, telegram]
           default: console
         notifyConfig:
           type: object
+          description: |
+            Per channel — webhook `{url, format: generic|slack|discord}`; ntfy `{server?, topic, token?}`;
+            pushover `{appToken, userKey}`; telegram `{botToken, chatId}`.
         cooldownSec:
           type: integer
           default: 300

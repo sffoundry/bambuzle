@@ -41,7 +41,8 @@ Browser
 | `src/server/routes/alerts.js` | Alert rules CRUD endpoints |
 | `src/server/routes/system.js` | `/healthz`, `/readyz`, `/api/system` |
 | `src/server/websocket.js` | WebSocket broadcast to dashboard |
-| `src/alerts/engine.js` | Alert condition evaluation |
+| `src/alerts/engine.js` | Alert condition evaluation (incl. `print_error`, BAM-15) |
+| `src/alerts/notifiers/` | console, webhook, `push.js` (ntfy JSON-publish, Pushover, Telegram) |
 | `src/index.js` | Main entry — orchestrates MQTT, sampling, jobs, alerts |
 | `public/index.html` | Single-page dashboard HTML |
 | `public/js/app.js` | Frontend entry — auth, WS, views, events |
