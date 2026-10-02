@@ -29,6 +29,8 @@ Browser
 | `src/config.js` | Loads .env + optional config.json |
 | `src/db/database.js` | SQLite schema, migrations (idempotent ALTER TABLE pattern) |
 | `src/db/queries.js` | All SQL queries |
+| `src/db/backup.js` | Online SQLite backups (verify, sha256, prune, cron) |
+| `scripts/restore.js` | Offline restore CLI (`npm run backup:restore`) |
 | `src/bambu/message-parser.js` | MQTT message parsing, `extractPrinterState()` |
 | `src/bambu/mqtt-client.js` | Per-printer MQTT connection manager |
 | `src/bambu/auth.js` | BambuLab Cloud authentication |
@@ -36,6 +38,7 @@ Browser
 | `src/server/routes/api.js` | Printer/event REST endpoints |
 | `src/server/routes/auth.js` | Login/verify/logout endpoints |
 | `src/server/routes/alerts.js` | Alert rules CRUD endpoints |
+| `src/server/routes/system.js` | `/healthz`, `/readyz`, `/api/system` |
 | `src/server/websocket.js` | WebSocket broadcast to dashboard |
 | `src/alerts/engine.js` | Alert condition evaluation |
 | `src/index.js` | Main entry — orchestrates MQTT, sampling, jobs, alerts |
@@ -45,6 +48,14 @@ Browser
 | `public/js/charts.js` | uPlot chart rendering |
 
 ## API Endpoints
+
+### Health (public, outside the /api guard — BAM-34)
+- `GET /healthz` — liveness (SQLite `SELECT 1`); 200 / 503
+- `GET /readyz` — readiness; 503 only if the DB is down, otherwise 200 `ok` or `degraded` (no Bambu login, no printers connected, last backup failed). Coarse counts only, no device IDs
+
+### System (guarded)
+- `GET /api/system` — version, uptime, data dir, DB size + row counts, backup schedule + last result
+- `POST /api/system/backup` — run a verified online backup now (`src/db/backup.js`; restore: `npm run backup:restore -- <file>`)
 
 ### Session (dashboard admin token, BAM-30)
 - `GET /api/session` — is the token required / is this client signed in

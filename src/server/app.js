@@ -9,13 +9,25 @@ const { createApiRouter } = require('./routes/api');
 const { createAlertsRouter } = require('./routes/alerts');
 const { createAuthRouter } = require('./routes/auth');
 const { createSessionRouter } = require('./routes/session');
+const { createHealthRouter, createSystemRouter } = require('./routes/system');
+const { getAuthStatus } = require('../bambu/auth');
+const config = require('../config');
 
 /**
  * @param {object} printerManager
  * @param {object} authCallbacks — { onAuthenticated(auth) }
  * @param {object} adminAuth — dashboard requester auth from createAdminAuth()
+ * @param {object} [deps] — optional extras (BAM-34)
+ * @param {object|null} [deps.backupService] — from createBackupService(); null disables backup endpoints
+ * @param {function} [deps.getCloudAuthStatus] — returns the Bambu Cloud auth state string
+ * @param {string} [deps.dataDir]
  */
-function createApp(printerManager, authCallbacks, adminAuth) {
+function createApp(printerManager, authCallbacks, adminAuth, deps = {}) {
+  const {
+    backupService = null,
+    getCloudAuthStatus = getAuthStatus,
+    dataDir = config.dataDir,
+  } = deps;
   const app = express();
 
   app.use(express.json());
@@ -28,6 +40,9 @@ function createApp(printerManager, authCallbacks, adminAuth) {
     }
     next();
   });
+
+  // Liveness/readiness probes — public, before static files and the /api guard
+  app.use(createHealthRouter(printerManager, { backupService, getCloudAuthStatus }));
 
   // Static files
   app.use(express.static(path.resolve(__dirname, '..', '..', 'public')));
@@ -48,6 +63,7 @@ function createApp(printerManager, authCallbacks, adminAuth) {
   app.use('/api/auth', createAuthRouter(authCallbacks));
   app.use('/api', createApiRouter(printerManager));
   app.use('/api/alerts', createAlertsRouter());
+  app.use('/api/system', createSystemRouter({ backupService, dataDir }));
 
   // SPA fallback
   app.get('*', (req, res) => {
