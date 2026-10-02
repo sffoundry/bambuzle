@@ -454,6 +454,7 @@ function renderEvents() {
       <td><span class="severity-${evt.severity}">${evt.severity}</span></td>
       <td>${escapeHtml(evt.message || '')}</td>
     `;
+    appendHmsWikiLink(tr.lastElementChild, evt);
     tbody.appendChild(tr);
   }
 }
@@ -508,6 +509,25 @@ function escapeHtml(str) {
   const div = document.createElement('div');
   div.textContent = str;
   return div.innerHTML;
+}
+
+const HMS_WIKI_INDEX = 'https://wiki.bambulab.com/en/hms/home';
+const HMS_KEY_RE = /^[0-9A-F]{4}(_[0-9A-F]{4}){3}$/;
+
+/** Append a DOM-built HMS wiki link to an hms_error message cell (no innerHTML). */
+function appendHmsWikiLink(td, evt) {
+  if (!td || evt.event_type !== 'hms_error' || !HMS_KEY_RE.test(evt.code || '')) return;
+  const href = typeof evt.wiki_url === 'string' && evt.wiki_url.startsWith('https://wiki.bambulab.com/')
+    ? evt.wiki_url
+    : HMS_WIKI_INDEX;
+  const a = document.createElement('a');
+  a.href = href;
+  a.target = '_blank';
+  a.rel = 'noopener noreferrer';
+  a.title = `HMS ${evt.code}`;
+  a.textContent = `[${evt.code}]`;
+  a.addEventListener('click', (e) => e.stopPropagation());
+  td.append(' ', a);
 }
 
 export { state, formatTime, escapeHtml };
@@ -704,6 +724,7 @@ function renderDashEvents() {
       <td><span class="severity-${evt.severity}">${evt.severity}</span></td>
       <td>${escapeHtml(evt.message || '')}</td>
     `;
+    appendHmsWikiLink(tr.lastElementChild, evt);
     tr.addEventListener('click', () => {
       const tsSec = new Date(evt.ts.endsWith('Z') ? evt.ts : evt.ts + 'Z').getTime() / 1000;
       if (selectedEventTs === tsSec) {
