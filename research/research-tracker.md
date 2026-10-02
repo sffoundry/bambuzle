@@ -48,3 +48,21 @@ Track research lifecycle: from Codex completion → Claude consumption → imple
 | Phase | Description | Status | Implemented In | Notes |
 |-------|-------------|--------|---------------|-------|
 | 1 | Rework the dashboard around quick-glance mobile status before camera and analytics density grows further | new | | |
+
+## CODEX-SF371 — [prompt] Bambuzle enhancement discovery beyond BAM-18 — ecosystem/firmware risk,
+- **Research completed:** 2026-10-02 22:43 UTC
+- **Consumed:**
+- **Overall status:** dispatched
+
+| Phase | Description | Status | Implemented In | Notes |
+|-------|-------------|--------|---------------|-------|
+| 1 | [prompt] Bambuzle enhancement discovery beyond BAM-18 — ecosystem/firmware risk, competitor deltas,  | new | | File: `research/2026-10-02-01-prompt-bambuzle-enhancement-discovery.md` |
+
+## AGY-SF002 — [prompt] Bambuzle enhancement discovery beyond BAM-18 — ecosystem/firmware risk,
+- **Research completed:** 2026-10-02 22:43 UTC
+- **Consumed:**
+- **Overall status:** dispatched
+
+| Phase | Description | Status | Implemented In | Notes |
+|-------|-------------|--------|---------------|-------|
+| 1 | [prompt] Bambuzle enhancement discovery beyond BAM-18 — ecosystem/firmware risk, competitor deltas,  | new | | File: `research/2026-10-02-01-prompt-bambuzle-enhancement-discovery.md` |
