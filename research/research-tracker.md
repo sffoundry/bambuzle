@@ -52,7 +52,7 @@ Track research lifecycle: from Codex completion → Claude consumption → imple
 ## CODEX-SF371 — [prompt] Bambuzle enhancement discovery beyond BAM-18 — ecosystem/firmware risk,
 - **Research completed:** 2026-10-02 22:43 UTC
 - **Consumed:**
-- **Overall status:** dispatched
+- **Overall status:** submitted
 
 | Phase | Description | Status | Implemented In | Notes |
 |-------|-------------|--------|---------------|-------|
@@ -61,7 +61,7 @@ Track research lifecycle: from Codex completion → Claude consumption → imple
 ## AGY-SF002 — [prompt] Bambuzle enhancement discovery beyond BAM-18 — ecosystem/firmware risk,
 - **Research completed:** 2026-10-02 22:43 UTC
 - **Consumed:**
-- **Overall status:** dispatched
+- **Overall status:** submitted
 
 | Phase | Description | Status | Implemented In | Notes |
 |-------|-------------|--------|---------------|-------|
