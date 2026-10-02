@@ -1,0 +1,55 @@
+{
+ "print": {
+  "nozzle_diameter": "0.4",
+  "nozzle_type": "stainless_steel",
+  "upgrade_state": {
+   "sequence_id": 0,
+   "progress": "100",
+   "status": "UPGRADE_SUCCESS",
+   "consistency_request": false,
+   "dis_state": 3,
+   "err_code": 0,
+   "force_upgrade": false,
+   "message": "0%, 0B/s",
+   "module": "ota",
+   "new_version_state": 2,
+   "cur_state_code": 0,
+   "idx2": 895185215,
+   "new_ver_list": []
+  },
+  "print_error": 0,
+  "home_flag": 224477464,
+  "net": {
+   "conf": 0,
+   "info": [
+    {
+     "ip": 2050140352,
+     "mask": 16777215
+    }
+   ]
+  },
+  "lights_report": [
+   {
+    "node": "chamber_light",
+    "mode": "on"
+   }
+  ],
+  "ipcam": {
+   "ipcam_dev": "1",
+   "ipcam_record": "disable",
+   "timelapse": "disable",
+   "resolution": "",
+   "tutk_server": "enable",
+   "mode_bits": 3
+  },
+  "heatbreak_fan_speed": "0",
+  "sdcard": true,
+  "wifi_signal": "-42dBm",
+  "gcode_state": "FINISH",
+  "nozzle_temper": 25.90625,
+  "bed_temper": 23.125,
+  "ams": {
+   "ams": []
+  }
+ }
+}

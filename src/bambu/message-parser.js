@@ -1,6 +1,7 @@
 'use strict';
 
 const { GCODE_STATE_MAP, GCODE_STATE } = require('../utils/constants');
+const { extractDiagnostics } = require('./diagnostics');
 
 /**
  * Deep-merge source into target. Arrays are replaced, not merged.
@@ -142,6 +143,9 @@ function extractPrinterState(merged) {
     printType: p.print_type || '',
     bigFan1Speed: p.big_fan1_speed ?? null,
     bigFan2Speed: p.big_fan2_speed ?? null,
+
+    // BAM-32: nozzle, firmware, AI-monitor settings, SD, network, camera, AMS humidity, print_error
+    diagnostics: extractDiagnostics(p, fanToPercent),
   };
 }
 

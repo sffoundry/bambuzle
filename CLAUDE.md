@@ -30,6 +30,7 @@ Browser
 | `src/db/database.js` | SQLite schema, migrations (idempotent ALTER TABLE pattern) |
 | `src/db/queries.js` | All SQL queries |
 | `src/bambu/message-parser.js` | MQTT message parsing, `extractPrinterState()` |
+| `src/bambu/diagnostics.js` | `state.diagnostics`: nozzles, firmware update, xcam AI-monitor *settings*, SD, IP, camera, AMS humidity, print_error, dev mode (BAM-32) |
 | `src/bambu/mqtt-client.js` | Per-printer MQTT connection manager |
 | `src/bambu/auth.js` | BambuLab Cloud authentication |
 | `src/server/app.js` | Express app setup, static files, route mounting |

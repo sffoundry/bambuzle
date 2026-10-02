@@ -169,8 +169,67 @@ function updateCardContent(card, deviceId, printer) {
       <div class="stat"><span class="stat-label">Aux Fan</span><span class="stat-value">${auxFan}</span></div>
       <div class="stat"><span class="stat-label">Cham Fan</span><span class="stat-value">${chamberFan}</span></div>
     </div>
+    ${renderDiagnostics(live.diagnostics)}
     ${gaugeHtml}
   `;
+}
+
+// BAM-32: compact chips for printer diagnostics (see src/bambu/diagnostics.js). Absent data → no chip.
+function chip(label, value, { tone = '', title = '' } = {}) {
+  const cls = tone ? `diag-chip ${tone}` : 'diag-chip';
+  const t = title ? ` title="${escapeHtml(title)}"` : '';
+  return `<span class="${cls}"${t}><span class="diag-label">${escapeHtml(label)}</span> ${escapeHtml(String(value))}</span>`;
+}
+
+function renderDiagnostics(d) {
+  if (!d) return '';
+  const chips = [];
+
+  if (d.printError?.active) {
+    chips.push(chip('ERR', d.printError.hex, { tone: 'diag-error', title: 'Printer reported print_error — see the printer screen or Bambu wiki' }));
+  }
+
+  if (d.nozzles?.length) {
+    const fmt = (n) => [n.diameter != null ? `${n.diameter}mm` : null, n.type].filter(Boolean).join(' ');
+    const text = d.nozzles.length > 1
+      ? d.nozzles.map((n) => `${n.id === 0 ? 'L' : 'R'} ${fmt(n)}`).join(' · ')
+      : fmt(d.nozzles[0]);
+    if (text) chips.push(chip('Nozzle', text));
+  }
+
+  if (d.firmware?.updateAvailable) {
+    chips.push(chip('FW', `update ${d.firmware.newVersion || 'available'}`, { tone: 'diag-accent' }));
+  } else if (d.firmware?.upgradeStatus && !['IDLE', 'UPGRADE_SUCCESS'].includes(d.firmware.upgradeStatus)) {
+    const pct = d.firmware.upgradeProgress != null ? ` ${d.firmware.upgradeProgress}%` : '';
+    chips.push(chip('FW', `${d.firmware.upgradeStatus.toLowerCase()}${pct}`, { tone: 'diag-warn' }));
+  }
+
+  if (d.aiMonitoring) {
+    const a = d.aiMonitoring;
+    const on = [
+      a.spaghettiDetector && 'spaghetti',
+      a.firstLayerInspector && 'first layer',
+      a.buildplateMarkerDetector && 'plate marker',
+    ].filter(Boolean);
+    const halt = a.pauseOnDetection ? ` (pause${a.haltSensitivity ? `, ${a.haltSensitivity}` : ''})` : '';
+    chips.push(chip('AI', on.length ? on.join(', ') + halt : 'off', { title: 'Printer-side AI monitoring settings (xcam)' }));
+  }
+
+  if (d.sdCard) {
+    chips.push(chip('SD', d.sdCard, { tone: d.sdCard === 'abnormal' ? 'diag-error' : d.sdCard === 'missing' ? 'diag-warn' : '' }));
+  }
+
+  for (const [i, u] of (d.amsHumidity || []).entries()) {
+    const value = u.percent != null ? `${u.percent}% RH` : u.index != null ? `level ${u.index}/5` : null;
+    if (value) chips.push(chip(`AMS${(parseInt(u.id, 10) || i) + 1}`, value, { title: 'AMS humidity (level 5 = driest)' }));
+  }
+
+  if (d.heatbreakFanSpeed != null) chips.push(chip('Heatbreak', `${d.heatbreakFanSpeed}%`));
+  if (d.camera?.timelapse) chips.push(chip('Timelapse', 'on'));
+  if (d.developerMode != null) chips.push(chip('Dev mode', d.developerMode ? 'on' : 'off', { title: 'LAN Developer Mode (unsigned MQTT)' }));
+  if (d.network?.ip) chips.push(chip('IP', d.network.ip));
+
+  return chips.length ? `<div class="card-diagnostics">${chips.join('')}</div>` : '';
 }
 
 function formatDuration(minutes) {

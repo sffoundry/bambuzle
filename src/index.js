@@ -214,6 +214,7 @@ function connectPrinter(device, auth) {
     if (state.hmsErrors?.length > 0) {
       handleHmsErrors(deviceId, state.hmsErrors, activeJob);
     }
+    handlePrintError(deviceId, state, prevState, activeJob);
 
     const printer = queries.getPrinter(deviceId);
     alertEngine.evaluate(deviceId, state, printer?.name || deviceId);
@@ -232,6 +233,20 @@ function connectPrinter(device, auth) {
   });
 
   client.connect();
+}
+
+// ─── Print Error (BAM-32) ───
+
+/** Record an event when print_error changes to a non-zero, non-cancel code. */
+function handlePrintError(deviceId, state, prevState, activeJob) {
+  const curr = state.diagnostics?.printError;
+  const prevCode = prevState?.diagnostics?.printError?.code ?? 0;
+  if (!curr?.active || curr.code === prevCode) return;
+
+  const message = `Print error ${curr.hex}`;
+  queries.insertEvent({ deviceId, jobId: activeJob?.id || null, eventType: 'print_error', severity: 'error', code: curr.hex, message });
+  broadcast('event', { device_id: deviceId, event_type: 'print_error', severity: 'error', code: curr.hex, message, ts: new Date().toISOString() });
+  log.warn({ deviceId, code: curr.hex }, message);
 }
 
 // ─── Job Tracking ───

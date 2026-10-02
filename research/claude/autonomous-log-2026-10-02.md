@@ -14,3 +14,5 @@
 - BAM-31 merged (agent, 040e7cc): 5,293 HMS codes vendored from ha-bambulab (MIT) tables built from Bambu's public HMS endpoint; Bambu text has no explicit license — owner may prefer generate-at-build. Old hardcoded table had wrong meanings (e.g. 0300_0100_0001_0001 is heatbed, not nozzle). Model-specific text not yet wired.
 - BAM-33 merged (agent, 3937aa6): Docker image builds, starts without creds, healthy, DB on /data. arm64 unverified (no buildx/QEMU). Follow-ups noted: config.json read from app root not data dir; HOST in .env can override container 0.0.0.0.
 - Tests after merge: 20/20.
+- Push reports 16 Dependabot vulnerabilities on bambuzle main (6 high, 8 moderate, 2 low) — out of queue; flag to Steve.
+- BAM-32 done (Claude): `src/bambu/diagnostics.js`, verified against ha-bambulab (MIT) parser + A1/H2D/P1P mock payloads (trimmed, attributed fixtures). Corrected agy: `xcam` = detector settings, not detection events. Dropped `home_flag` "wired" bit (contradicted by A1 mock). New `print_error` event. Card chips smoke-rendered via stub DOM (escaping verified); not browser-verified. 28/28 tests.

@@ -819,3 +819,11 @@ main { padding: 12px; }
 }
 .u-legend .u-value { font-family: var(--mono); color: var(--text) !important; }
 .u-legend .u-label { text-transform: uppercase; letter-spacing: 0.5px; font-size: 10px; }
+
+/* BAM-32: printer diagnostics chips */
+.card-diagnostics { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+.diag-chip { border: 1px solid var(--border); border-radius: var(--radius); padding: 1px 5px; font-size: 10px; color: var(--text); white-space: nowrap; }
+.diag-label { color: var(--text-dim); text-transform: uppercase; }
+.diag-chip.diag-accent { border-color: var(--accent); }
+.diag-chip.diag-warn { border-color: var(--yellow); color: var(--yellow); }
+.diag-chip.diag-error { border-color: var(--red); color: var(--red); }
