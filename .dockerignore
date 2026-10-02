@@ -1,0 +1,29 @@
+# Dependencies are installed inside the image
+node_modules
+npm-debug.log
+*.log
+
+# VCS / tooling
+.git
+.gitattributes
+.aiw
+
+# Runtime state and secrets — never bake into the image
+*.db
+*.db-*
+.env
+config.json
+admin-token
+data
+
+# Not needed at runtime
+research/
+planning/
+code-review/
+test/
+
+# Docker files themselves
+Dockerfile
+.dockerignore
+compose*.yaml
+compose*.yml

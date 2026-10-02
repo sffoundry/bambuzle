@@ -25,6 +25,8 @@ npm start
 
 Open **http://localhost:3000**
 
+Prefer containers? `cp compose.example.yaml compose.yaml && docker compose up -d --build` — see [Install.md § Docker](Install.md#docker) (amd64 + arm64/Raspberry Pi 4/5).
+
 See [Install.md](Install.md) for detailed platform-specific instructions (Windows, macOS/Linux, Raspberry Pi).
 
 ## Documentation
