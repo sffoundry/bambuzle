@@ -1,0 +1,39 @@
+# Bambuzle — example Docker Compose file.
+#   cp compose.example.yaml compose.yaml
+#   cp .env.example .env        # optional: BambuLab credentials, LOG_LEVEL, ...
+#   mkdir -p data               # bind-mounted state dir (must be writable by uid 1000)
+#   docker compose up -d --build
+services:
+  bambuzle:
+    build: .
+    image: bambuzle:local
+    container_name: bambuzle
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # Runtime state (bambuzle.db and friends) lives here; it is the mounted volume below.
+      BAMBUZLE_DATA_DIR: /data
+      # --- Dashboard auth (optional) ---
+      # Fixed admin token. If unset, the server generates one into /data/admin-token on
+      # first start and logs it. Find it with:
+      #   docker compose logs bambuzle | grep -i token
+      # or read ./data/admin-token (or the named volume) on the host.
+      # BAMBUZLE_ADMIN_TOKEN: change-me
+      # Disable dashboard auth entirely (trusted LAN only):
+      # BAMBUZLE_AUTH: "off"
+      # Allow unauthenticated read-only viewing:
+      # BAMBUZLE_PUBLIC_READ: "true"
+    ports:
+      - "3000:3000"
+    volumes:
+      # Bind mount: the host dir must be writable by the container user (uid 1000 = `node`).
+      - ./data:/data
+      # Or use a named volume instead (no host permission issues):
+      # - bambuzle-data:/data
+      # Optional tuning file (read from the app root, not /data):
+      # - ./config.json:/app/config.json:ro
+
+# volumes:
+#   bambuzle-data:
