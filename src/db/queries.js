@@ -27,18 +27,23 @@ function getPrinter(deviceId) {
 
 // ─── Print Jobs ───
 
-function startJob({ deviceId, taskId, subtaskName, gcodeFile }) {
+function startJob({ deviceId, taskId, subtaskName, gcodeFile, material = null, materialColor = null }) {
   const db = getDb();
   const result = db.prepare(`
-    INSERT INTO print_jobs (device_id, task_id, subtask_name, gcode_file, started_at)
-    VALUES (?, ?, ?, ?, datetime('now'))
-  `).run(deviceId, taskId, subtaskName, gcodeFile);
+    INSERT INTO print_jobs (device_id, task_id, subtask_name, gcode_file, started_at, material, material_color)
+    VALUES (?, ?, ?, ?, datetime('now'), ?, ?)
+  `).run(deviceId, taskId, subtaskName, gcodeFile, material, materialColor);
   return result.lastInsertRowid;
 }
 
+/** Close a job; duration_sec is wall-clock (started_at → now), pauses included. */
 function endJob(jobId, endState, progressPct) {
   getDb().prepare(`
-    UPDATE print_jobs SET ended_at = datetime('now'), end_state = ?, progress_pct = ?
+    UPDATE print_jobs SET
+      ended_at = datetime('now'),
+      end_state = ?,
+      progress_pct = ?,
+      duration_sec = MAX(0, CAST(ROUND((julianday('now') - julianday(started_at)) * 86400) AS INTEGER))
     WHERE id = ?
   `).run(endState, progressPct, jobId);
 }
@@ -57,6 +62,96 @@ function getJobs(deviceId, limit = 50) {
     WHERE device_id = ?
     ORDER BY started_at DESC LIMIT ?
   `).all(deviceId, limit);
+}
+
+// ─── Job Statistics (BAM-10) ───
+
+// Duration of an ended job in seconds; falls back to ended_at − started_at for rows
+// written before duration_sec existed. NULL for running jobs.
+const JOB_DURATION_SQL = `CASE WHEN j.ended_at IS NOT NULL THEN
+  COALESCE(j.duration_sec, MAX(0, (julianday(j.ended_at) - julianday(j.started_at)) * 86400))
+END`;
+
+const JOB_COUNTERS_SQL = `
+  COUNT(*) AS jobs,
+  COALESCE(SUM(CASE WHEN j.end_state = 'FINISH' THEN 1 ELSE 0 END), 0) AS finished,
+  COALESCE(SUM(CASE WHEN j.end_state = 'FAILED' THEN 1 ELSE 0 END), 0) AS failed,
+  COALESCE(SUM(CASE WHEN j.end_state = 'IDLE' THEN 1 ELSE 0 END), 0) AS cancelled,
+  COALESCE(SUM(CASE WHEN j.ended_at IS NULL THEN 1 ELSE 0 END), 0) AS running,
+  COALESCE(SUM(${JOB_DURATION_SQL}), 0) AS total_sec,
+  AVG(${JOB_DURATION_SQL}) AS avg_sec`;
+
+function round(n, digits) {
+  const f = 10 ** digits;
+  return Math.round(n * f) / f;
+}
+
+/** Shape a raw counters row into the API's stats object. */
+function shapeCounters(row) {
+  const finished = row.finished || 0;
+  const failed = row.failed || 0;
+  const cancelled = row.cancelled || 0;
+  const completed = finished + failed + cancelled;
+  return {
+    jobs: row.jobs || 0,
+    finished,
+    failed,
+    cancelled,
+    running: row.running || 0,
+    successRate: completed > 0 ? round(finished / completed, 4) : null,
+    totalPrintHours: round((row.total_sec || 0) / 3600, 2),
+    avgDurationMin: row.avg_sec != null ? round(row.avg_sec / 60, 1) : null,
+  };
+}
+
+/**
+ * Aggregate print-job statistics. Jobs are selected by started_at within [from, to].
+ * Cancelled = end_state IDLE. successRate = finished / (finished + failed + cancelled).
+ * @param {{ deviceId?: string, from?: string, to?: string }} opts — from/to are SQLite-parsable datetimes
+ */
+function getJobStats({ deviceId, from, to } = {}) {
+  let where = 'WHERE 1=1';
+  const params = [];
+  if (deviceId) { where += ' AND j.device_id = ?'; params.push(deviceId); }
+  if (from) { where += ' AND j.started_at >= datetime(?)'; params.push(from); }
+  if (to) { where += ' AND j.started_at <= datetime(?)'; params.push(to); }
+
+  const db = getDb();
+  const overall = db.prepare(`SELECT ${JOB_COUNTERS_SQL} FROM print_jobs j ${where}`).get(...params);
+
+  const byPrinter = db.prepare(`
+    SELECT j.device_id AS device_id, COALESCE(NULLIF(p.name, ''), j.device_id) AS name, ${JOB_COUNTERS_SQL}
+    FROM print_jobs j LEFT JOIN printers p ON p.device_id = j.device_id
+    ${where}
+    GROUP BY j.device_id
+    ORDER BY jobs DESC, name ASC
+  `).all(...params);
+
+  const byMaterial = db.prepare(`
+    SELECT COALESCE(NULLIF(TRIM(j.material), ''), 'Unknown') AS material, ${JOB_COUNTERS_SQL}
+    FROM print_jobs j
+    ${where}
+    GROUP BY 1
+    ORDER BY jobs DESC, material ASC
+  `).all(...params);
+
+  const byDay = db.prepare(`
+    SELECT date(j.started_at) AS date,
+      COALESCE(SUM(CASE WHEN j.end_state = 'FINISH' THEN 1 ELSE 0 END), 0) AS finished,
+      COALESCE(SUM(CASE WHEN j.end_state = 'FAILED' THEN 1 ELSE 0 END), 0) AS failed,
+      COALESCE(SUM(CASE WHEN j.end_state = 'IDLE' THEN 1 ELSE 0 END), 0) AS cancelled
+    FROM print_jobs j
+    ${where}
+    GROUP BY 1
+    ORDER BY 1 ASC
+  `).all(...params);
+
+  return {
+    overall: shapeCounters(overall),
+    byPrinter: byPrinter.map((r) => ({ deviceId: r.device_id, name: r.name, ...shapeCounters(r) })),
+    byMaterial: byMaterial.map((r) => ({ material: r.material, ...shapeCounters(r) })),
+    byDay,
+  };
 }
 
 // ─── Samples ───
@@ -373,6 +468,7 @@ module.exports = {
   endJob,
   getActiveJob,
   getJobs,
+  getJobStats,
   insertSample,
   getSamples,
   insertEvent,

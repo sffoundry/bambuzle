@@ -147,6 +147,11 @@ function runMigrations(database) {
   try { database.exec('ALTER TABLE print_jobs ADD COLUMN hms_codes TEXT'); } catch { /* already exists */ }
   try { database.exec('ALTER TABLE print_jobs ADD COLUMN total_layers INTEGER'); } catch { /* already exists */ }
 
+  // Job statistics columns (BAM-10). Nullable: historical rows predate them.
+  try { database.exec('ALTER TABLE print_jobs ADD COLUMN material TEXT'); } catch { /* already exists */ }
+  try { database.exec('ALTER TABLE print_jobs ADD COLUMN material_color TEXT'); } catch { /* already exists */ }
+  try { database.exec('ALTER TABLE print_jobs ADD COLUMN duration_sec INTEGER'); } catch { /* already exists */ }
+
   database.exec(`
     CREATE TABLE IF NOT EXISTS auth_tokens (
       id INTEGER PRIMARY KEY CHECK (id = 1),

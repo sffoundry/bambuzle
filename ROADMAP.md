@@ -75,7 +75,7 @@ Shipped Feb 2026 but never recorded on the roadmap. Effort sizes are retrospecti
 | ID | Feature | Status | Priority | Effort | Notes |
 |---|---|---|---|---|---|
 | BAM-9 |Live camera feed (LAN-only, MJPEG/WS)|❌|HIGH|XL|See § "Live camera feed" below for full spec|
-| BAM-10 |Print job statistics (totals, success rates, by-material)|❌|MEDIUM|M|Aggregations across `prints` table|
+| BAM-10 |Print job statistics (totals, success rates, by-material)|✅|MEDIUM|M|v0.5.0. `GET /api/stats` + Stats view; jobs now record material/colour (active tray at start) and duration. Caveats: durations include pauses; one material per job; UTC days|
 | BAM-11 |Filament inventory tracking (per-spool usage)|❌|HIGH|XL|See § "Filament inventory tracking" below for full spec — schema + backend + UI changes. 2026-10-02 xval: both partners recommend re-scoping to Spoolman integration (BAM-38)|
 | BAM-12 |Mobile-friendly responsive layout|❌|MEDIUM|M|Phone/tablet viewing of the dashboard|
 
