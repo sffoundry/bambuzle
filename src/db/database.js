@@ -1,15 +1,19 @@
 'use strict';
 
 const Database = require('better-sqlite3');
+const fs = require('fs');
 const path = require('path');
 
-const DB_PATH = path.resolve(__dirname, '..', '..', 'bambuzle.db');
+const config = require('../config');
+
+const DB_PATH = path.join(config.dataDir, 'bambuzle.db');
 
 let db = null;
 
 function getDb() {
   if (db) return db;
 
+  fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
   db = new Database(DB_PATH);
   db.pragma('journal_mode = WAL');
   db.pragma('busy_timeout = 5000');

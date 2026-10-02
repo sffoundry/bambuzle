@@ -15,7 +15,12 @@ try {
   // No config.json or invalid — use defaults
 }
 
+const PROJECT_ROOT = path.resolve(__dirname, '..');
+
 const config = {
+  // Directory for the SQLite database and other runtime state (Docker: mount a volume here)
+  dataDir: path.resolve(process.env.BAMBUZLE_DATA_DIR || fileConfig.dataDir || PROJECT_ROOT),
+
   // BambuLab credentials (from .env)
   bambu: {
     email: process.env.BAMBU_EMAIL || '',
