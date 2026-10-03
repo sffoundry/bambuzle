@@ -1440,7 +1440,7 @@ components:
           nullable: true
         conditionType:
           type: string
-          enum: [state_change, hms_error, temp_anomaly, temp_threshold, progress_stall, print_error]
+          enum: [state_change, hms_error, temp_anomaly, temp_threshold, progress_stall, print_error, ams_humidity]
         conditionConfig:
           type: object
         notifyVia:

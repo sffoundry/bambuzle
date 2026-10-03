@@ -80,6 +80,8 @@ class AlertEngine {
         return this._checkProgressStall(deviceId, state, config);
       case 'print_error':
         return this._checkPrintError(state, prev);
+      case 'ams_humidity':
+        return this._checkAmsHumidity(state, prev, config);
       default:
         return null;
     }
@@ -112,6 +114,24 @@ class AlertEngine {
     if (!curr?.active) return null;
     if (prev.diagnostics?.printError?.code === curr.code) return null;
     return { severity: 'error', message: `Printer reported error ${curr.hex}` };
+  }
+
+  /**
+   * BAM-43: fires when an AMS unit crosses into "too humid" — % RH ≥ thresholdPct where the unit reports
+   * a percentage, else the 1–5 level ≤ maxLevel (5 = driest). Edge-triggered per unit.
+   */
+  _checkAmsHumidity(state, prev, config = {}) {
+    const thresholdPct = Number.isFinite(config.thresholdPct) ? config.thresholdPct : 40;
+    const maxLevel = Number.isFinite(config.maxLevel) ? config.maxLevel : 2;
+    const tooHumid = (u) => (u?.percent != null ? u.percent >= thresholdPct : u?.index != null && u.index <= maxLevel);
+    const before = new Map((prev.diagnostics?.amsHumidity || []).map((u) => [u.id, u]));
+    const crossed = (state.diagnostics?.amsHumidity || []).filter((u) => tooHumid(u) && !tooHumid(before.get(u.id)));
+    if (crossed.length === 0) return null;
+    const parts = crossed.map((u) => `AMS ${(parseInt(u.id, 10) || 0) + 1} at ${u.percent != null ? `${u.percent}% RH` : `level ${u.index}/5`}`);
+    return {
+      severity: 'warning',
+      message: `${parts.join(', ')} (limit ${thresholdPct}% RH) — dry the filament or replace the desiccant`,
+    };
   }
 
   _checkTempAnomaly(state, config) {

@@ -944,3 +944,8 @@ main { padding: 12px; }
 .ctl-status.ctl-ok { color: var(--green); }
 .ctl-status.ctl-warn { color: var(--yellow); }
 .ctl-status.ctl-error { color: var(--red); }
+
+/* BAM-43: AMS humidity trend */
+.ams-spark { vertical-align: middle; margin-left: 6px; color: var(--accent); }
+.ams-trend-up { color: var(--yellow); margin-left: 6px; font-size: 10px; }
+.ams-trend-down { color: var(--green); margin-left: 6px; font-size: 10px; }

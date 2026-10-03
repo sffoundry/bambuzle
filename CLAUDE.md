@@ -43,6 +43,7 @@ Browser
 | `src/server/routes/system.js` | `/healthz`, `/readyz`, `/api/system` |
 | `src/server/websocket.js` | WebSocket broadcast to dashboard |
 | `src/server/routes/metrics.js` | `GET /metrics` Prometheus exposition, admin-token guarded (BAM-37) |
+| `src/db/ams-humidity.js` | AMS humidity history (self-creating table), recorded from `state.diagnostics.amsHumidity` (BAM-43) |
 | `src/alerts/engine.js` | Alert condition evaluation (incl. `print_error`, BAM-15) |
 | `src/alerts/notifiers/` | console, webhook, `push.js` (ntfy JSON-publish, Pushover, Telegram) |
 | `src/index.js` | Main entry — orchestrates MQTT, sampling, jobs, alerts |
@@ -84,6 +85,7 @@ Every other `/api/*` route and `/ws` is guarded by `src/server/admin-auth.js` (B
 
 ### Stats
 - `GET /api/stats` — print job statistics: totals, success rate, by printer / material / day (query: printer, from, to; default last 30 days; bad dates → 400)
+- `GET /api/printers/:id/ams-humidity` — humidity history per AMS unit (default 7 days)
 - `POST /api/printers/:id/command` — pause/resume/stop/set_speed; state-gated (`src/server/printer-commands.js`), waits for the printer's reply, audited as `command` events (BAM-28)
 
 ### Events

@@ -1,0 +1,73 @@
+'use strict';
+
+const { test, after } = require('node:test');
+const assert = require('node:assert/strict');
+const pino = require('pino');
+const { authHeaders, startServer, cleanup } = require('./helpers');
+const store = require('../src/db/ams-humidity');
+const queries = require('../src/db/queries');
+const { AlertEngine } = require('../src/alerts/engine');
+
+after(cleanup);
+
+const T0 = Date.parse('2026-10-01T00:00:00Z');
+const unit = (id, percent, index = 2) => ({ id, percent, index, temp: 27 });
+
+test('records every 15 min, sooner on change, ignores sub-minute jitter', () => {
+  store._resetThrottle();
+  assert.equal(store.recordAmsHumidity('h1', [unit('0', 32), unit('1', 43)], T0), 2);
+  assert.equal(store.recordAmsHumidity('h1', [unit('0', 32), unit('1', 43)], T0 + 5 * 60e3), 0, 'unchanged within interval');
+  assert.equal(store.recordAmsHumidity('h1', [unit('0', 33), unit('1', 43)], T0 + 30e3), 0, 'change within a minute ignored');
+  assert.equal(store.recordAmsHumidity('h1', [unit('0', 33), unit('1', 43)], T0 + 2 * 60e3), 1, 'change after a minute recorded');
+  assert.equal(store.recordAmsHumidity('h1', [unit('0', 33), unit('1', 43)], T0 + 16 * 60e3), 1, 'unit 1 hit the interval');
+  assert.equal(store.recordAmsHumidity('h1', [{ id: '2', percent: null, index: null }], T0), 0, 'no data, no row');
+  assert.equal(store.recordAmsHumidity('h1', undefined, T0), 0);
+
+  const hist = store.getAmsHumidityHistory('h1', { from: '2026-09-30 00:00:00' });
+  assert.deepEqual(hist['0'].map((p) => p.pct), [32, 33]);
+  assert.deepEqual(hist['1'].map((p) => p.pct), [43, 43]);
+});
+
+test('history API: auth, default 7-day window, bad dates', async () => {
+  store._resetThrottle();
+  store.recordAmsHumidity('h2', [unit('0', 40)], Date.now() - 2 * 86400e3);
+  store._resetThrottle();
+  store.recordAmsHumidity('h2', [unit('0', 41)], Date.now() - 30 * 86400e3);
+  const srv = await startServer();
+  try {
+    assert.equal((await fetch(`${srv.baseUrl}/api/printers/h2/ams-humidity`)).status, 401);
+    const body = await (await fetch(`${srv.baseUrl}/api/printers/h2/ams-humidity`, { headers: authHeaders })).json();
+    assert.deepEqual(body.units['0'].map((p) => p.pct), [40], '30-day-old point outside default window');
+    const all = await (await fetch(`${srv.baseUrl}/api/printers/h2/ams-humidity?from=2020-01-01`, { headers: authHeaders })).json();
+    assert.equal(all.units['0'].length, 2);
+    assert.equal((await fetch(`${srv.baseUrl}/api/printers/h2/ams-humidity?from=nope`, { headers: authHeaders })).status, 400);
+  } finally {
+    await srv.close();
+  }
+});
+
+test('retention cleanup removes old rows', () => {
+  const before = store.getAmsHumidityHistory('h2', { from: '2020-01-01' })['0'].length;
+  store.deleteOldAmsHumidity(7);
+  assert.equal(store.getAmsHumidityHistory('h2', { from: '2020-01-01' })['0'].length, before - 1);
+});
+
+test('ams_humidity alert is edge-triggered per unit; level fallback for older AMS', async () => {
+  const sent = [];
+  const engine = new AlertEngine(pino({ level: 'silent' }), { notifiers: { console: { notify: async (a) => sent.push(a.message) } } });
+  queries.upsertPrinter({ deviceId: 'h3', name: 'Gamma', model: 'H2D' });
+  queries.createAlertRule({ name: 'Wet AMS', deviceId: 'h3', conditionType: 'ams_humidity', conditionConfig: { thresholdPct: 40 }, notifyVia: 'console', cooldownSec: 0 });
+  const st = (units) => ({ gcodeState: 'IDLE', diagnostics: { amsHumidity: units } });
+
+  engine.evaluate('h3', st([unit('0', 32), unit('1', 38)]), 'Gamma');
+  engine.evaluate('h3', st([unit('0', 32), unit('1', 43)]), 'Gamma'); // unit 1 crosses
+  engine.evaluate('h3', st([unit('0', 32), unit('1', 45)]), 'Gamma'); // still above → no repeat
+  engine.evaluate('h3', st([unit('0', 32), unit('1', 30)]), 'Gamma'); // recovers
+  engine.evaluate('h3', st([{ id: '0', percent: null, index: 1 }, unit('1', 30)]), 'Gamma'); // level fallback
+  await new Promise((r) => setImmediate(r));
+
+  assert.equal(sent.length, 2, JSON.stringify(sent));
+  assert.equal(queries.getAlertRule(queries.getAllAlertRules().find((r) => r.name === "Wet AMS").id).cooldown_sec, 0, "cooldown 0 is kept, not defaulted to 300");
+  assert.match(sent[0], /AMS 2 at 43% RH \(limit 40% RH\)/);
+  assert.match(sent[1], /AMS 1 at level 1\/5/);
+});

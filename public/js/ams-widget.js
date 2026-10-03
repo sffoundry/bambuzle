@@ -42,6 +42,7 @@ function getTargetPrinter(printers, dashFilters) {
 }
 
 function renderAmsForPrinter(container, printer) {
+  lastRender = { container, printer };
   const live = printer?.live;
   const amsData = live?.ams;
 
@@ -58,7 +59,7 @@ function renderAmsForPrinter(container, printer) {
     const humidity = formatAmsHumidity(unit);
 
     html += `<div class="ams-unit">`;
-    html += `<div class="ams-unit-header">AMS ${unitId} &mdash; Humidity: ${escapeHtml(humidity)}</div>`;
+    html += `<div class="ams-unit-header">AMS ${unitId} &mdash; Humidity: ${escapeHtml(humidity)}${renderHumidityTrend(printer, unit.id)}</div>`;
     html += `<div class="ams-trays">`;
 
     if (unit.tray && unit.tray.length > 0) {
@@ -118,3 +119,57 @@ function formatAmsHumidity(unit) {
   if (level >= 1 && level <= 5) return `level ${level}/5`;
   return '--';
 }
+
+// ─── BAM-43: humidity history (sparkline + 24h trend) ───
+// History comes from /api/printers/:id/ams-humidity; cached per printer and refreshed every 5 min.
+// The widget re-renders on every MQTT update, so fetching is fire-and-forget with a re-render on arrival.
+
+const HISTORY_TTL_MS = 5 * 60 * 1000;
+const historyCache = {}; // deviceId -> { at, units, loading }
+let lastRender = null;
+
+function getHistory(deviceId) {
+  const entry = historyCache[deviceId];
+  if (entry && (entry.loading || Date.now() - entry.at < HISTORY_TTL_MS)) return entry.units || null;
+  historyCache[deviceId] = { at: Date.now(), units: entry?.units || null, loading: true };
+  fetch(`/api/printers/${encodeURIComponent(deviceId)}/ams-humidity`)
+    .then((r) => (r.ok ? r.json() : null))
+    .then((data) => {
+      historyCache[deviceId] = { at: Date.now(), units: data?.units || {}, loading: false };
+      if (lastRender && lastRender.printer?.db?.device_id === deviceId) {
+        renderAmsForPrinter(lastRender.container, lastRender.printer);
+      }
+    })
+    .catch(() => { historyCache[deviceId] = { at: Date.now(), units: entry?.units || null, loading: false }; });
+  return entry?.units || null;
+}
+
+function seriesValue(p) {
+  return p.pct != null ? p.pct : null;
+}
+
+function renderHumidityTrend(printer, amsId) {
+  const deviceId = printer?.db?.device_id;
+  if (!deviceId || amsId == null) return '';
+  const points = (getHistory(deviceId) || {})[String(amsId)] || [];
+  const values = points.map(seriesValue).filter((v) => v != null);
+  if (values.length < 2) return '';
+
+  // 24h delta: latest vs the newest point at least 24h old (or the oldest available)
+  const latest = points[points.length - 1];
+  const cutoff = Date.now() - 86400e3;
+  const ref = [...points].reverse().find((p) => Date.parse(p.ts.replace(' ', 'T') + 'Z') <= cutoff) || points[0];
+  const delta = seriesValue(latest) != null && seriesValue(ref) != null ? seriesValue(latest) - seriesValue(ref) : null;
+  const arrow = delta == null || delta === 0 ? '' : delta > 0 ? `<span class="ams-trend-up" title="vs 24h ago">&#9650;${delta}</span>`
+    : `<span class="ams-trend-down" title="vs 24h ago">&#9660;${-delta}</span>`;
+
+  const w = 80;
+  const h = 16;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = max - min || 1;
+  const step = w / (values.length - 1);
+  const d = values.map((v, i) => `${i ? 'L' : 'M'}${(i * step).toFixed(1)},${(h - ((v - min) / span) * (h - 2) - 1).toFixed(1)}`).join(' ');
+  return ` ${arrow}<svg class="ams-spark" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" aria-label="7-day humidity ${min}–${max}%"><path d="${d}" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>`;
+}
+

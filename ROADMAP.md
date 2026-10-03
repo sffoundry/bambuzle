@@ -113,7 +113,7 @@ From the CODEX-SF371 × AGY-SF002 blind xval, merged and verified in `research/c
 | BAM-40 |Print-failure triage timeline (anomalies + xcam + HMS)|❌|MEDIUM|M|BAM-32|Builds on BAM-25 anomaly capture|
 | BAM-41 |Operator audit trail (auth, config, command attempts)|❌|MEDIUM|M|BAM-30||
 | BAM-42 |Home Assistant MQTT discovery bridge (read-only)|❌|LOW|M|BAM-34|Overlaps sibling `bambu-farm-card`|
-| BAM-43 |AMS humidity / desiccant trend + alert|❌|LOW|S|—|Raw `ams` humidity already reaches the client|
+| BAM-43 |AMS humidity / desiccant trend + alert|✅|LOW|S|—|v0.6.0. `ams_humidity_samples` (15-min / on-change, retention-pruned), `GET /api/printers/:id/ams-humidity`, 7-day sparkline + 24h trend in the AMS widget, edge-triggered `ams_humidity` alert (% RH threshold, level fallback for older AMS). Also fixed: alert cooldown 0 was silently stored as 300|
 | BAM-44 |SD-card timelapse/file harvester over FTPS|❌|LOW|M|BAM-35|Proposed replacement for BAM-13's frame-stitching approach|
 | BAM-45 |Compact fleet matrix view (read-only)|❌|LOW|M|—|No control buttons until BAM-30|
 | BAM-46 |Job data export (CSV/JSON + data dictionary)|❌|LOW|S|BAM-10||

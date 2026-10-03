@@ -10,6 +10,7 @@ const { parseHmsErrors } = require('./utils/hms-codes');
 const { GCODE_STATE } = require('./utils/constants');
 const { getActiveTrayMaterial } = require('./utils/material');
 const { jobEndState, JOB_END_CANCELLED } = require('./utils/job-state');
+const amsHumidity = require('./db/ams-humidity');
 const { getDb, closeDb } = require('./db/database');
 const { createBackupService } = require('./db/backup');
 const queries = require('./db/queries');
@@ -180,12 +181,14 @@ function startCronJobs(auth) {
     const layersDeleted = queries.deleteOldLayerTransitions(days);
     const anomaliesDeleted = queries.deleteOldTempAnomalies(days);
     const pausesDeleted = queries.deleteOldJobPauses(days);
+    const amsHumidityDeleted = amsHumidity.deleteOldAmsHumidity(days);
     log.info({
       samplesDeleted: samplesDeleted.changes,
       eventsDeleted: eventsDeleted.changes,
       layersDeleted: layersDeleted.changes,
       anomaliesDeleted: anomaliesDeleted.changes,
       pausesDeleted: pausesDeleted.changes,
+      amsHumidityDeleted: amsHumidityDeleted.changes,
     }, 'Cleanup complete');
   });
 
@@ -227,6 +230,7 @@ function connectPrinter(device, auth) {
     const activeJob = queries.getActiveJob(deviceId);
     maybeCaptureMaterial(activeJob, state);
     maybeSample(deviceId, state, activeJob);
+    amsHumidity.recordAmsHumidity(deviceId, state.diagnostics?.amsHumidity);
     anomalyDetector.checkLayerTransition(deviceId, state, activeJob);
     anomalyDetector.checkTemperatureAnomalies(deviceId, state, activeJob);
 

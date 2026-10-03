@@ -28,3 +28,4 @@
 - **Trust:** T1 (bambuzle). **Items:** BAM-43 AMS humidity trend + alert, BAM-28 printer-control UI, BAM-39 maintenance ledger, BAM-46 job export.
 - Plan: Claude does BAM-28 + BAM-43; agents do BAM-39 and BAM-46 in manual worktrees (auto/bam-39-maintenance, auto/bam-46-export).
 - BAM-28 done (Claude): state-gated command route + reply wait by sequence_id + command audit events + card controls (Stop confirm). Stub-rendered; NOT tried on real printers (would interrupt prints). 62/62.
+- BAM-43 done (Claude): humidity history + API + widget sparkline/trend + edge-triggered alert. Tests found pre-existing bug: createAlertRule stored cooldown 0 as 300 (`||` vs `??`) — fixed. 66/66.

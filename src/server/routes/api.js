@@ -3,6 +3,7 @@
 const express = require('express');
 const queries = require('../../db/queries');
 const { planCommand } = require('../printer-commands');
+const { getAmsHumidityHistory } = require('../../db/ams-humidity');
 const { getAuthStatus } = require('../../bambu/auth');
 
 // Upper bounds for ?limit= (BAM-30 / code-review 2026-10-02 M3). The charts request 10000 samples.
@@ -132,6 +133,20 @@ function createApiRouter(printerManager, { getCloudAuthStatus = getAuthStatus } 
     const limit = clampLimit(req.query.limit, 50, MAX_LIMIT.jobs);
     const jobs = queries.getJobs(req.params.id, limit);
     res.json(jobs);
+  });
+
+  // GET /api/printers/:id/ams-humidity?from&to — humidity history per AMS unit (BAM-43); default last 7 days
+  router.get('/printers/:id/ams-humidity', (req, res) => {
+    let from;
+    let to;
+    try {
+      from = parseIsoParam(req.query.from);
+      to = parseIsoParam(req.query.to, { endOfDay: true });
+    } catch {
+      return res.status(400).json({ error: 'from/to must be ISO 8601 dates' });
+    }
+    const fromSql = toSqlDatetime(from || new Date(Date.now() - 7 * 86400e3));
+    res.json({ units: getAmsHumidityHistory(req.params.id, { from: fromSql, to: to ? toSqlDatetime(to) : undefined }) });
   });
 
   // POST /api/printers/:id/command — pause / resume / stop / set_speed (BAM-28)

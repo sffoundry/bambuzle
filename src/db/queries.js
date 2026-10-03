@@ -265,7 +265,7 @@ function createAlertRule({ name, deviceId, conditionType, conditionConfig, notif
   const result = getDb().prepare(`
     INSERT INTO alert_rules (name, device_id, condition_type, condition_config, notify_via, notify_config, cooldown_sec)
     VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(name, deviceId || null, conditionType, JSON.stringify(conditionConfig || {}), notifyVia || 'console', JSON.stringify(notifyConfig || {}), cooldownSec || 300);
+  `).run(name, deviceId || null, conditionType, JSON.stringify(conditionConfig || {}), notifyVia || 'console', JSON.stringify(notifyConfig || {}), cooldownSec ?? 300);
   return result.lastInsertRowid;
 }
 

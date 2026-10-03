@@ -199,6 +199,16 @@ function updateConditionFields(type, config) {
         <label>Value (°C) <input type="number" name="cc_value" value="${config.value || 0}"></label>
       `;
       break;
+    case 'ams_humidity':
+      container.innerHTML = `
+        <label>Alert at humidity (% RH)
+          <input type="number" name="cc_thresholdPct" value="${escapeHtml(String(config.thresholdPct ?? 40))}" min="1" max="100">
+        </label>
+        <label>Older AMS without % — alert at level (1 = wettest, 5 = driest)
+          <input type="number" name="cc_maxLevel" value="${escapeHtml(String(config.maxLevel ?? 2))}" min="1" max="5">
+        </label>
+      `;
+      break;
     case 'progress_stall':
       container.innerHTML = `
         <label>Stall duration (minutes)
@@ -262,6 +272,11 @@ function getConditionConfig(form) {
       };
     case 'progress_stall':
       return { minutes: parseInt(form.cc_minutes?.value || '15', 10) };
+    case 'ams_humidity':
+      return {
+        thresholdPct: parseInt(form.cc_thresholdPct?.value || '40', 10),
+        maxLevel: parseInt(form.cc_maxLevel?.value || '2', 10),
+      };
     default:
       return {};
   }
@@ -297,6 +312,8 @@ function describeCondition(type, config) {
       return `Stall > ${config.minutes || 15} min`;
     case 'print_error':
       return 'Printer error (print_error)';
+    case 'ams_humidity':
+      return `AMS humidity ≥ ${config.thresholdPct ?? 40}% RH`;
     default:
       return type;
   }
