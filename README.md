@@ -14,6 +14,8 @@ Self-hosted monitoring dashboard for BambuLab 3D printers. Connects to BambuLab 
 - Full HMS error dictionary (5,000+ codes) with Bambu wiki links
 - Print job statistics (success rate, print hours, by printer and material)
 - Admin-token protected dashboard and API
+- Six UI themes from HamTab: Terminal, Modern, LCARS, HamClock, Radio Face, Accessible
+- Printer controls (pause/resume/stop/speed), AMS humidity history + alerts, maintenance tracker, CSV/JSON export
 - Docker image, health/readiness probes, automatic verified backups, Prometheus `/metrics`
 
 ## Quick Start

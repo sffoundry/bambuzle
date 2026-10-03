@@ -147,9 +147,9 @@ function updateCardContent(card, deviceId, printer) {
   const gaugeHtml = isRunning ? `
     <div class="gauge-section">
       <div class="gauge-row">
-        ${renderSemiGauge(progress || 0, 100, `${progress || 0}%`, 'PROGRESS', '#00cc66')}
+        ${renderSemiGauge(progress || 0, 100, `${progress || 0}%`, 'PROGRESS', 'var(--accent)')}
         ${renderSemiGauge(live.layerNum || 0, live.totalLayers || 1,
-          `${layer}${totalLayers}`, 'LAYER', '#00ff44')}
+          `${layer}${totalLayers}`, 'LAYER', 'var(--green)')}
       </div>
       <div class="gauge-eta">
         <span class="gauge-eta-icon">&#9202;</span>

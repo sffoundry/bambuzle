@@ -18,7 +18,7 @@ info:
     ## Real-time Data
     For live updates, connect to the WebSocket endpoint at `ws://<host>:<port>/ws`.
     Messages are JSON with `{ type, data }` format. Types include `state`, `event`, and `auth`.
-  version: 0.5.0
+  version: 0.6.0
   contact:
     name: Bambuzle
   license:

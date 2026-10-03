@@ -11,6 +11,7 @@
   --text-dim: #338855;
   --accent: #00cc66;
   --accent-dim: #009944;
+  --on-accent: #000000;   /* text on accent-coloured backgrounds */
   --green: #00ff44;
   --yellow: #cccc00;
   --red: #ff3333;
@@ -81,7 +82,7 @@ nav {
   transition: all 0.15s;
 }
 .nav-btn:hover { color: var(--text); background: var(--bg-hover); }
-.nav-btn.active { color: #000; background: var(--accent); border-color: var(--accent); }
+.nav-btn.active { color: var(--on-accent); background: var(--accent); border-color: var(--accent); }
 
 /* Config button */
 .config-btn {
@@ -438,7 +439,7 @@ main { padding: 12px; }
   text-transform: uppercase; letter-spacing: 0.5px; transition: all 0.15s;
 }
 .chart-toggle-btn:hover { color: var(--text); border-color: var(--accent); }
-.chart-toggle-btn.active { color: #000; background: var(--accent); border-color: var(--accent); }
+.chart-toggle-btn.active { color: var(--on-accent); background: var(--accent); border-color: var(--accent); }
 
 /* Compact secondary charts */
 .chart-container-sm { min-height: 160px; }
@@ -499,7 +500,7 @@ main { padding: 12px; }
 
 .btn-primary {
   background: var(--accent);
-  color: #000;
+  color: var(--on-accent);
   border: none;
   padding: 6px 14px;
   border-radius: var(--radius);
@@ -851,7 +852,7 @@ main { padding: 12px; }
   cursor: pointer;
 }
 .stats-range-btn:hover { color: var(--text); background: var(--bg-hover); }
-.stats-range-btn.active { color: #000; background: var(--accent); border-color: var(--accent); }
+.stats-range-btn.active { color: var(--on-accent); background: var(--accent); border-color: var(--accent); }
 .stats-status { color: var(--text-dim); font-size: 11px; }
 .stats-export { display: flex; gap: 4px; margin-left: auto; }
 .stats-export-btn { text-decoration: none; }
@@ -1000,3 +1001,87 @@ main { padding: 12px; }
 .maint-form-notes { flex: 1 1 240px; }
 .maint-code { font-family: var(--mono); white-space: nowrap; }
 .maint-wiki { color: var(--accent); }
+
+/* ════════════════════════════════════════════════════════════════
+   Themes — ported from HamTab (stevencheist/HamTabv1, MIT).
+   Colours come from public/js/themes.js (CSS variables); the body
+   classes below add each theme's shapes and type.
+   ════════════════════════════════════════════════════════════════ */
+
+/* Theme picker (config modal) */
+.theme-selector { display: flex; gap: 10px; flex-wrap: wrap; padding: 6px 0; }
+.theme-swatch {
+  width: 104px; cursor: pointer; border: 2px solid transparent; border-radius: 8px; padding: 8px;
+  text-align: center; background: var(--bg-hover); color: var(--text); font-family: var(--font);
+  transition: border-color 0.15s, transform 0.15s; display: flex; flex-direction: column;
+}
+.theme-swatch:hover { transform: translateY(-2px); border-color: var(--text-dim); }
+.theme-swatch.active { border-color: var(--accent); box-shadow: 0 0 8px var(--accent-dim); }
+.theme-swatch-colors { display: flex; gap: 2px; height: 28px; border-radius: 4px; overflow: hidden; margin-bottom: 6px; }
+.theme-swatch-colors span { flex: 1; }
+.theme-swatch-name { font-size: 11px; font-weight: 600; }
+.theme-swatch-desc { font-size: 9px; color: var(--text-dim); margin-top: 2px; }
+
+/* Modern (HamTab default): softer corners, sans-serif */
+.theme-modern { --radius: 6px; }
+.theme-modern .printer-card,
+.theme-modern .chart-panel,
+.theme-modern .modal-content,
+.theme-modern .login-card { border-radius: 10px; }
+.theme-modern .printer-name { font-weight: 600; }
+
+/* LCARS: pill buttons, rounded panels, coloured header bars, condensed caps */
+.theme-lcars { --radius: 14px; letter-spacing: 0.5px; }
+.theme-lcars header { border-bottom: 6px solid var(--border); }
+.theme-lcars .nav-btn,
+.theme-lcars .btn-primary,
+.theme-lcars .btn-secondary,
+.theme-lcars .btn-danger,
+.theme-lcars .ctl-btn,
+.theme-lcars .chart-toggle-btn,
+.theme-lcars .stats-range-btn { border-radius: 999px; text-transform: uppercase; letter-spacing: 1px; }
+.theme-lcars .printer-card,
+.theme-lcars .chart-panel,
+.theme-lcars .ams-unit,
+.theme-lcars .modal-content,
+.theme-lcars .login-card { border-radius: 16px; border-width: 2px; }
+.theme-lcars .printer-card .card-header,
+.theme-lcars .ams-unit-header,
+.theme-lcars .chart-header {
+  background: var(--accent); color: var(--on-accent); border-radius: 14px 14px 0 0;
+  padding: 4px 14px; text-transform: uppercase; letter-spacing: 2px;
+}
+.theme-lcars .printer-card .card-header .printer-model { color: var(--on-accent); opacity: 0.75; }
+.theme-lcars .chart-header h2 { color: var(--on-accent); }
+.theme-lcars .diag-chip { border-radius: 999px; }
+
+/* HamClock: pure black, thin borders, cyan headings */
+.theme-hamclock .printer-card,
+.theme-hamclock .chart-panel,
+.theme-hamclock .ams-unit { border-width: 1px; border-radius: 0; }
+.theme-hamclock .printer-name,
+.theme-hamclock .chart-header h2,
+.theme-hamclock .ams-unit-header { color: var(--accent); }
+
+/* Radio Face: transceiver LCD glow */
+.theme-radioface .printer-card,
+.theme-radioface .chart-panel,
+.theme-radioface .ams-unit {
+  border-radius: 6px;
+  background: linear-gradient(180deg, var(--bg-hover), var(--bg-card));
+  box-shadow: inset 0 0 12px rgba(0, 229, 255, 0.06);
+}
+.theme-radioface .stat-value,
+.theme-radioface .semi-gauge-value { color: var(--accent); text-shadow: 0 0 6px rgba(0, 229, 255, 0.45); }
+
+/* Accessible: larger text, stronger borders, obvious focus */
+.high-contrast { font-size: 15px; }
+.high-contrast .printer-card,
+.high-contrast .chart-panel,
+.high-contrast .ams-unit,
+.high-contrast .modal-content { border-width: 2px; }
+.high-contrast .diag-chip,
+.high-contrast .ctl-status,
+.high-contrast .theme-swatch-desc { font-size: 12px; }
+.high-contrast :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.high-contrast .stat-label { color: var(--text); }

@@ -1,3 +1,4 @@
+import { initTheme } from './themes.js';
 import { renderPrinterCards, updatePrinterCard } from './dashboard.js';
 import { initCharts, loadChartData, destroyCharts, pushLivePoint, setZoomCallback, highlightEvent } from './charts.js';
 import { initAlertsUI } from './alerts-ui.js';
@@ -833,8 +834,16 @@ function initResizeHandle() {
 
 // ─── Boot ───
 
+initTheme();
 setupAuthForms();
 startDashboard();
+
+// Theme switch: cards/AMS re-render from CSS vars; uPlot bakes colours in, so rebuild the charts
+window.addEventListener('bambuzle:themechange', () => {
+  renderPrinterCards(state.printers, uiConfig, dashFilters);
+  renderAmsWidget(state.printers, dashFilters);
+  if (state.selectedPrinter) updateChartPrinter();
+});
 initEventSorting();
 initEventFilters();
 initDashFilters();

@@ -53,6 +53,7 @@ Browser
 | `public/index.html` | Single-page dashboard HTML |
 | `public/js/app.js` | Frontend entry — auth, WS, views, events |
 | `public/js/dashboard.js` | Printer card rendering |
+| `public/js/themes.js` | Theme engine (6 themes from HamTab), `themeVar()` for canvas/SVG colours, `bambuzle:themechange` event |
 | `public/js/charts.js` | uPlot chart rendering |
 | `public/js/stats.js` | Stats view — job statistics (`/api/stats`), Export CSV / JSON links |
 | `src/server/routes/export.js` | `GET /api/export/jobs` CSV/JSON job export (BAM-46) |
@@ -118,7 +119,7 @@ Every other `/api/*` route and `/ws` is guarded by `src/server/admin-auth.js` (B
 - Backend: CommonJS (`require`), strict mode
 - Frontend: ES modules (`import/export`)
 - Naming: camelCase in JS, snake_case in SQL columns
-- CSS: HamClock theme (green-on-black, monospace, `var(--text)` / `var(--accent)`)
+- CSS: theme-driven — colours ONLY via CSS variables (`var(--text)`, `var(--accent)`, `var(--on-accent)` …) defined per theme in `public/js/themes.js` (ported from HamTab); never hardcode colours. Default theme `terminal` = the original green-on-black
 - Database migrations: idempotent `ALTER TABLE` wrapped in try/catch
 
 ## Security Notes

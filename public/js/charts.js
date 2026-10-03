@@ -1,3 +1,5 @@
+import { themeVar } from './themes.js';
+
 // ─── Chart Registry & Multi-Chart System ───
 
 const charts = {};           // chartId -> { chart, observer }
@@ -46,13 +48,16 @@ const COLORS = {
   pauseTime: '#cccc00',
 };
 
-// Shared axis styling
-const AXIS_STYLE = {
-  stroke: '#338855',
-  grid: { stroke: '#1a4a2a44' },
-  font: '10px Courier New',
-  ticks: { stroke: '#1a4a2a' },
-};
+// Shared axis styling — read from the active theme at chart creation (charts are rebuilt on theme change)
+function axisStyle() {
+  const border = themeVar('--border', '#1a4a2a');
+  return {
+    stroke: themeVar('--text-dim', '#338855'),
+    grid: { stroke: border + '44' },
+    font: '10px ' + themeVar('--font', 'Courier New'),
+    ticks: { stroke: border },
+  };
+}
 
 // ─── Anomaly overlay data (mutable, read by plugin closure) ───
 let anomalyOverlayData = { anomalies: [], pauses: [] };
@@ -70,9 +75,9 @@ function eventsPlugin(events) {
           const x = u.valToPos(ts, 'x', true);
           if (x < left || x > left + width) continue;
 
-          const color = evt.severity === 'error' ? '#ff3333'
-            : evt.severity === 'warning' ? '#cccc00'
-            : '#00cc66';
+          const color = evt.severity === 'error' ? themeVar('--red', '#ff3333')
+            : evt.severity === 'warning' ? themeVar('--yellow', '#cccc00')
+            : themeVar('--accent', '#00cc66');
 
           ctx.save();
           ctx.beginPath();
@@ -417,8 +422,8 @@ function renderTempChart(samples, events) {
     cursor: { show: true, drag: { x: true, y: false } },
     scales: { x: { time: true }, y: { auto: true } },
     axes: [
-      { ...AXIS_STYLE },
-      { ...AXIS_STYLE, label: 'DEG C', labelFont: '10px Courier New' },
+      { ...axisStyle() },
+      { ...axisStyle(), label: 'DEG C', labelFont: '10px ' + themeVar('--font', 'Courier New') },
     ],
     series,
   };
@@ -453,8 +458,8 @@ function renderFanChart(samples) {
     cursor: { show: true, drag: { x: true, y: false } },
     scales: { x: { time: true }, y: { min: 0, max: 100 } },
     axes: [
-      { ...AXIS_STYLE },
-      { ...AXIS_STYLE, label: '%', labelFont: '10px Courier New' },
+      { ...axisStyle() },
+      { ...axisStyle(), label: '%', labelFont: '10px ' + themeVar('--font', 'Courier New') },
     ],
     series,
   };
@@ -491,11 +496,11 @@ function renderSpeedChart(samples) {
     cursor: { show: true, drag: { x: true, y: false } },
     scales: { x: { time: true }, y: { min: 0.5, max: 4.5 } },
     axes: [
-      { ...AXIS_STYLE },
+      { ...axisStyle() },
       {
-        ...AXIS_STYLE,
+        ...axisStyle(),
         label: 'LEVEL',
-        labelFont: '10px Courier New',
+        labelFont: '10px ' + themeVar('--font', 'Courier New'),
         values: (u, vals) => vals.map((v) => SPEED_LABELS[Math.round(v)] || ''),
         incrs: [1],
       },
@@ -534,12 +539,12 @@ function renderProgressChart(samples) {
       min: { auto: true },
     },
     axes: [
-      { ...AXIS_STYLE },
-      { ...AXIS_STYLE, label: '%', labelFont: '10px Courier New', scale: 'pct' },
+      { ...axisStyle() },
+      { ...axisStyle(), label: '%', labelFont: '10px ' + themeVar('--font', 'Courier New'), scale: 'pct' },
       {
-        ...AXIS_STYLE,
+        ...axisStyle(),
         label: 'MIN',
-        labelFont: '10px Courier New',
+        labelFont: '10px ' + themeVar('--font', 'Courier New'),
         scale: 'min',
         side: 1,
         grid: { show: false },
@@ -578,8 +583,8 @@ function renderWifiChart(samples) {
     cursor: { show: true, drag: { x: true, y: false } },
     scales: { x: { time: true }, y: { auto: true } },
     axes: [
-      { ...AXIS_STYLE },
-      { ...AXIS_STYLE, label: 'dBm', labelFont: '10px Courier New' },
+      { ...axisStyle() },
+      { ...axisStyle(), label: 'dBm', labelFont: '10px ' + themeVar('--font', 'Courier New') },
     ],
     series,
   };
@@ -624,8 +629,8 @@ function renderLayerChart() {
     cursor: { show: true, drag: { x: true, y: false } },
     scales: { x: { time: false }, y: { auto: true, min: 0 } },
     axes: [
-      { ...AXIS_STYLE, label: 'LAYER', labelFont: '10px Courier New' },
-      { ...AXIS_STYLE, label: 'SEC', labelFont: '10px Courier New' },
+      { ...axisStyle(), label: 'LAYER', labelFont: '10px ' + themeVar('--font', 'Courier New') },
+      { ...axisStyle(), label: 'SEC', labelFont: '10px ' + themeVar('--font', 'Courier New') },
     ],
     series,
   };

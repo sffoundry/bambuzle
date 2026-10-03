@@ -1,3 +1,4 @@
+import { getThemeList, getCurrentThemeId, getThemeSwatchColors, applyTheme } from './themes.js';
 // ─── Config UI — Widget Visibility Toggles ───
 // Persists per-printer and chart visibility to localStorage.
 
@@ -45,6 +46,8 @@ export function openConfigModal(cfg, printers, onChanged) {
   const modal = document.getElementById('config-modal');
   const printersList = document.getElementById('config-printers-list');
   const chartsList = document.getElementById('config-charts-list');
+
+  renderThemePicker();
 
   // ── Printer toggles ──
   printersList.innerHTML = '';
@@ -119,3 +122,37 @@ function escapeHtml(str) {
 function escapeAttr(str) {
   return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
 }
+
+// ── Theme picker (themes ported from HamTab) ──
+function renderThemePicker() {
+  const list = document.getElementById('config-theme-list');
+  if (!list) return;
+  list.replaceChildren();
+  const current = getCurrentThemeId();
+  for (const t of getThemeList()) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'theme-swatch' + (t.id === current ? ' active' : '');
+    btn.setAttribute('aria-pressed', String(t.id === current));
+    const colors = document.createElement('span');
+    colors.className = 'theme-swatch-colors';
+    for (const c of getThemeSwatchColors(t.id)) {
+      const dot = document.createElement('span');
+      dot.style.background = c;
+      colors.appendChild(dot);
+    }
+    const name = document.createElement('span');
+    name.className = 'theme-swatch-name';
+    name.textContent = t.name;
+    const desc = document.createElement('span');
+    desc.className = 'theme-swatch-desc';
+    desc.textContent = t.description;
+    btn.append(colors, name, desc);
+    btn.addEventListener('click', () => {
+      applyTheme(t.id);
+      renderThemePicker();
+    });
+    list.appendChild(btn);
+  }
+}
+

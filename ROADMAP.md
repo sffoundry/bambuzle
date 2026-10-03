@@ -116,6 +116,7 @@ From the CODEX-SF371 × AGY-SF002 blind xval, merged and verified in `research/c
 | BAM-43 |AMS humidity / desiccant trend + alert|✅|LOW|S|—|v0.6.0. `ams_humidity_samples` (15-min / on-change, retention-pruned), `GET /api/printers/:id/ams-humidity`, 7-day sparkline + 24h trend in the AMS widget, edge-triggered `ams_humidity` alert (% RH threshold, level fallback for older AMS). Also fixed: alert cooldown 0 was silently stored as 300|
 | BAM-44 |SD-card timelapse/file harvester over FTPS|❌|LOW|M|BAM-35|Proposed replacement for BAM-13's frame-stitching approach|
 | BAM-45 |Compact fleet matrix view (read-only)|❌|LOW|M|—|No control buttons until BAM-30|
+| BAM-47 |UI themes (ported from HamTab)|✅|MEDIUM|M|—|v0.6.0. Terminal (classic, default), Modern, LCARS, HamClock, Radio Face, Accessible; picker in Configuration; per-browser; charts/gauges follow the theme. Requested by Steve 2026-10-03|
 | BAM-46 |Job data export (CSV/JSON + data dictionary)|✅|LOW|S|BAM-10|v0.6.0. `GET /api/export/jobs?format=csv|json`, versioned columns (`docs/export-data-dictionary.md`), CSV formula-injection guard + BOM, 50k-row cap; Export buttons on the Stats view|
 
 ---
