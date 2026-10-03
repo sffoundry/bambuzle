@@ -933,3 +933,53 @@ main { padding: 12px; }
   .stats-tables { grid-template-columns: 1fr; }
   .stats-tile-value { font-size: 18px; }
 }
+
+/* ── Maintenance view (BAM-39) ── */
+.maint-badge {
+  display: inline-block;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1px 6px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+.maint-badge.maint-ok { color: var(--green); border-color: var(--accent-dim); }
+.maint-badge.maint-due_soon { color: var(--yellow); border-color: var(--yellow); }
+.maint-badge.maint-due { color: #000; background: var(--red); border-color: var(--red); font-weight: 700; }
+.maint-badge.maint-unscheduled { color: var(--text-dim); }
+.maint-row-due td:first-child { border-left: 2px solid var(--red); }
+.maint-row-due_soon td:first-child { border-left: 2px solid var(--yellow); }
+.maint-notes { color: var(--text-dim); font-size: 10px; }
+.maint-actions { white-space: nowrap; }
+.maint-actions > button + button { margin-left: 4px; }
+.btn-sm { padding: 3px 8px; font-size: 10px; }
+.maint-done-form { display: flex; gap: 4px; align-items: center; }
+.maint-done-form input,
+.maint-form input {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 3px 6px;
+  font-family: var(--font);
+  font-size: 11px;
+}
+.maint-done-form input:focus, .maint-form input:focus { outline: none; border-color: var(--accent); }
+.maint-empty { margin-bottom: 10px; }
+.maint-empty.hidden, .maint-form .hidden { display: none; }
+.maint-template-list { margin: 4px 0 10px 20px; color: var(--text-dim); font-size: 11px; }
+.maint-form { margin: 12px 0 16px; border: 1px solid var(--border); padding: 8px 10px; background: var(--bg-card); }
+.maint-form-fields { display: flex; flex-wrap: wrap; gap: 8px 12px; margin-bottom: 8px; }
+.maint-form-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--text-dim);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+.maint-form-notes { flex: 1 1 240px; }
+.maint-code { font-family: var(--mono); white-space: nowrap; }
+.maint-wiki { color: var(--accent); }

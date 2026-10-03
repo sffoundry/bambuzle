@@ -185,6 +185,30 @@ function runMigrations(database) {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
   `);
+
+  // Maintenance ledger (BAM-39). Queries live in src/db/maintenance.js.
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS maintenance_tasks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      device_id TEXT NOT NULL REFERENCES printers(device_id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      interval_hours REAL,
+      interval_days INTEGER,
+      last_done_at TEXT,
+      notes TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_maint_tasks_device ON maintenance_tasks(device_id);
+
+    CREATE TABLE IF NOT EXISTS maintenance_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      task_id INTEGER NOT NULL REFERENCES maintenance_tasks(id) ON DELETE CASCADE,
+      done_at TEXT NOT NULL DEFAULT (datetime('now')),
+      print_hours_at REAL,
+      note TEXT NOT NULL DEFAULT ''
+    );
+    CREATE INDEX IF NOT EXISTS idx_maint_log_task ON maintenance_log(task_id, done_at);
+  `);
 }
 
 function closeDb() {
