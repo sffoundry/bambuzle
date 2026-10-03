@@ -4,6 +4,7 @@ const express = require('express');
 const queries = require('../../db/queries');
 const { planCommand } = require('../printer-commands');
 const { getAmsHumidityHistory } = require('../../db/ams-humidity');
+const { triageForJob, triageRecentJobs } = require('../../db/triage');
 const { getAuthStatus } = require('../../bambu/auth');
 const { audit } = require('../audit');
 
@@ -133,6 +134,20 @@ function createApiRouter(printerManager, { getCloudAuthStatus = getAuthStatus } 
   });
 
   // GET /api/printers/:id/jobs — print job history
+  // GET /api/printers/:id/triage — verdicts for recent jobs (BAM-40)
+  router.get('/printers/:id/triage', (req, res) => {
+    res.json(triageRecentJobs(req.params.id, clampLimit(req.query.limit, 25, 100)));
+  });
+
+  // GET /api/printers/:id/jobs/:jobId/triage — verdict, reasons, timeline, clusters (BAM-40)
+  router.get('/printers/:id/jobs/:jobId/triage', (req, res) => {
+    const jobId = Number(req.params.jobId);
+    if (!Number.isInteger(jobId) || jobId < 1) return res.status(400).json({ error: 'Invalid job id' });
+    const t = triageForJob(req.params.id, jobId);
+    if (!t) return res.status(404).json({ error: 'Job not found for this printer' });
+    res.json(t);
+  });
+
   router.get('/printers/:id/jobs', (req, res) => {
     const limit = clampLimit(req.query.limit, 50, MAX_LIMIT.jobs);
     const jobs = queries.getJobs(req.params.id, limit);
