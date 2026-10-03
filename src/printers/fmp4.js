@@ -36,8 +36,15 @@ function rbsp(nal) {
 function parseSps(sps) {
   const b = rbsp(sps);
   let bit = 8; // skip the NAL header byte
-  const read = (n) => { let v = 0; for (let i = 0; i < n; i++) { v = (v << 1) | ((b[bit >> 3] >> (7 - (bit & 7))) & 1); bit++; } return v >>> 0; };
-  const ue = () => { let z = 0; while (read(1) === 0 && z < 32) z++; return (2 ** z - 1) + read(z); };
+  const total = b.length * 8;
+  // Bounds-checked: a corrupt SPS throws instead of reading zeros forever (review #4)
+  const read = (n) => {
+    if (bit + n > total) throw new Error('Truncated SPS');
+    let v = 0;
+    for (let i = 0; i < n; i++) { v = (v * 2) + ((b[bit >> 3] >> (7 - (bit & 7))) & 1); bit++; }
+    return v;
+  };
+  const ue = () => { let z = 0; while (read(1) === 0) { if (++z > 31) throw new Error('Corrupt SPS'); } return (2 ** z - 1) + read(z); };
   const se = () => { const v = ue(); return v & 1 ? (v + 1) / 2 : -v / 2; };
   const profile = read(8); read(8); read(8); ue();
   let chroma = 1;
@@ -54,7 +61,8 @@ function parseSps(sps) {
   ue(); // log2_max_frame_num
   const pocType = ue();
   if (pocType === 0) ue();
-  else if (pocType === 1) { read(1); se(); se(); const n = ue(); for (let i = 0; i < n; i++) se(); }
+  else if (pocType === 1) { read(1); se(); se(); const n = ue(); if (n > 255) throw new Error('Corrupt SPS'); for (let i = 0; i < n; i++) se(); }
+  else if (pocType !== 2) throw new Error('Corrupt SPS');
   ue(); read(1);
   const wMbs = ue() + 1;
   const hMapUnits = ue() + 1;
@@ -67,10 +75,10 @@ function parseSps(sps) {
   const subH = chroma === 1 ? 2 : 1;
   const cropX = chroma === 0 ? 1 : subW;
   const cropY = (chroma === 0 ? 1 : subH) * (2 - frameMbsOnly);
-  return {
-    width: wMbs * 16 - (cl + cr) * cropX,
-    height: (2 - frameMbsOnly) * hMapUnits * 16 - (ct + cb) * cropY,
-  };
+  const width = wMbs * 16 - (cl + cr) * cropX;
+  const height = (2 - frameMbsOnly) * hMapUnits * 16 - (ct + cb) * cropY;
+  if (!(width > 0 && width <= 8192 && height > 0 && height <= 8192)) throw new Error('Implausible SPS dimensions');
+  return { width, height };
 }
 
 function initSegment({ avcc, width, height }) {
@@ -118,16 +126,21 @@ class Fmp4Writer {
     this.lastTs = null;
   }
 
+  /**
+   * (Re)start with a decoder config. Throws on a corrupt SPS. Decode time and sequence keep counting
+   * across re-inits (reconnects, resolution changes), so the browser's timeline never jumps back (review #6).
+   */
   config({ avcc, sps }) {
     const { width, height } = parseSps(sps);
-    this.reset();
+    this.pending = null;
+    this.lastTs = null;
     this.write(initSegment({ avcc, width, height }));
     this.started = true;
   }
 
   frame({ data, key, ts90k }) {
     if (!this.started) return;
-    if (this.pending) {
+    if (this.pending && this.lastTs !== null) {
       let d = (ts90k - this.lastTs) >>> 0; // RTP timestamps wrap at 2^32
       if (d === 0 || d > TIMESCALE * 2) d = 6000; // missing/odd timing → assume 15 fps
       this.write(mediaSegment({ seq: this.seq++, baseTime: this.time, duration: d, data: this.pending.data, key: this.pending.key }));

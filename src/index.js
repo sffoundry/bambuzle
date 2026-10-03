@@ -243,12 +243,9 @@ async function onAuthenticated(auth) {
     // LAN access code from the account (BAM-9): saved like a typed-in code. Only the code — never the
     // address — so a cloud printer stays on cloud (a LAN switch needs a host too); refreshed if the
     // printer's code changed. Used for the LAN camera stream and LAN connection tests.
-    const conn = d.accessCode ? printerConnections.getConnection(d.deviceId) : null;
-    if (conn && conn.source !== 'manual' && conn.accessCode !== d.accessCode) {
-      printerConnections.setConnection(d.deviceId, { accessCode: d.accessCode });
-      codesImported++;
-      if (conn.lanHost) syncConnection(d.deviceId); // a LAN printer with a stale code reconnects with the new one
-    }
+    const r = printerConnections.importCloudAccessCode(d.deviceId, d.accessCode);
+    if (r.changed) codesImported++;
+    if (r.reconnect) syncConnection(d.deviceId);
   }
   if (codesImported) log.info({ count: codesImported }, 'LAN access codes updated from the BambuLab account');
 

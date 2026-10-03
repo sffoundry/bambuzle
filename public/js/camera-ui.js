@@ -32,12 +32,16 @@ async function streamError(id) {
 
 function showMjpeg(id, stage, status) {
   const img = el('img', { class: 'camera-view', alt: 'Live camera' });
+  let closed = false;
   img.addEventListener('load', () => { status.textContent = ''; }, { once: true });
-  img.addEventListener('error', async () => { status.textContent = (await streamError(id)) || 'Camera stream ended'; });
+  img.addEventListener('error', async () => {
+    if (closed) return; // closing swaps the src, which fires error — don't open a new stream to explain it
+    status.textContent = (await streamError(id)) || 'Camera stream ended';
+  });
   img.src = streamUrl(id);
   stage.append(img);
   status.textContent = 'Connecting…';
-  return () => { img.removeAttribute('src'); img.src = 'data:,'; img.remove(); };
+  return () => { closed = true; img.removeAttribute('src'); img.src = 'data:,'; img.remove(); };
 }
 
 /** Codec string from the init segment's avcC box (profile, compatibility, level). */
@@ -101,9 +105,14 @@ function showMse(id, stage, status) {
         const b = sb.buffered;
         if (b.length && video.currentTime - b.start(0) > 30) { sb.remove(b.start(0), video.currentTime - 10); return; }
         if (b.length && b.end(b.length - 1) - video.currentTime > 2) video.currentTime = b.end(b.length - 1) - 0.3;
-        sb.appendBuffer(queue.shift());
+        sb.appendBuffer(queue[0]);
+        queue.shift(); // only once accepted: a QuotaExceededError keeps the chunk for the retry
       } catch (e) {
-        status.textContent = `Playback error: ${e.message}`;
+        if (e.name === 'QuotaExceededError' && sb.buffered.length && video.currentTime - sb.buffered.start(0) > 1) {
+          sb.remove(sb.buffered.start(0), video.currentTime - 1); // make room; updateend retries the append
+        } else {
+          status.textContent = `Playback error: ${e.message}`;
+        }
       }
     };
     for (;;) {

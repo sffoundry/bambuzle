@@ -14,7 +14,7 @@ const { Fmp4Writer } = require('../../printers/fmp4');
 
 const MAX_VIEWERS = 6;
 const MAX_BUFFER = 2 * 1024 * 1024;
-const RECHECK_MS = 30 * 1000;
+const RECHECK_MS = Number(process.env.BAMBUZLE_CAMERA_RECHECK_MS) || 30 * 1000; // env: tests only
 const BOUNDARY = 'bambuzleframe';
 
 /**
@@ -45,8 +45,12 @@ function createCameraRouter({ printerManager, cameraStreams, adminAuth }) {
     res.flushHeaders?.();
 
     let waitKey = !mjpeg; // a new H.264 viewer starts at a keyframe (the hub replays the current GOP)
+    let ended = false;
     const mp4 = mjpeg ? null : new Fmp4Writer((buf) => res.write(buf));
     const send = (msg) => {
+      // Never write after end: an unhandled write-after-end would take the whole process down (review #1)
+      if (ended || res.writableEnded || res.destroyed) return;
+      if (msg.type === 'end') { finish(); return; } // hub replaced or shut down
       if (mjpeg) {
         if (msg.type !== 'jpeg' || res.writableLength > MAX_BUFFER) return;
         res.write(`--${BOUNDARY}\r\nContent-Type: image/jpeg\r\nContent-Length: ${msg.data.length}\r\n\r\n`);
@@ -54,24 +58,43 @@ function createCameraRouter({ printerManager, cameraStreams, adminAuth }) {
         res.write('\r\n');
         return;
       }
-      if (msg.type === 'config') { mp4.config({ avcc: msg.description, sps: msg.sps }); waitKey = true; return; }
+      if (msg.type === 'config') {
+        try {
+          mp4.config({ avcc: msg.description, sps: msg.sps });
+        } catch {
+          finish(); // corrupt decoder config from the camera: end this viewer cleanly
+          return;
+        }
+        waitKey = true;
+        return;
+      }
       if (msg.type !== 'au') return;
       if (res.writableLength > MAX_BUFFER) { waitKey = true; return; } // too slow: skip to the next keyframe
       if (waitKey && !msg.key) return;
       waitKey = false;
       mp4.frame(msg);
     };
-    const unsubscribe = hub.subscribe(send);
+    let unsubscribe = () => {};
+    let recheck = null;
+    function finish() {
+      if (ended) return;
+      ended = true;
+      clearInterval(recheck);
+      unsubscribe();
+      if (!res.writableEnded) res.end();
+    }
+    unsubscribe = hub.subscribe(send);
+    if (ended) unsubscribe(); // the hub ended us during replay
 
-    const recheck = setInterval(() => {
+    recheck = setInterval(() => {
       delete req._principal;
       const p = adminAuth?.getPrincipal(req);
-      if (adminAuth?.enabled && (!p || !hasRole(p.role, 'viewer'))) res.end();
+      if (adminAuth?.enabled && (!p || !hasRole(p.role, 'viewer'))) finish(); // revoked / expired / demoted
     }, RECHECK_MS);
     recheck.unref?.();
-    const done = () => { clearInterval(recheck); unsubscribe(); };
-    req.on('close', done);
-    res.on('close', done);
+    req.on('close', finish);
+    res.on('close', finish);
+    res.on('error', finish);
   });
 
   return router;

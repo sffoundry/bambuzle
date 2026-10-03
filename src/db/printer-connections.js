@@ -44,6 +44,20 @@ function setConnection(deviceId, { mode, lanHost, accessCode }) {
   return true;
 }
 
+/**
+ * BAM-9: take a printer's LAN access code from the BambuLab account device list. Only for cloud-sourced
+ * printers (never hand-added or removed ones); only the code, never the address; and never fills a code
+ * that was cleared on a printer that has a saved LAN address — that would switch it to LAN.
+ * @returns {{ changed: boolean, reconnect: boolean }}
+ */
+function importCloudAccessCode(deviceId, code) {
+  const conn = getConnection(deviceId);
+  if (!conn || !code || conn.source !== 'cloud' || conn.accessCode === code) return { changed: false, reconnect: false };
+  if (conn.lanHost && !conn.accessCode) return { changed: false, reconnect: false };
+  setConnection(deviceId, { accessCode: code });
+  return { changed: true, reconnect: Boolean(conn.lanHost) }; // a LAN printer with a stale code reconnects
+}
+
 /** Bambu serials are uppercase; the printer only publishes on device/<SERIAL>/report. */
 function normalizeSerial(serial) {
   return String(serial).trim().toUpperCase();
@@ -91,4 +105,5 @@ function deleteManualPrinter(serial) {
   return true;
 }
 
-module.exports = { MODES, getConnection, getAllConnections, setConnection, addManualPrinter, deleteManualPrinter, findBySerial, normalizeSerial };
+module.exports = {
+  importCloudAccessCode, MODES, getConnection, getAllConnections, setConnection, addManualPrinter, deleteManualPrinter, findBySerial, normalizeSerial };

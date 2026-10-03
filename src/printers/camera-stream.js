@@ -22,6 +22,35 @@ const IDLE_CLOSE_MS = 10 * 1000;
 const RETRY_MS = [2000, 5000, 10000, 30000];
 const STALL_MS = 20 * 1000; // no frame for this long → reconnect
 const MAX_FRAME = 4 * 1024 * 1024;
+const MAX_RTSP_HEAD = 64 * 1024; // RTSP status line + headers
+const MAX_RTSP_BODY = 64 * 1024; // SDP is a few hundred bytes
+
+/**
+ * Byte queue for stream parsing: keeps incoming chunks and only copies the bytes a parser asks for,
+ * so a large frame arriving in many small reads costs O(n), not O(n²) (review #8).
+ */
+class ByteQueue {
+  constructor() { this.chunks = []; this.length = 0; }
+  push(b) { if (b.length) { this.chunks.push(b); this.length += b.length; } }
+  /** First n bytes as one Buffer (n ≤ length). Merges only the chunks needed. */
+  peek(n) {
+    if (this.chunks[0]?.length >= n) return this.chunks[0].subarray(0, n);
+    const parts = [];
+    let got = 0;
+    for (const c of this.chunks) { parts.push(c); got += c.length; if (got >= n) break; }
+    const merged = Buffer.concat(parts);
+    this.chunks.splice(0, parts.length, merged);
+    return merged.subarray(0, n);
+  }
+  consume(n) {
+    this.length -= n;
+    while (n > 0) {
+      const c = this.chunks[0];
+      if (c.length <= n) { n -= c.length; this.chunks.shift(); } else { this.chunks[0] = c.subarray(n); n = 0; }
+    }
+  }
+  take(n) { const b = Buffer.from(this.peek(n)); this.consume(n); return b; }
+}
 
 function tlsOptions({ serial, host, port, tlsVerify, ca }) {
   return {
@@ -51,27 +80,27 @@ class JpegTlsSource extends EventEmitter {
     super();
     this.opts = opts;
     this.sock = null;
-    this.buf = Buffer.alloc(0);
+    this.q = new ByteQueue();
   }
 
   start() {
     const { connectFn = tls.connect } = this.opts;
     this.sock = connectFn(tlsOptions({ ...this.opts, port: this.opts.port || 6000 }));
     this.sock.on('secureConnect', () => this.sock.write(jpegAuthPacket(this.opts.accessCode)));
-    this.sock.on('data', (d) => this._data(d));
+    this.sock.on('data', (d) => safeData(this, d));
     this.sock.on('error', (e) => this.emit('error', e));
     this.sock.on('close', () => this.emit('close'));
   }
 
   _data(d) {
-    this.buf = this.buf.length ? Buffer.concat([this.buf, d]) : d;
-    while (this.buf.length >= 16) {
-      const size = this.buf.readUInt32LE(0);
-      if (size > MAX_FRAME) { this.emit('error', new Error('Camera sent an oversized frame')); this.stop(); return; }
-      if (this.buf.length < 16 + size) return;
-      const img = this.buf.subarray(16, 16 + size);
-      this.buf = this.buf.subarray(16 + size);
-      if (img.length > 4 && img[0] === 0xff && img[1] === 0xd8) this.emit('jpeg', Buffer.from(img));
+    this.q.push(d);
+    while (this.q.length >= 16) {
+      const size = this.q.peek(16).readUInt32LE(0);
+      if (size > MAX_FRAME) throw new Error('Camera sent an oversized frame');
+      if (this.q.length < 16 + size) return;
+      this.q.consume(16);
+      const img = this.q.take(size);
+      if (img.length > 4 && img[0] === 0xff && img[1] === 0xd8) this.emit('jpeg', img);
       // Anything else (e.g. a short status reply on models that don't serve this protocol) is ignored;
       // the printer then closes the connection.
     }
@@ -79,6 +108,16 @@ class JpegTlsSource extends EventEmitter {
 
   stop() {
     try { this.sock?.destroy(); } catch { /* closed */ }
+  }
+}
+
+/** Parser errors from a misbehaving camera must never escape a socket handler (review #3). */
+function safeData(src, d) {
+  try {
+    src._data(d);
+  } catch (err) {
+    src.emit('error', err);
+    src.stop();
   }
 }
 
@@ -131,6 +170,7 @@ function parseSdp(sdp, baseUrl) {
 
 /** avcC (ISO 14496-15) decoder config from SPS + PPS, and the WebCodecs codec string. Exported for tests. */
 function avcConfig(sps, pps) {
+  if (!sps || sps.length < 4 || !pps || !pps.length) throw new Error('Camera sent an invalid SPS/PPS');
   const avcc = Buffer.concat([
     Buffer.from([1, sps[1], sps[2], sps[3], 0xff, 0xe1]),
     Buffer.from([sps.length >> 8, sps.length & 0xff]), sps,
@@ -149,6 +189,8 @@ class H264Depacketizer {
     this.onAU = onAccessUnit;
     this.nals = [];
     this.fu = null;
+    this.fuBytes = 0;
+    this.bytes = 0;
     this.ts = null;
   }
 
@@ -171,29 +213,40 @@ class H264Depacketizer {
     this.ts = ts;
     const p = pkt.subarray(off, end);
     const type = p[0] & 0x1f;
-    if (type >= 1 && type <= 23) this.nals.push(Buffer.from(p));
+    const add = (n) => {
+      this.bytes += n.length;
+      if (this.bytes > MAX_FRAME) { this.nals = []; this.bytes = 0; this.dropping = true; return; } // runaway access unit (review #9)
+      if (!this.dropping) this.nals.push(n);
+    };
+    if (type >= 1 && type <= 23) add(Buffer.from(p));
     else if (type === 24) { // STAP-A
       let i = 1;
       while (i + 2 <= p.length) {
         const n = p.readUInt16BE(i);
         i += 2;
         if (n === 0 || i + n > p.length) break;
-        this.nals.push(Buffer.from(p.subarray(i, i + n)));
+        add(Buffer.from(p.subarray(i, i + n)));
         i += n;
       }
     } else if (type === 28 && p.length > 2) { // FU-A
       const start = (p[1] & 0x80) !== 0;
       const stop = (p[1] & 0x40) !== 0;
-      if (start) this.fu = [Buffer.from([(p[0] & 0xe0) | (p[1] & 0x1f)]), Buffer.from(p.subarray(2))];
-      else if (this.fu) this.fu.push(Buffer.from(p.subarray(2)));
-      if (stop && this.fu) { this.nals.push(Buffer.concat(this.fu)); this.fu = null; }
+      if (start) { this.fu = [Buffer.from([(p[0] & 0xe0) | (p[1] & 0x1f)]), Buffer.from(p.subarray(2))]; this.fuBytes = p.length; }
+      else if (this.fu) {
+        this.fuBytes += p.length;
+        if (this.fuBytes > MAX_FRAME) this.fu = null; // fragments without an end bit (review #9)
+        else this.fu.push(Buffer.from(p.subarray(2)));
+      }
+      if (stop && this.fu) { add(Buffer.concat(this.fu)); this.fu = null; }
     }
     if (marker) this._flush();
   }
 
   _flush() {
-    if (this.nals.length) this.onAU(this.nals, this.ts);
+    if (this.nals.length && !this.dropping) this.onAU(this.nals, this.ts);
     this.nals = [];
+    this.bytes = 0;
+    this.dropping = false;
   }
 }
 
@@ -203,7 +256,7 @@ class RtspsSource extends EventEmitter {
     super();
     this.opts = opts;
     this.cseq = 0;
-    this.buf = Buffer.alloc(0);
+    this.q = new ByteQueue();
     this.pending = null; // { resolve, reject }
     this.session = null;
     this.sps = null;
@@ -218,7 +271,7 @@ class RtspsSource extends EventEmitter {
     const { connectFn = tls.connect } = this.opts;
     this.sock = connectFn(tlsOptions({ ...this.opts, port: this.opts.port || 322 }));
     this.sock.on('secureConnect', () => this._handshake().catch((e) => { this.emit('error', e); this.stop(); }));
-    this.sock.on('data', (d) => this._data(d));
+    this.sock.on('data', (d) => safeData(this, d));
     this.sock.on('error', (e) => { this.pending?.reject(e); this.emit('error', e); });
     this.sock.on('close', () => { clearInterval(this.keepalive); this.pending?.reject(new Error('Camera closed the connection')); this.emit('close'); });
   }
@@ -261,8 +314,8 @@ class RtspsSource extends EventEmitter {
     const desc = await this._call('DESCRIBE', this.uri, { Accept: 'application/sdp' });
     const sdp = parseSdp(desc.body, desc.headers['content-base'] || this.uri);
     if (sdp.codec && sdp.codec !== 'H264') throw new Error(`Unsupported camera codec ${sdp.codec}`);
-    this.sps = sdp.sps;
-    this.pps = sdp.pps;
+    this.sps = sdp.sps?.length >= 4 ? sdp.sps : null;
+    this.pps = sdp.pps?.length ? sdp.pps : null;
     const setup = await this._call('SETUP', sdp.control, { Transport: 'RTP/AVP/TCP;unicast;interleaved=0-1' });
     this.session = (setup.headers.session || '').split(';')[0] || null;
     const timeout = Number((/timeout=(\d+)/.exec(setup.headers.session || '') || [])[1]) || 60;
@@ -273,34 +326,38 @@ class RtspsSource extends EventEmitter {
   }
 
   _data(d) {
-    this.buf = this.buf.length ? Buffer.concat([this.buf, d]) : d;
+    this.q.push(d);
     for (;;) {
-      if (!this.buf.length) return;
-      if (this.buf[0] === 0x24) { // '$' interleaved RTP/RTCP
-        if (this.buf.length < 4) return;
-        const ch = this.buf[1];
-        const len = this.buf.readUInt16BE(2);
-        if (this.buf.length < 4 + len) return;
-        const pkt = this.buf.subarray(4, 4 + len);
-        this.buf = this.buf.subarray(4 + len);
-        if (ch === 0) this.dep.push(pkt);
+      if (!this.q.length) return;
+      if (this.q.peek(1)[0] === 0x24) { // '$' interleaved RTP/RTCP
+        if (this.q.length < 4) return;
+        const h = this.q.peek(4);
+        const len = h.readUInt16BE(2);
+        if (this.q.length < 4 + len) return;
+        this.q.consume(4);
+        const pkt = this.q.take(len);
+        if (h[1] === 0) this.dep.push(pkt);
         continue;
       }
-      // RTSP response
-      const headEnd = this.buf.indexOf('\r\n\r\n');
+      // RTSP response: headers must end within MAX_RTSP_HEAD
+      const window = this.q.peek(Math.min(this.q.length, MAX_RTSP_HEAD));
+      const headEnd = window.indexOf('\r\n\r\n');
       if (headEnd < 0) {
-        if (this.buf.length > 65536) { this.emit('error', new Error('Malformed RTSP response')); this.stop(); }
+        if (this.q.length >= MAX_RTSP_HEAD) throw new Error('Malformed RTSP response');
         return;
       }
-      const head = this.buf.subarray(0, headEnd).toString('latin1');
+      const head = window.subarray(0, headEnd).toString('latin1');
       const [statusLine, ...hl] = head.split('\r\n');
+      if (!/^RTSP\/1\.0 \d{3}/.test(statusLine)) throw new Error('Unexpected data from the camera'); // e.g. a server→client request
       const headers = {};
       for (const l of hl) { const i = l.indexOf(':'); if (i > 0) headers[l.slice(0, i).trim().toLowerCase()] = l.slice(i + 1).trim(); }
-      const len = Number(headers['content-length'] || 0);
-      if (this.buf.length < headEnd + 4 + len) return;
-      const body = this.buf.subarray(headEnd + 4, headEnd + 4 + len).toString('utf8');
-      this.buf = this.buf.subarray(headEnd + 4 + len);
-      const status = Number((/^RTSP\/1\.0 (\d{3})/.exec(statusLine) || [])[1]) || 0;
+      const cl = headers['content-length'] ?? '0';
+      if (!/^\d{1,6}$/.test(cl) || Number(cl) > MAX_RTSP_BODY) throw new Error('Malformed RTSP Content-Length'); // review #2
+      const len = Number(cl);
+      if (this.q.length < headEnd + 4 + len) return;
+      this.q.consume(headEnd + 4);
+      const body = this.q.take(len).toString('utf8');
+      const status = Number(/^RTSP\/1\.0 (\d{3})/.exec(statusLine)[1]);
       const p = this.pending;
       this.pending = null;
       p?.resolve({ status, headers, body });
@@ -310,10 +367,11 @@ class RtspsSource extends EventEmitter {
   _au(nals, ts) {
     let key = false;
     const parts = [];
+    let paramsChanged = false;
     for (const n of nals) {
       const t = n[0] & 0x1f;
-      if (t === 7) { this.sps = n; continue; }
-      if (t === 8) { this.pps = n; continue; }
+      if (t === 7) { if (n.length >= 4 && !n.equals(this.sps || Buffer.alloc(0))) { this.sps = n; paramsChanged = true; } continue; }
+      if (t === 8) { if (n.length >= 1 && !n.equals(this.pps || Buffer.alloc(0))) { this.pps = n; paramsChanged = true; } continue; }
       if (t === 9 || t === 6) continue; // AUD / SEI: not needed by the decoder
       if (t === 5) key = true;
       const len = Buffer.alloc(4);
@@ -321,7 +379,8 @@ class RtspsSource extends EventEmitter {
       parts.push(len, n);
     }
     if (!parts.length) return;
-    if (!this.configSent && this.sps && this.pps) {
+    // First config, or the camera changed SPS/PPS (e.g. resolution): (re)announce at a keyframe (review #7)
+    if (this.sps && this.pps && (!this.configSent || (paramsChanged && key))) {
       this.configSent = true;
       this.emit('config', { ...avcConfig(this.sps, this.pps), sps: this.sps, pps: this.pps });
     }
@@ -387,13 +446,14 @@ class CameraHub extends EventEmitter {
     };
     alive();
     src.on('jpeg', (data) => { this.attempt = 0; this.status = { state: 'streaming', error: null }; alive(); this.lastJpeg = data; this._emit({ type: 'jpeg', data }); });
-    src.on('config', (cfg) => { this.config = cfg; this._emit({ type: 'config', ...cfg }); });
+    src.on('config', (cfg) => { this.config = cfg; this.gop = []; this.gopBytes = 0; this.gopFull = false; this._emit({ type: 'config', ...cfg }); });
     src.on('au', (au) => {
       this.attempt = 0;
       this.status = { state: 'streaming', error: null };
       alive();
-      if (au.key) { this.gop = []; this.gopBytes = 0; }
-      if (this.gopBytes + au.data.length < 8 * 1024 * 1024) { this.gop.push(au); this.gopBytes += au.data.length; }
+      if (au.key) { this.gop = []; this.gopBytes = 0; this.gopFull = false; }
+      // Once the replay buffer is full, stop adding until the next keyframe — a GOP with holes can't be decoded
+      if (!this.gopFull && this.gopBytes + au.data.length < 8 * 1024 * 1024) { this.gop.push(au); this.gopBytes += au.data.length; } else this.gopFull = true;
       this._emit({ type: 'au', ...au });
     });
     src.on('error', (e) => { this.status.error = e.message; this.status.stage = e.stage || null; this.opts.log?.debug?.({ serial: this.opts.serial, err: e.message }, 'Camera error'); });
@@ -428,6 +488,8 @@ class CameraHub extends EventEmitter {
     this.config = null;
     this.lastJpeg = null;
     this.status = { state: 'idle', error: null };
+    this._emit({ type: 'end' }); // viewers' responses end; they reconnect to the current hub (review #5)
+    this.viewers.clear();
     this.emit('closed');
   }
 }
