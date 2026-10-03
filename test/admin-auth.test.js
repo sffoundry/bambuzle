@@ -60,7 +60,7 @@ test('bearer token and session cookie both authorize', async () => {
 
     assert.equal((await fetch(`${srv.baseUrl}/api/printers`, { headers: { cookie } })).status, 200);
     const status = await (await fetch(`${srv.baseUrl}/api/session`, { headers: { cookie } })).json();
-    assert.deepEqual(status, { required: true, authenticated: true, publicRead: false });
+    assert.deepEqual(status, { required: true, authenticated: true, publicRead: false, mode: 'token', user: { name: 'session', role: 'admin', kind: 'token-session' } });
     assert.equal(await wsOpens(srv.baseUrl.replace('http', 'ws') + '/ws', { cookie }), true);
   } finally {
     await srv.close();

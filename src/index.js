@@ -247,6 +247,7 @@ function startCronJobs() {
     const anomaliesDeleted = queries.deleteOldTempAnomalies(days);
     const pausesDeleted = queries.deleteOldJobPauses(days);
     const amsHumidityDeleted = amsHumidity.deleteOldAmsHumidity(days);
+    require('./db/users').pruneExpiredSessions();
     const auditDeleted = auditLog.deleteOldAudit(config.audit.retentionDays); // own retention (BAM-41)
     log.info({
       samplesDeleted: samplesDeleted.changes,

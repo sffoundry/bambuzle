@@ -38,9 +38,9 @@ function requestId(req) {
  */
 function actorFor(req, adminAuth) {
   if (!adminAuth || !adminAuth.enabled) return 'anonymous';
-  const bearer = /^Bearer\s+(.+)$/i.exec(req.headers.authorization || '');
-  if (bearer && adminAuth.checkToken(bearer[1])) return 'admin-token';
-  if (adminAuth.isAuthorized(req)) return 'session';
+  // BAM-16: 'admin-token' (Bearer), 'session' (token sign-in) or the signed-in username
+  const p = adminAuth.getPrincipal ? adminAuth.getPrincipal(req) : null;
+  if (p) return p.kind === 'user' ? `user:${p.name}` : p.name;
   return 'anonymous';
 }
 
