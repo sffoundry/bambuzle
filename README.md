@@ -7,9 +7,14 @@ Self-hosted monitoring dashboard for BambuLab 3D printers. Connects to BambuLab 
 - Real-time printer status cards (temps, progress, fans, ETA)
 - Historical temperature and progress charts
 - Event log with sorting and filtering
-- Configurable alert rules
+- Configurable alert rules — webhook (generic/Slack/Discord), ntfy, Pushover, Telegram
 - Multi-printer support
 - H2D dual-nozzle support
+- Printer diagnostics: nozzle, firmware updates, AI-monitor settings, SD card, AMS humidity, print errors
+- Full HMS error dictionary (5,000+ codes) with Bambu wiki links
+- Print job statistics (success rate, print hours, by printer and material)
+- Admin-token protected dashboard and API
+- Docker image, health/readiness probes, automatic verified backups, Prometheus `/metrics`
 
 ## Quick Start
 
