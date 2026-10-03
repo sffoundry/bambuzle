@@ -302,6 +302,11 @@ Bambuzle backs up its SQLite database automatically using SQLite's online-backup
    npm run backup:restore -- backups/bambuzle-20261002-033000.db
    ```
    It checks `integrity_check` and the `.sha256` sidecar (if present), moves the current `bambuzle.db` (and `-wal` / `-shm`) aside to `bambuzle.db.pre-restore-<timestamp>`, and copies the backup into place. Use the same `BAMBUZLE_DATA_DIR` / `PORT` as the server.
+   **Docker:** the restore script ships in the image. Stop the service, then run it in a one-off container against the same volume:
+   ```bash
+   docker compose stop bambuzle
+   docker compose run --rm --no-deps bambuzle npm run backup:restore -- /data/backups/bambuzle-20261002-033000.db
+   ```
 3. Start Bambuzle again. Once you're happy, delete the `*.pre-restore-*` files; to undo, stop the server and rename them back.
 
 Health probes for monitoring: `GET /healthz` (liveness) and `GET /readyz` (readiness; returns `degraded` until BambuLab login completes and printers connect) need no token and expose no printer details.

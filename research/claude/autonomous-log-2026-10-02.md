@@ -21,3 +21,4 @@
 - Docker re-verified on merged main (562e38d+): healthy via /healthz, 401 unauth / 200 token, token logged once; cleaned only own images.
 - BAM-10 merged (agent, f71001a): /api/stats + Stats view, per-job material/duration capture. Resolved CSS append conflict; hoisted inline require. Live-checked API (200 + 400 on bad date). 50/50.
 - BAM-37 done (Claude): /metrics (hand-rolled exposition, no dep), admin-token guarded, bounded labels, last-message age + MQTT connection count + backup status. Live-checked (401 unauth / 200 token). 52/52.
+- Independent review (agent): 1 High / 4 Med / 5 Low, all verified by reproduction. All fixed + regression tests; fixing #4 surfaced a 2nd bug (close handlers deref nulled wss). Live-verified crash fix, 0.03s shutdown, 0600 DB, restore.js in image. 60/60. Record: code-review/2026-10-02-tranche-review.md

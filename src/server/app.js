@@ -31,6 +31,10 @@ function createApp(printerManager, authCallbacks, adminAuth, deps = {}) {
   } = deps;
   const app = express();
 
+  // Reverse proxy support (review finding 8): real client IP for throttling, Secure cookie over TLS
+  const trustProxy = adminAuth.trustProxy;
+  if (trustProxy) app.set('trust proxy', /^\d+$/.test(trustProxy) ? parseInt(trustProxy, 10) : trustProxy);
+
   app.use(express.json());
 
   // CSP relaxed for /api/docs (Swagger UI needs inline scripts)

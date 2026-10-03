@@ -35,7 +35,13 @@ function parseCookies(header) {
   for (const part of header.split(';')) {
     const idx = part.indexOf('=');
     if (idx < 0) continue;
-    out[part.slice(0, idx).trim()] = decodeURIComponent(part.slice(idx + 1).trim());
+    const raw = part.slice(idx + 1).trim();
+    try {
+      out[part.slice(0, idx).trim()] = decodeURIComponent(raw);
+    } catch {
+      // Malformed escape in someone else's cookie (cookies are shared across ports) — keep raw, never throw
+      out[part.slice(0, idx).trim()] = raw;
+    }
   }
   return out;
 }
@@ -90,10 +96,39 @@ function createAdminAuth({ auth, dataDir, log }) {
     return req.method === 'GET' || req.method === 'HEAD';
   }
 
+  /**
+   * GETs that stay private even with publicRead: alert rules hold notifier secrets (bot tokens,
+   * webhook URLs), /system exposes paths, and debug/mqtt dumps the raw payload (camera URLs).
+   * Express routing is case-insensitive, so compare lowercased.
+   */
+  function isPrivateRead(req) {
+    const p = (req.baseUrl + req.path).toLowerCase();
+    return p.startsWith('/api/alerts') || p.startsWith('/api/system') || p.includes('/debug/');
+  }
+
+  /**
+   * Same-site CSRF guard for cookie-authenticated writes: SameSite=Strict does not separate other
+   * ports on the same host, so a browser write must carry an Origin matching this Host.
+   * Bearer-token clients and requests without Origin (curl, scripts) are unaffected.
+   */
+  function crossOriginWrite(req) {
+    if (isReadOnly(req) || /^Bearer\s/i.test(req.headers.authorization || '')) return false;
+    const origin = req.headers.origin;
+    if (!origin) return false;
+    try {
+      return new URL(origin).host !== req.headers.host;
+    } catch {
+      return true;
+    }
+  }
+
   /** Express middleware guarding /api. */
   function requireAdmin(req, res, next) {
-    if (isAuthorized(req)) return next();
-    if (publicRead && isReadOnly(req)) return next();
+    if (isAuthorized(req)) {
+      if (enabled && crossOriginWrite(req)) return res.status(403).json({ error: 'cross_origin_write_rejected' });
+      return next();
+    }
+    if (publicRead && isReadOnly(req) && !isPrivateRead(req)) return next();
     res.status(401).json({ error: 'admin_auth_required' });
   }
 
@@ -115,7 +150,7 @@ function createAdminAuth({ auth, dataDir, log }) {
     return `${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`;
   }
 
-  return { enabled, publicRead, isAuthorized, requireAdmin, verifyWsRequest, checkToken, sessionCookie, clearCookie };
+  return { enabled, publicRead, trustProxy: auth.trustProxy || '', isAuthorized, requireAdmin, verifyWsRequest, checkToken, sessionCookie, clearCookie };
 }
 
 module.exports = { createAdminAuth, COOKIE_NAME };

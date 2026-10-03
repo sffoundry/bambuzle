@@ -12,7 +12,9 @@ const queries = require('../../db/queries');
 
 const { version } = require('../../../package.json');
 
-const STATES = ['IDLE', 'PREPARE', 'RUNNING', 'PAUSE', 'FINISH', 'FAILED', 'UNKNOWN'];
+const { GCODE_STATE } = require('../../utils/constants');
+
+const STATES = Object.values(GCODE_STATE); // incl. SLICING (review finding 10)
 
 function escapeLabel(v) {
   return String(v ?? '').replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/"/g, '\\"');

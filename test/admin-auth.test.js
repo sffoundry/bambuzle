@@ -125,3 +125,65 @@ test('limit query params are clamped', async () => {
   assert.equal(clampLimit('100000000', 200, 2000), 2000);
   assert.equal(clampLimit('10000', 5000, 20000), 10000);
 });
+
+// ─── Review fixes (2026-10-02) ───
+
+test('malformed cookies never throw (HTTP or WebSocket) — finding 1', async () => {
+  const srv = await startServer();
+  try {
+    const bad = { cookie: 'other=%E0%A4%A' };
+    assert.equal((await fetch(`${srv.baseUrl}/api/printers`, { headers: bad })).status, 401);
+    assert.equal((await fetch(`${srv.baseUrl}/api/session`, { headers: bad })).status, 200);
+    assert.equal(await wsOpens(srv.baseUrl.replace('http', 'ws') + '/ws', bad), false);
+    assert.equal((await fetch(`${srv.baseUrl}/api/session`)).status, 200, 'server still alive');
+  } finally {
+    await srv.close();
+  }
+});
+
+test('publicRead never exposes alert secrets, system paths or raw MQTT — finding 2', async () => {
+  const srv = await startServer({ auth: { mode: 'on', adminToken: TEST_TOKEN, publicRead: true } });
+  try {
+    for (const url of ['/api/alerts', '/API/Alerts', '/api/alerts/1', '/api/system', '/api/printers/dev1/debug/mqtt']) {
+      assert.equal((await fetch(srv.baseUrl + url)).status, 401, url);
+    }
+    assert.equal((await fetch(`${srv.baseUrl}/api/alerts`, { headers: authHeaders })).status, 200);
+  } finally {
+    await srv.close();
+  }
+});
+
+test('cookie-authenticated writes from another origin are rejected; same origin and bearer pass — finding 7', async () => {
+  const srv = await startServer();
+  try {
+    const login = await fetch(`${srv.baseUrl}/api/session`, { method: 'POST', headers: json, body: JSON.stringify({ token: TEST_TOKEN }) });
+    const cookie = login.headers.get('set-cookie').split(';')[0];
+    const host = new URL(srv.baseUrl).host;
+    const post = (headers) => fetch(`${srv.baseUrl}/api/auth/logout`, { method: 'POST', headers: { cookie, ...headers } });
+    assert.equal((await post({ origin: `http://${host.split(':')[0]}:9999` })).status, 403);
+    assert.equal((await post({ origin: 'null' })).status, 403);
+    assert.notEqual((await post({ origin: `http://${host}` })).status, 403);
+    assert.notEqual((await fetch(`${srv.baseUrl}/api/auth/logout`, { method: 'POST', headers: { ...authHeaders, origin: 'http://evil.example' } })).status, 403);
+  } finally {
+    await srv.close();
+  }
+});
+
+test('successful sign-ins do not count toward the lockout — finding 8', async () => {
+  const srv = await startServer();
+  try {
+    for (let i = 0; i < 12; i++) {
+      const r = await fetch(`${srv.baseUrl}/api/session`, { method: 'POST', headers: json, body: JSON.stringify({ token: TEST_TOKEN }) });
+      assert.equal(r.status, 200, `attempt ${i}`);
+    }
+  } finally {
+    await srv.close();
+  }
+});
+
+test('database file is owner-only — finding 9', () => {
+  const fs = require('fs');
+  const path = require('path');
+  require('../src/db/database').getDb();
+  assert.equal(fs.statSync(path.join(dataDir, 'bambuzle.db')).mode & 0o077, 0);
+});

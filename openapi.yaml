@@ -493,7 +493,7 @@ paths:
       summary: Print job statistics (totals, success rates, by printer / material / day)
       description: |
         Aggregates print jobs whose `started_at` falls within [from, to]. Defaults to the last 30 days.
-        Cancelled = end_state `IDLE`. `successRate` = finished / (finished + failed + cancelled), null when 0.
+        Cancelled = end_state `CANCELLED` (user cancel) or legacy `IDLE`. `successRate` = finished / (finished + failed + cancelled), null when 0.
         Durations are wall-clock (pauses included); rows without `duration_sec` fall back to ended_at − started_at.
         Days in `byDay` are UTC.
       parameters:
@@ -1161,7 +1161,7 @@ components:
         end_state:
           type: string
           nullable: true
-          enum: [FINISH, FAILED, IDLE]
+          enum: [FINISH, FAILED, CANCELLED, IDLE]
         progress_pct:
           type: number
           nullable: true

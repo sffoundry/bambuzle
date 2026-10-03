@@ -52,6 +52,8 @@ const config = {
   auth: {
     mode: (process.env.BAMBUZLE_AUTH || fileConfig.auth?.mode || 'on').toLowerCase() === 'off' ? 'off' : 'on',
     adminToken: process.env.BAMBUZLE_ADMIN_TOKEN || fileConfig.auth?.adminToken || '',
+    // Set when behind a reverse proxy (e.g. 1, 'loopback', or a subnet) so req.ip / req.secure are real
+    trustProxy: process.env.BAMBUZLE_TRUST_PROXY || fileConfig.auth?.trustProxy || '',
     publicRead: (process.env.BAMBUZLE_PUBLIC_READ ?? String(fileConfig.auth?.publicRead ?? 'false')).toLowerCase() === 'true',
   },
 

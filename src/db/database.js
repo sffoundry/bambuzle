@@ -14,7 +14,13 @@ function getDb() {
   if (db) return db;
 
   fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
+  // The DB holds the BambuLab Cloud token (auth_tokens): keep it and its -wal/-shm owner-only.
+  // umask covers files SQLite creates later; chmod fixes databases created by older versions.
+  process.umask(0o077);
   db = new Database(DB_PATH);
+  for (const suffix of ['', '-wal', '-shm']) {
+    try { fs.chmodSync(DB_PATH + suffix, 0o600); } catch { /* not created yet */ }
+  }
   db.pragma('journal_mode = WAL');
   db.pragma('busy_timeout = 5000');
   db.pragma('synchronous = NORMAL');

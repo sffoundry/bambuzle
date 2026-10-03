@@ -24,6 +24,7 @@ COPY --from=build --chown=node:node /app/node_modules ./node_modules
 COPY --chown=node:node package.json package-lock.json openapi.yaml ./
 COPY --chown=node:node src ./src
 COPY --chown=node:node public ./public
+COPY --chown=node:node scripts ./scripts
 
 RUN mkdir -p /data && chown node:node /data
 VOLUME /data

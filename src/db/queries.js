@@ -48,6 +48,11 @@ function endJob(jobId, endState, progressPct) {
   `).run(endState, progressPct, jobId);
 }
 
+function setJobMaterial(jobId, material, materialColor) {
+  getDb().prepare('UPDATE print_jobs SET material = ?, material_color = ? WHERE id = ? AND material IS NULL')
+    .run(material, materialColor || null, jobId);
+}
+
 function getActiveJob(deviceId) {
   return getDb().prepare(`
     SELECT * FROM print_jobs
@@ -76,7 +81,7 @@ const JOB_COUNTERS_SQL = `
   COUNT(*) AS jobs,
   COALESCE(SUM(CASE WHEN j.end_state = 'FINISH' THEN 1 ELSE 0 END), 0) AS finished,
   COALESCE(SUM(CASE WHEN j.end_state = 'FAILED' THEN 1 ELSE 0 END), 0) AS failed,
-  COALESCE(SUM(CASE WHEN j.end_state = 'IDLE' THEN 1 ELSE 0 END), 0) AS cancelled,
+  COALESCE(SUM(CASE WHEN j.end_state IN ('IDLE', 'CANCELLED') THEN 1 ELSE 0 END), 0) AS cancelled,
   COALESCE(SUM(CASE WHEN j.ended_at IS NULL THEN 1 ELSE 0 END), 0) AS running,
   COALESCE(SUM(${JOB_DURATION_SQL}), 0) AS total_sec,
   AVG(${JOB_DURATION_SQL}) AS avg_sec`;
@@ -106,7 +111,7 @@ function shapeCounters(row) {
 
 /**
  * Aggregate print-job statistics. Jobs are selected by started_at within [from, to].
- * Cancelled = end_state IDLE. successRate = finished / (finished + failed + cancelled).
+ * Cancelled = end_state IDLE (legacy) or CANCELLED (user cancel, FAILED + print_error 50348044). successRate = finished / (finished + failed + cancelled).
  * @param {{ deviceId?: string, from?: string, to?: string }} opts — from/to are SQLite-parsable datetimes
  */
 function getJobStats({ deviceId, from, to } = {}) {
@@ -139,7 +144,7 @@ function getJobStats({ deviceId, from, to } = {}) {
     SELECT date(j.started_at) AS date,
       COALESCE(SUM(CASE WHEN j.end_state = 'FINISH' THEN 1 ELSE 0 END), 0) AS finished,
       COALESCE(SUM(CASE WHEN j.end_state = 'FAILED' THEN 1 ELSE 0 END), 0) AS failed,
-      COALESCE(SUM(CASE WHEN j.end_state = 'IDLE' THEN 1 ELSE 0 END), 0) AS cancelled
+      COALESCE(SUM(CASE WHEN j.end_state IN ('IDLE', 'CANCELLED') THEN 1 ELSE 0 END), 0) AS cancelled
     FROM print_jobs j
     ${where}
     GROUP BY 1
@@ -467,6 +472,7 @@ module.exports = {
   startJob,
   endJob,
   getActiveJob,
+  setJobMaterial,
   getJobs,
   getJobStats,
   insertSample,

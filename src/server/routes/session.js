@@ -7,13 +7,18 @@ const WINDOW_MS = 5 * 60 * 1000;
 const MAX_ATTEMPTS = 10;
 const attempts = new Map(); // ip -> [timestamps]
 
-function allowAttempt(ip) {
-  const now = Date.now();
+function recentFailures(ip, now = Date.now()) {
   const recent = (attempts.get(ip) || []).filter((t) => now - t < WINDOW_MS);
-  attempts.set(ip, recent);
-  if (recent.length >= MAX_ATTEMPTS) return false;
-  recent.push(now);
-  return true;
+  if (recent.length) attempts.set(ip, recent);
+  else attempts.delete(ip);
+  return recent;
+}
+
+function recordFailure(ip) {
+  const now = Date.now();
+  attempts.set(ip, [...recentFailures(ip, now), now]);
+  // Bound memory: drop idle entries when the map grows
+  if (attempts.size > 1000) for (const key of attempts.keys()) recentFailures(key, now);
 }
 
 /**
@@ -35,10 +40,12 @@ function createSessionRouter(adminAuth) {
   // POST /api/session — exchange the admin token for a session cookie
   router.post('/', (req, res) => {
     if (!adminAuth.enabled) return res.json({ authenticated: true });
-    if (!allowAttempt(req.ip || req.socket.remoteAddress)) {
+    const ip = req.ip || req.socket.remoteAddress;
+    if (recentFailures(ip).length >= MAX_ATTEMPTS) {
       return res.status(429).json({ error: 'Too many attempts — try again later' });
     }
     if (!adminAuth.checkToken(req.body?.token)) {
+      recordFailure(ip); // only failures count, so legitimate sign-ins never lock anyone out
       return res.status(401).json({ error: 'Invalid admin token' });
     }
     res.setHeader('Set-Cookie', adminAuth.sessionCookie(req));

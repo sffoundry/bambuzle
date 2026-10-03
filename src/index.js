@@ -9,6 +9,7 @@ const { MqttPrinterClient } = require('./bambu/mqtt-client');
 const { parseHmsErrors } = require('./utils/hms-codes');
 const { GCODE_STATE } = require('./utils/constants');
 const { getActiveTrayMaterial } = require('./utils/material');
+const { jobEndState, JOB_END_CANCELLED } = require('./utils/job-state');
 const { getDb, closeDb } = require('./db/database');
 const { createBackupService } = require('./db/backup');
 const queries = require('./db/queries');
@@ -104,7 +105,7 @@ async function main() {
       client.destroy();
     }
 
-    closeWebSocket();
+    closeWebSocket(); // terminates open dashboard sockets, otherwise server.close() never resolves
 
     await new Promise((resolve) => server.close(resolve));
 
@@ -224,6 +225,7 @@ function connectPrinter(device, auth) {
     handleJobTransition(deviceId, state, prevState);
 
     const activeJob = queries.getActiveJob(deviceId);
+    maybeCaptureMaterial(activeJob, state);
     maybeSample(deviceId, state, activeJob);
     anomalyDetector.checkLayerTransition(deviceId, state, activeJob);
     anomalyDetector.checkTemperatureAnomalies(deviceId, state, activeJob);
@@ -274,18 +276,21 @@ function handleJobTransition(deviceId, state, prevState) {
   if (prev === curr) return;
 
   const activeJob = queries.getActiveJob(deviceId);
+  const cancelled = jobEndState(curr, state) === JOB_END_CANCELLED;
+  const severity = curr === GCODE_STATE.FAILED && !cancelled ? 'error' : 'info';
+  const message = `State: ${prev || '?'} → ${curr}${cancelled ? ' (cancelled by user)' : ''}`;
   queries.insertEvent({
     deviceId,
     jobId: activeJob?.id || null,
     eventType: 'state_change',
-    severity: curr === GCODE_STATE.FAILED ? 'error' : 'info',
-    message: `State: ${prev || '?'} → ${curr}`,
+    severity,
+    message,
   });
   broadcast('event', {
     device_id: deviceId,
     event_type: 'state_change',
-    severity: curr === GCODE_STATE.FAILED ? 'error' : 'info',
-    message: `State: ${prev || '?'} → ${curr}`,
+    severity,
+    message,
     ts: new Date().toISOString(),
   });
 
@@ -319,10 +324,20 @@ function handleJobTransition(deviceId, state, prevState) {
   if ((prev === GCODE_STATE.RUNNING || prev === GCODE_STATE.PAUSE) &&
       (curr === GCODE_STATE.FINISH || curr === GCODE_STATE.FAILED || curr === GCODE_STATE.IDLE)) {
     if (activeJob) {
-      queries.endJob(activeJob.id, curr, state.progress);
-      log.info({ deviceId, jobId: activeJob.id, endState: curr }, 'Print job ended');
+      const endState = jobEndState(curr, state);
+      queries.endJob(activeJob.id, endState, state.progress);
+      log.info({ deviceId, jobId: activeJob.id, endState }, 'Print job ended');
     }
   }
+}
+
+// ─── Late material capture (review finding 11) ───
+
+/** The AMS is often still loading during PREPARE (tray_now 255) — fill material once RUNNING. */
+function maybeCaptureMaterial(activeJob, state) {
+  if (!activeJob || activeJob.material || state.gcodeState !== GCODE_STATE.RUNNING) return;
+  const { material, color } = getActiveTrayMaterial(state.ams);
+  if (material) queries.setJobMaterial(activeJob.id, material, color);
 }
 
 // ─── Sampling ───

@@ -10,18 +10,19 @@ let wss = null;
  * Returns the WSS instance.
  */
 function createWebSocket(httpServer, logger, { verifyRequest } = {}) {
-  wss = new WebSocketServer({
+  // Handlers use this local reference: closeWebSocket() nulls `wss` while terminated clients still fire 'close'
+  const server = new WebSocketServer({
     server: httpServer,
     path: '/ws',
     verifyClient: verifyRequest ? ({ req }) => verifyRequest(req) : undefined,
   });
   const log = logger.child({ component: 'websocket' });
 
-  wss.on('connection', (ws) => {
-    log.info({ clients: wss.clients.size }, 'WebSocket client connected');
+  server.on('connection', (ws) => {
+    log.info({ clients: server.clients.size }, 'WebSocket client connected');
 
     ws.on('close', () => {
-      log.debug({ clients: wss.clients.size }, 'WebSocket client disconnected');
+      log.debug({ clients: server.clients.size }, 'WebSocket client disconnected');
     });
 
     ws.on('error', (err) => {
@@ -29,6 +30,7 @@ function createWebSocket(httpServer, logger, { verifyRequest } = {}) {
     });
   });
 
+  wss = server;
   return wss;
 }
 
@@ -57,6 +59,8 @@ function clientCount() {
 
 function closeWebSocket() {
   if (wss) {
+    // ws v8 with an external HTTP server leaves clients open on close(); terminate them so shutdown completes
+    for (const client of wss.clients) client.terminate();
     wss.close();
     wss = null;
   }
