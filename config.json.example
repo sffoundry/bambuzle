@@ -6,6 +6,9 @@
   "retention": {
     "days": 90
   },
+  "audit": {
+    "retentionDays": 365
+  },
   "server": {
     "port": 3000,
     "host": "0.0.0.0"

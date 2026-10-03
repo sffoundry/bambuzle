@@ -4,6 +4,7 @@ import { initCharts, loadChartData, destroyCharts, pushLivePoint, setZoomCallbac
 import { initAlertsUI } from './alerts-ui.js';
 import { initStatsUI } from './stats.js';
 import { initMaintenanceUI } from './maintenance.js';
+import { initAuditUI } from './audit.js';
 import { renderAmsWidget, updateAmsWidget } from './ams-widget.js';
 import { loadConfig, saveConfig, openConfigModal, applyVisibility } from './config-ui.js';
 
@@ -292,6 +293,7 @@ document.querySelectorAll('.nav-btn').forEach((btn) => {
     if (btn.dataset.view === 'alerts') initAlertsUI(state);
     if (btn.dataset.view === 'stats') initStatsUI(state);
     if (btn.dataset.view === 'maintenance') initMaintenanceUI();
+    if (btn.dataset.view === 'audit') initAuditUI();
   });
 });
 

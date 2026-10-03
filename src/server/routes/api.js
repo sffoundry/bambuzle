@@ -5,6 +5,7 @@ const queries = require('../../db/queries');
 const { planCommand } = require('../printer-commands');
 const { getAmsHumidityHistory } = require('../../db/ams-humidity');
 const { getAuthStatus } = require('../../bambu/auth');
+const { audit } = require('../audit');
 
 // Upper bounds for ?limit= (BAM-30 / code-review 2026-10-02 M3). The charts request 10000 samples.
 const MAX_LIMIT = { samples: 20000, events: 2000, jobs: 500 };
@@ -159,6 +160,14 @@ function createApiRouter(printerManager, { getCloudAuthStatus = getAuthStatus } 
     const { command, param, expectState, expectTaskId } = req.body || {};
     const commandLabel = typeof command === 'string' ? command.slice(0, 32) : '(invalid)';
 
+    // BAM-41: every exit also lands in the operator audit trail (the 'command' events stay as they were).
+    // outcome: confirmed | rejected (printer said no) | unconfirmed (no reply) | not_sent | refused (gate) | error
+    const auditCommand = (result, outcome, extra = {}) => audit(req, {
+      action: 'printer.command',
+      result,
+      target: `printer:${String(deviceId).slice(0, 64)}`,
+      detail: { command: commandLabel, ...(command === 'set_speed' && param !== undefined ? { param: String(param).slice(0, 8) } : {}), outcome, ...extra },
+    });
     const record = (severity, message) => {
       try {
         queries.insertEvent({ deviceId, eventType: 'command', severity, code: commandLabel, message });
@@ -170,13 +179,16 @@ function createApiRouter(printerManager, { getCloudAuthStatus = getAuthStatus } 
       // A cloud login is only needed for printers connected through the cloud (LAN works without one)
       const kind = printerManager.getTransportKind ? printerManager.getTransportKind(deviceId) : 'cloud';
       if ((kind || 'cloud') === 'cloud' && getCloudAuthStatus() !== 'authenticated') {
+        auditCommand('rejected', 'refused', { reason: 'cloud_not_logged_in', status: 503 });
         return res.status(503).json({ error: 'Server is not logged into BambuLab Cloud' });
       }
       if (!client || !printerManager.isConnected(deviceId)) {
+        auditCommand('rejected', 'refused', { reason: 'not_connected', status: 404 });
         return res.status(404).json({ error: 'Printer not found or not connected' });
       }
       // One command in flight per printer (double clicks, two tabs) — review 2, #7
       if (commandsInFlight.has(deviceId)) {
+        auditCommand('rejected', 'refused', { reason: 'command_in_flight', status: 429 });
         return res.status(429).json({ error: 'Another command for this printer is still in progress' });
       }
 
@@ -184,6 +196,7 @@ function createApiRouter(printerManager, { getCloudAuthStatus = getAuthStatus } 
       const caps = printerManager.getCapabilities ? printerManager.getCapabilities(deviceId) : null;
       if (caps?.control === 'signature_required') {
         record('warning', `Rejected command "${commandLabel}": ${caps.controlHint}`);
+        auditCommand('rejected', 'refused', { reason: 'signature_required', status: 409 });
         return res.status(409).json({ error: caps.controlHint, signatureRequired: true });
       }
 
@@ -191,6 +204,7 @@ function createApiRouter(printerManager, { getCloudAuthStatus = getAuthStatus } 
         { state: expectState, taskId: expectTaskId });
       if (plan.error) {
         record('warning', `Rejected command "${commandLabel}": ${plan.error}`);
+        auditCommand('rejected', 'refused', { reason: plan.error.slice(0, 160), status: plan.status });
         return res.status(plan.status).json({ error: plan.error, signatureRequired: Boolean(plan.signatureRequired) });
       }
 
@@ -210,10 +224,15 @@ function createApiRouter(printerManager, { getCloudAuthStatus = getAuthStatus } 
             : failed ? `printer rejected it: ${reply.reason || reply.result}` : 'confirmed by printer';
       if (signatureRequired) printerManager.markSignatureRejected?.(deviceId);
       record(failed || !reply.sent ? 'warning' : 'info', `Command ${plan.label}: ${outcome}`);
+      if (!reply.sent) auditCommand('error', 'not_sent');
+      else if (failed) auditCommand('rejected', 'rejected', { signatureRequired, reason: String(reply.reason || reply.result).slice(0, 160) });
+      else if (!reply.acknowledged) auditCommand('error', 'unconfirmed');
+      else auditCommand('ok', 'confirmed');
       return res.status(reply.sent ? 200 : 502).json({ ok: reply.sent && !failed, ...reply, outcome, signatureRequired });
     } catch (err) {
       // Express 4 doesn't catch async handler errors; never let one take the process down (review 2, #1)
       record('error', `Command "${commandLabel}" failed: ${err.message}`);
+      auditCommand('error', 'error');
       if (!res.headersSent) res.status(500).json({ error: 'Command failed' });
     }
   });

@@ -48,6 +48,14 @@ const config = {
     days: fileConfig.retention?.days ?? 90,
   },
 
+  // Operator audit trail (BAM-41) — kept much longer than telemetry; 0 = keep forever
+  audit: {
+    retentionDays: (() => {
+      const n = parseInt(process.env.BAMBUZLE_AUDIT_RETENTION_DAYS ?? fileConfig.audit?.retentionDays ?? 365, 10);
+      return Number.isFinite(n) && n >= 0 ? n : 365;
+    })(),
+  },
+
   // Dashboard requester auth (BAM-30) — see src/server/admin-auth.js
   auth: {
     mode: (process.env.BAMBUZLE_AUTH || fileConfig.auth?.mode || 'on').toLowerCase() === 'off' ? 'off' : 'on',

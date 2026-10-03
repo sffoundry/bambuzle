@@ -1140,3 +1140,12 @@ a:hover { color: var(--text); }
 .conn-test-result.conn-bad { color: var(--red); }
 .conn-dialog .form-actions { display: flex; gap: 8px; justify-content: flex-end; }
 .conn-remove { margin-right: auto; }
+
+/* ── Audit view (BAM-41) ── */
+.audit-note { color: var(--text-dim); font-size: 11px; margin: 0 0 10px; }
+.audit-table-wrap { overflow-x: auto; }
+.audit-table td { vertical-align: top; }
+.audit-time, .audit-source { white-space: nowrap; }
+.audit-action { white-space: nowrap; color: var(--accent); }
+.audit-target, .audit-detail { overflow-wrap: anywhere; }
+.audit-detail { color: var(--text-dim); font-size: 11px; }

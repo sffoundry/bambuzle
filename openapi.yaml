@@ -57,6 +57,8 @@ tags:
     description: Diagnostic endpoints
   - name: Maintenance
     description: Maintenance ledger — print hours, service-interval tasks, completion log, repeat errors (BAM-39)
+  - name: Audit
+    description: Operator audit trail — who did what, when, from where, with what result (BAM-41)
 
 paths:
   # ─── Health (public probes) ───
@@ -1186,6 +1188,106 @@ paths:
         '404':
           $ref: '#/components/responses/MaintNotFound'
 
+  # ─── Audit trail (BAM-41) ───
+
+  /api/audit:
+    get:
+      tags: [Audit]
+      summary: Operator audit trail, newest first
+      description: |
+        BAM-41. Append-only record of security-relevant and state-changing operator actions: dashboard sign-in /
+        sign-out / rate-limit hits, admin-guard denials on mutating requests (throttled to one row per source IP +
+        action per minute; the next row carries `detail.suppressed`), BambuLab Cloud login / verify / logout,
+        connection settings, LAN printer add / remove, connection tests, printer commands, alert rule and
+        maintenance task changes, manual backups.
+
+        Private even with `BAMBUZLE_PUBLIC_READ=true`. `detail` never contains secrets (access codes, passwords,
+        verification codes, tokens, notifier config) — only field names and flags such as `accessCodeChanged`.
+        Rows older than `audit.retentionDays` (default 365, env `BAMBUZLE_AUDIT_RETENTION_DAYS`, 0 = forever) are
+        pruned by the daily cleanup.
+      parameters:
+        - $ref: '#/components/parameters/AuditFrom'
+        - $ref: '#/components/parameters/AuditTo'
+        - $ref: '#/components/parameters/AuditAction'
+        - $ref: '#/components/parameters/AuditResult'
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 500
+            minimum: 1
+            maximum: 2000
+      responses:
+        '200':
+          description: Matching entries (at most `limit`)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  window:
+                    type: object
+                    properties:
+                      from: { type: string, format: date-time }
+                      to: { type: string, format: date-time }
+                  filters:
+                    type: object
+                    properties:
+                      action: { type: string, nullable: true }
+                      result: { type: string, nullable: true }
+                  limit: { type: integer }
+                  truncated:
+                    type: boolean
+                    description: True when `limit` entries were returned (there may be more)
+                  entries:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AuditEntry'
+        '400':
+          description: Bad from/to/action/result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/MaintUnauthorized'
+
+  /api/audit/export:
+    get:
+      tags: [Audit]
+      summary: Download the audit trail as CSV
+      description: |
+        Same filters as `GET /api/audit`, newest first, at most 50,000 rows (`X-Bambuzle-Truncated: true` when
+        more matched). RFC 4180 with a UTF-8 BOM and CRLF line endings; text cells starting with `= + - @`, tab or
+        CR are prefixed with `'` (formula-injection guard). Columns: id, ts, actor, source_ip, user_agent, action,
+        target, result, detail (JSON), request_id.
+      parameters:
+        - name: format
+          in: query
+          schema:
+            type: string
+            enum: [csv]
+            default: csv
+        - $ref: '#/components/parameters/AuditFrom'
+        - $ref: '#/components/parameters/AuditTo'
+        - $ref: '#/components/parameters/AuditAction'
+        - $ref: '#/components/parameters/AuditResult'
+      responses:
+        '200':
+          description: CSV attachment
+          content:
+            text/csv:
+              schema:
+                type: string
+        '400':
+          description: Bad format or filters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/MaintUnauthorized'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1218,6 +1320,32 @@ components:
       schema:
         type: integer
       description: Maintenance task ID
+    AuditFrom:
+      name: from
+      in: query
+      description: Window start (ISO 8601 date or date-time; offset-less values are UTC). Default 30 days before `to`.
+      schema:
+        type: string
+        example: '2026-09-01'
+    AuditTo:
+      name: to
+      in: query
+      description: Window end (ISO 8601; a bare date means the end of that UTC day). Default now.
+      schema:
+        type: string
+    AuditAction:
+      name: action
+      in: query
+      description: Exact action (`printer.command`) or category prefix (`printer` matches `printer.*`)
+      schema:
+        type: string
+        example: printer.command
+    AuditResult:
+      name: result
+      in: query
+      schema:
+        type: string
+        enum: [ok, denied, rejected, error]
   responses:
     MaintBadRequest:
       description: Validation failed (name 1-100 chars, intervals positive or null, at least one interval)
@@ -1239,6 +1367,34 @@ components:
             $ref: '#/components/schemas/Error'
 
   schemas:
+    AuditEntry:
+      type: object
+      properties:
+        id: { type: integer }
+        ts: { type: string, format: date-time, description: ISO 8601 UTC with milliseconds }
+        actor:
+          type: string
+          description: Credential that authorised the request — `admin-token` (Bearer), `session` (cookie) or `anonymous`. Per-user identities arrive with BAM-16.
+        source_ip: { type: string, nullable: true, description: Client IP (honours BAMBUZLE_TRUST_PROXY) }
+        user_agent: { type: string, nullable: true, maxLength: 200 }
+        action:
+          type: string
+          description: |
+            session.login, session.logout, session.rate_limited, access.denied, access.cross_origin,
+            cloud.login, cloud.verify, cloud.logout, printer.connection.update, printer.connection.test,
+            printer.add, printer.remove, printer.command, alert.create, alert.update, alert.delete,
+            maintenance.task.create, maintenance.task.update, maintenance.task.delete, maintenance.task.done,
+            maintenance.templates, system.backup
+        target: { type: string, nullable: true, example: 'printer:01S00EXAMPLE01' }
+        result:
+          type: string
+          enum: [ok, denied, rejected, error]
+          description: ok = done; denied = authentication/authorisation refused; rejected = validation, state gate or printer refusal; error = failure (incl. unconfirmed commands)
+        detail:
+          type: object
+          nullable: true
+          description: Small secret-free JSON, e.g. `{"accessCodeChanged":true}` or `{"command":"pause","outcome":"confirmed"}`
+        request_id: { type: string, nullable: true, description: Also sent as the `X-Request-Id` response header }
     Error:
       type: object
       properties:
