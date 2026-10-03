@@ -55,7 +55,7 @@ function renderAmsForPrinter(container, printer) {
 
   for (const unit of amsData.ams) {
     const unitId = unit.id != null ? unit.id : '?';
-    const humidity = unit.humidity != null ? `${unit.humidity}%` : '--';
+    const humidity = formatAmsHumidity(unit);
 
     html += `<div class="ams-unit">`;
     html += `<div class="ams-unit-header">AMS ${unitId} &mdash; Humidity: ${escapeHtml(humidity)}</div>`;
@@ -105,4 +105,16 @@ function escapeHtml(str) {
   const div = document.createElement('div');
   div.textContent = str;
   return div.innerHTML;
+}
+
+/**
+ * `humidity_raw` is real % RH (AMS 2 Pro / HT and newer firmware); `humidity` is only a 1–5 level
+ * (5 = driest), so never print the level with a % sign.
+ */
+function formatAmsHumidity(unit) {
+  const raw = parseInt(unit.humidity_raw, 10);
+  if (raw >= 1 && raw <= 100) return `${raw}%`;
+  const level = parseInt(unit.humidity, 10);
+  if (level >= 1 && level <= 5) return `level ${level}/5`;
+  return '--';
 }
