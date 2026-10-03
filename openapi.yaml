@@ -18,7 +18,7 @@ info:
     ## Real-time Data
     For live updates, connect to the WebSocket endpoint at `ws://<host>:<port>/ws`.
     Messages are JSON with `{ type, data }` format. Types include `state`, `event`, and `auth`.
-  version: 0.8.0
+  version: 0.9.0
   contact:
     name: Bambuzle
   license:
@@ -220,6 +220,47 @@ paths:
       responses:
         '200':
           description: 'Result: { ok, stage: connected|auth|identity|tls|unreachable|error, message, developerMode }'
+
+  /api/users:
+    get:
+      tags: [Session]
+      summary: List user accounts (admin)
+      responses: { '200': { description: Users (no password hashes) }, '403': { description: Not an admin } }
+    post:
+      tags: [Session]
+      summary: Create a user (admin)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password, role]
+              properties:
+                username: { type: string, description: '2–32 of letters, digits, . _ -' }
+                password: { type: string, minLength: 10 }
+                role: { type: string, enum: [viewer, operator, admin] }
+      responses: { '201': { description: Created }, '400': { description: Invalid }, '409': { description: Duplicate username } }
+  /api/users/{id}:
+    patch:
+      tags: [Session]
+      summary: Change role / disable / reset password (admin) — revokes the user's sessions
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses: { '200': { description: Updated }, '409': { description: Would remove the last active admin } }
+    delete:
+      tags: [Session]
+      summary: Delete a user (admin)
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses: { '200': { description: Deleted }, '409': { description: Last active admin } }
+  /api/me:
+    get:
+      tags: [Session]
+      summary: Who am I (name, role, kind)
+      responses: { '200': { description: Principal } }
+  /api/me/password:
+    post:
+      tags: [Session]
+      summary: Change own password (user accounts) — signs out other sessions
+      responses: { '200': { description: Changed }, '403': { description: Current password wrong } }
 
   # ─── Session (dashboard admin token) ───
 

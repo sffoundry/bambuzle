@@ -289,6 +289,21 @@ docker buildx build --platform linux/amd64,linux/arm64 -t <registry>/bambuzle:la
 
 A multi-platform build must be pushed to a registry (or exported with `--output`); use `--platform linux/arm64 --load` to load a single-arch image locally. Emulated arm64 builds compile `better-sqlite3` slowly if no prebuilt binary matches — expect several minutes. 32-bit Pi OS (armv7) is not a tested target.
 
+### Users and roles
+
+To give people their own sign-in, open **⚙ Configuration → Users…** while signed in with the admin token, and add accounts. Once one account exists, the sign-in screen asks for a username and password.
+
+| Role | Can |
+|---|---|
+| **Viewer** | See printers, charts, events, stats, maintenance and triage |
+| **Operator** | Everything a viewer can, plus pause/resume/stop/speed, maintenance edits and SD-card files |
+| **Admin** | Everything, including users, printer connections, alert rules, audit trail, backups and the BambuLab Cloud login |
+
+- **Sign-in protection:** passwords are hashed with scrypt, and failed sign-ins are rate-limited per IP and per username.
+- **Revocation:** signing out, changing a password, changing someone's role or disabling them takes effect immediately on their open sessions.
+- **The admin token keeps working** as a break-glass admin login ("Use the admin token instead") and for scripts (`Authorization: Bearer …`).
+- **Lockout protection:** the last active admin account can't be demoted, disabled or deleted.
+
 ## Connecting printers: Cloud or LAN
 
 Each printer connects one of two ways (see `docs/architecture-transports.md`):

@@ -1408,3 +1408,23 @@ button.diag-files { cursor: pointer; background: transparent; font-family: var(-
 .fleet-bar-fill { height: 100%; background: var(--accent); }
 .fleet-pct { color: var(--text); }
 .fleet-alerts { color: var(--yellow); }
+
+/* BAM-16: role-gated UI (the server enforces; this hides what a role can't use) */
+html[data-role="viewer"] .requires-operator,
+html[data-role="viewer"] .requires-admin,
+html[data-role="operator"] .requires-admin { display: none !important; }
+html[data-role="viewer"] .maint-actions,
+html[data-role="viewer"] .maint-form,
+html[data-role="viewer"] .maint-empty button { display: none !important; }
+.user-menu { display: inline-flex; gap: 6px; align-items: center; }
+.user-menu.hidden { display: none; }
+.user-chip { background: transparent; border: 1px solid var(--border); color: var(--text); font-family: var(--font); font-size: 11px; padding: 2px 8px; border-radius: var(--radius); cursor: pointer; }
+.user-chip:hover { border-color: var(--accent); }
+.signout-btn { padding: 2px 8px; font-size: 11px; }
+.login-alt { width: 100%; margin-top: 6px; font-size: 11px; }
+.users-dialog-content { max-width: 720px; }
+.users-actions { white-space: nowrap; display: flex; gap: 4px; flex-wrap: wrap; } /* on an inner div — flex on a <td> breaks table layout */
+.users-actions button { padding: 2px 6px; font-size: 10px; }
+.users-disabled td { color: var(--text-dim); font-style: italic; } /* not opacity — that failed contrast in LCARS */
+.users-add { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
+.users-add input, .users-role { background: var(--bg); color: var(--text); border: 1px solid var(--border); padding: 4px 6px; font-family: var(--font); }

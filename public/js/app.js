@@ -1,3 +1,5 @@
+import { openAccountDialog } from './users-ui.js';
+import { setUserRole } from './dashboard.js';
 import { initFleetToggle, renderFleet, scheduleFleetRender } from './fleet.js';
 import { initTheme } from './themes.js';
 import { renderPrinterCards, updatePrinterCard } from './dashboard.js';
@@ -40,19 +42,47 @@ let eventSortDir = 'desc';
 // ─── Dashboard session (BAM-30 admin token) ───
 
 /** Resolves true when this browser may use the API; otherwise shows the token form. */
+let currentUser = null;
+
+/** BAM-16: reflect who's signed in — role-gated UI (CSS on html[data-role]) + header chip. */
+function applyUser(user) {
+  currentUser = user;
+  const role = user?.role || 'viewer';
+  document.documentElement.dataset.role = role;
+  setUserRole(role);
+  const menu = document.getElementById('user-menu');
+  const chip = document.getElementById('account-btn');
+  if (user && user.kind !== 'none') {
+    chip.textContent = user.kind === 'user' ? `${user.name} · ${role}` : 'admin token';
+    menu.classList.remove('hidden');
+  } else {
+    menu.classList.add('hidden');
+  }
+}
+
+function showSignIn(mode) {
+  const useUsers = mode === 'users';
+  document.getElementById('login-overlay').classList.remove('hidden');
+  document.getElementById('user-login-form').classList.toggle('hidden', !useUsers);
+  document.getElementById('admin-form').classList.toggle('hidden', useUsers);
+  document.getElementById('use-user-btn').classList.toggle('hidden', !useUsers);
+  document.getElementById('login-form').classList.add('hidden');
+  document.getElementById('verify-form').classList.add('hidden');
+  document.getElementById('login-subtitle').textContent = useUsers ? 'Sign in to Bambuzle' : 'Enter the dashboard admin token';
+}
+
 async function ensureDashboardSession() {
+  let s;
   try {
     const res = await fetch('/api/session');
-    const { required, authenticated } = await res.json();
-    if (!required || authenticated) return true;
+    s = await res.json();
   } catch {
     return false;
   }
-  document.getElementById('login-overlay').classList.remove('hidden');
-  document.getElementById('admin-form').classList.remove('hidden');
-  document.getElementById('login-form').classList.add('hidden');
-  document.getElementById('verify-form').classList.add('hidden');
-  document.getElementById('login-subtitle').textContent = 'Enter the dashboard admin token';
+  if (!s.required) { applyUser({ name: 'anonymous', role: 'admin', kind: 'none' }); return true; }
+  if (s.authenticated) { applyUser(s.user); return true; }
+  if (s.publicRead) applyUser(null); // read-only visitors see the dashboard without controls
+  showSignIn(s.mode);
   return false;
 }
 
@@ -96,6 +126,47 @@ async function checkAuth() {
 }
 
 function setupAuthForms() {
+  const userForm = document.getElementById('user-login-form');
+  document.getElementById('use-token-btn').addEventListener('click', () => {
+    userForm.classList.add('hidden');
+    document.getElementById('admin-form').classList.remove('hidden');
+    document.getElementById('login-subtitle').textContent = 'Enter the dashboard admin token';
+  });
+  document.getElementById('use-user-btn').addEventListener('click', () => showSignIn('users'));
+  userForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const errorEl = document.getElementById('login-error');
+    errorEl.classList.add('hidden');
+    const btn = userForm.querySelector('button[type="submit"]');
+    btn.disabled = true;
+    try {
+      const res = await fetch('/api/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: userForm.username.value, password: userForm.password.value }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        errorEl.textContent = data.error || 'Sign-in failed';
+        errorEl.classList.remove('hidden');
+        return;
+      }
+      userForm.reset();
+      userForm.classList.add('hidden');
+      startDashboard();
+    } catch {
+      errorEl.textContent = 'Network error — is the server running?';
+      errorEl.classList.remove('hidden');
+    } finally {
+      btn.disabled = false;
+    }
+  });
+  document.getElementById('signout-btn').addEventListener('click', async () => {
+    try { await fetch('/api/session', { method: 'DELETE' }); } catch { /* reload anyway */ }
+    location.reload();
+  });
+  document.getElementById('account-btn').addEventListener('click', () => { if (currentUser) openAccountDialog(currentUser); });
+
   const adminForm = document.getElementById('admin-form');
   const loginForm = document.getElementById('login-form');
   const verifyForm = document.getElementById('verify-form');

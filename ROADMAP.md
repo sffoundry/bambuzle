@@ -123,7 +123,7 @@ Shipped Feb 2026 but never recorded on the roadmap. Effort sizes are retrospecti
 | BAM-13 |Timelapse assembly from camera frames|❌|M|Depends on camera-feed feature shipping first. 2026-10-02 xval: printers already record MP4 timelapses to SD — see BAM-44|
 | BAM-14 |OctoPrint-style GCode viewer|❌|L|Render G-code path with toolhead position|
 | BAM-15 |Push notifications (Pushover, ntfy, Telegram) in addition to webhook alerts|✅|M|v0.5.0. `src/alerts/notifiers/push.js`; new `print_error` alert condition. ntfy uses JSON publish (header publish breaks on non-ASCII printer names). Not tested against live services|
-| BAM-16 |Multi-user auth (currently single-session)|❌|L|Foundational for any shared deployment. v0.5.0 shipped the interim single shared admin token (BAM-30); this item is per-user accounts/roles on top of it, paired with the BAM-41 audit trail|
+| BAM-16 |Multi-user auth (currently single-session)|✅|L|v0.9.0. Accounts with viewer / operator / admin roles; scrypt passwords; server-side hashed sessions revoked on sign-out, password/role change, disable; one permission table enforced by the /api guard (unlisted writes → admin); per-IP + per-username lockout; Users dialog + My account; admin token stays as break-glass + API access; last-admin guard|
 | BAM-17 |Print queue / job scheduling|❌|XL|Submit jobs from bambuzle to printer. 2026-10-02 xval: both partners say blocked — print start is authorization-gated (Jan 2025 firmware) and Bambu Farm Manager (free, local) already queues|
 | BAM-18 |Power consumption tracking (smart plug integration)|❌|M|Match printer-on intervals against smart-plug telemetry. 2026-10-02 xval: start advisory-only (draw, cost, circuit-limit alerts); no plug switching before BAM-16|
 

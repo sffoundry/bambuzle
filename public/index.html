@@ -13,14 +13,18 @@
   <header>
     <h1>Bambuzle</h1>
     <button id="config-btn" class="config-btn" title="Configuration">&#9881;</button>
+    <div id="user-menu" class="user-menu hidden">
+      <button type="button" id="account-btn" class="user-chip" title="Your account"></button>
+      <button type="button" id="signout-btn" class="btn-secondary signout-btn">Sign out</button>
+    </div>
     <div id="connection-status" class="status-dot disconnected" title="WebSocket disconnected"></div>
     <nav>
       <button class="nav-btn active" data-view="dashboard">Dashboard</button>
       <button class="nav-btn" data-view="events">Events</button>
-      <button class="nav-btn" data-view="alerts">Alerts</button>
+      <button class="nav-btn requires-admin" data-view="alerts">Alerts</button>
       <button class="nav-btn" data-view="stats">Stats</button>
       <button class="nav-btn" data-view="maintenance">Maintenance</button>
-      <button class="nav-btn" data-view="audit">Audit</button>
+      <button class="nav-btn requires-admin" data-view="audit">Audit</button>
     </nav>
   </header>
 
@@ -31,11 +35,20 @@
       <p id="login-subtitle" class="login-subtitle">Sign in with your BambuLab account</p>
       <div id="login-error" class="login-error hidden"></div>
 
-      <!-- Step 0: Dashboard admin token (BAM-30) -->
+      <!-- Step 0a: user sign-in (BAM-16, once accounts exist) -->
+      <form id="user-login-form" class="hidden">
+        <label>Username <input type="text" name="username" required autocomplete="username" autocapitalize="none" spellcheck="false"></label>
+        <label>Password <input type="password" name="password" required autocomplete="current-password"></label>
+        <button type="submit" class="btn-primary login-btn">Sign in</button>
+        <button type="button" id="use-token-btn" class="btn-secondary login-alt">Use the admin token instead</button>
+      </form>
+
+      <!-- Step 0b: Dashboard admin token (BAM-30) -->
       <form id="admin-form" class="hidden">
         <p class="verify-hint">This dashboard is protected. The admin token is in the server log on first start, in <code>&lt;data dir&gt;/admin-token</code>, or set via <code>BAMBUZLE_ADMIN_TOKEN</code>.</p>
         <label>Admin Token <input type="password" name="token" required autocomplete="current-password"></label>
         <button type="submit" class="btn-primary login-btn">Unlock</button>
+        <button type="button" id="use-user-btn" class="btn-secondary login-alt hidden">Sign in with a username instead</button>
       </form>
 
       <!-- Step 1: Email + Password -->

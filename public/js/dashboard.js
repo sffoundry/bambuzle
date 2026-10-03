@@ -212,6 +212,12 @@ function updateCardContent(card, deviceId, printer) {
 // last command result is kept per printer (shown for CMD_STATUS_MS) instead of living in the DOM.
 
 const CMD_STATUS_MS = 20000;
+
+// BAM-16: the signed-in role; the server enforces permissions, this only hides what can't be used
+let userRole = 'admin';
+const ROLE_RANK = { viewer: 1, operator: 2, admin: 3 };
+export function setUserRole(role) { userRole = role || 'viewer'; }
+const canOperate = () => (ROLE_RANK[userRole] || 0) >= ROLE_RANK.operator;
 const signatureRejected = {}; // deviceId -> true once the printer rejected a command as unsigned
 const printerCaps = {}; // deviceId -> capabilities (kept from the printer object on each render)
 const cmdStatus = {}; // deviceId -> { text, tone, at, busy }
@@ -225,6 +231,7 @@ function renderControls(deviceId, live, connected, gcodeState) {
   const locked = st?.busy || Boolean(st?.awaitingState);
   const showStatus = st && (locked || Date.now() - st.at < CMD_STATUS_MS);
   if (!connected || (!active && !showStatus)) return '';
+  if (!canOperate()) return ''; // viewers never see printer controls (the server would answer 403)
 
   // Only offer buttons that can work (server-computed capabilities, docs/architecture-transports.md):
   // 'available' (LAN + Developer Mode) or 'unknown' (old firmware: try). Otherwise explain why not.
@@ -352,7 +359,7 @@ function renderDiagnostics(d, caps, deviceId) {
     chips.push(chip('Via', caps.transport === 'lan' ? 'LAN' : 'Cloud', { title: caps.transport === 'lan' ? 'Connected directly to the printer on the local network' : 'Connected through BambuLab Cloud' }));
   }
   // BAM-44: SD-card files (needs a LAN connection; availability learned on first use)
-  if (caps?.files && caps.files !== 'needs_lan' && deviceId) {
+  if (caps?.files && caps.files !== 'needs_lan' && deviceId && canOperate()) {
     const title = caps.files === 'unavailable' ? (caps.filesHint || 'File access unavailable') : 'Browse timelapses and print files on the SD card';
     chips.push(`<button type="button" class="diag-chip diag-files${caps.files === 'unavailable' ? ' diag-warn' : ''}" data-files="${escapeHtml(deviceId)}" title="${escapeHtml(title)}"><span class="diag-label">SD</span> files</button>`);
   }

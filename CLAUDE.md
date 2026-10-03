@@ -40,6 +40,8 @@ Browser
 | `src/db/printer-connections.js` | Connection settings; the ONLY reader of `printers.lan_access_code` (secret, never returned by the API) |
 | `src/printers/printer-files.js` | SD-card files over implicit FTPS (BAM-44): list/download, path allow-list, one session per printer, reuses LAN TLS policy |
 | `src/server/routes/printer-files.js` | `/api/printers/:id/files[/download]` (private under public-read) |
+| `src/server/permissions.js` | **Role required per /api route (BAM-16).** Add new routes here; unlisted writes default to admin, reads to viewer |
+| `src/db/users.js` | Accounts (scrypt), server-side hashed sessions, last-admin guard |
 | `src/server/routes/printer-connections.js` | Connection settings API, LAN connection test, hand-added LAN printers |
 | `src/bambu/message-parser.js` | MQTT message parsing, `extractPrinterState()` |
 | `src/bambu/diagnostics.js` | `state.diagnostics`: nozzles, firmware update, xcam AI-monitor *settings*, SD, IP, camera, AMS humidity, print_error, dev mode (BAM-32) |
@@ -148,7 +150,7 @@ Every other `/api/*` route and `/ws` is guarded by `src/server/admin-auth.js` (B
 ## Security Notes
 
 - BambuLab credentials stored in `.env` (gitignored)
-- Dashboard requester auth: shared admin token (`BAMBUZLE_ADMIN_TOKEN` or generated `<data dir>/admin-token`); env `BAMBUZLE_PUBLIC_READ`, `BAMBUZLE_AUTH=off`. Never add an `/api` route outside the guard without a reason.
+- Dashboard requester auth: shared admin token (`BAMBUZLE_ADMIN_TOKEN` or generated `<data dir>/admin-token`); env `BAMBUZLE_PUBLIC_READ`, `BAMBUZLE_AUTH=off`. Never add an `/api` route outside the guard without a reason. New routes need a role in `src/server/permissions.js` (viewer/operator/admin) — the guard enforces it; the UI's `requires-operator` / `requires-admin` classes only hide.
 - `?limit=` params are clamped (`clampLimit` in `routes/api.js`)
 - **Audit trail (BAM-41): every new state-changing or security-relevant route must call `audit(req, { action, target, result, detail })` from `src/server/audit.js`** on each exit (ok / rejected / error). `detail` must never hold secret values — record field names or flags (`accessCodeChanged: true`), never access codes, passwords, verification codes, tokens or notifier config. Don't audit plain reads. Retention: `audit.retentionDays` / `BAMBUZLE_AUDIT_RETENTION_DAYS` (default 365, separate from telemetry)
 - Frontend uses `escapeHtml()` (via textContent) for all user-visible strings

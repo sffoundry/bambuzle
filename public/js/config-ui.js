@@ -1,6 +1,7 @@
 import { getThemeList, getCurrentThemeId, getThemeSwatchColors, applyTheme } from './themes.js';
 import { openConnectionDialog, openAddLanPrinterDialog } from './connection-ui.js';
 import { openFilesDialog } from './files-ui.js';
+import { openUsersDialog } from './users-ui.js';
 // ─── Config UI — Widget Visibility Toggles ───
 // Persists per-printer and chart visibility to localStorage.
 
@@ -77,14 +78,14 @@ export function openConfigModal(cfg, printers, onChanged) {
     via.textContent = t === 'lan' ? 'LAN' : t === 'cloud' ? 'Cloud' : 'not connected';
     const connBtn = document.createElement('button');
     connBtn.type = 'button';
-    connBtn.className = 'btn-secondary config-conn-btn';
+    connBtn.className = 'btn-secondary config-conn-btn requires-admin';
     connBtn.textContent = 'Connection…';
     connBtn.addEventListener('click', () => openConnectionDialog(deviceId, name));
     row.append(label, via, connBtn);
     if (printer.capabilities?.files && printer.capabilities.files !== 'needs_lan') {
       const filesBtn = document.createElement('button');
       filesBtn.type = 'button';
-      filesBtn.className = 'btn-secondary config-conn-btn';
+      filesBtn.className = 'btn-secondary config-conn-btn requires-operator';
       filesBtn.textContent = 'SD files…';
       filesBtn.addEventListener('click', () => openFilesDialog(deviceId, name));
       row.append(filesBtn);
@@ -93,10 +94,20 @@ export function openConfigModal(cfg, printers, onChanged) {
   }
   const addLan = document.createElement('button');
   addLan.type = 'button';
-  addLan.className = 'btn-secondary config-add-lan';
+  addLan.className = 'btn-secondary config-add-lan requires-admin';
   addLan.textContent = '+ Add LAN printer';
   addLan.addEventListener('click', () => openAddLanPrinterDialog());
   printersList.appendChild(addLan);
+  // BAM-16: user management (admins only — hidden for other roles, enforced server-side)
+  if (!document.getElementById('config-users-btn')) {
+    const usersBtn = document.createElement('button');
+    usersBtn.type = 'button';
+    usersBtn.id = 'config-users-btn';
+    usersBtn.className = 'btn-secondary config-add-lan requires-admin';
+    usersBtn.textContent = 'Users…';
+    usersBtn.addEventListener('click', () => openUsersDialog());
+    printersList.parentElement.appendChild(usersBtn);
+  }
 
   if (Object.keys(printers).length === 0) {
     // Insert (don't replace the list) so "+ Add LAN printer" stays reachable on a fresh install (review BAM-35 #2)

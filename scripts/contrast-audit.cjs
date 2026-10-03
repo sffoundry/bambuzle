@@ -66,6 +66,16 @@ const AUDIT = () => {
     const isField = ['INPUT', 'SELECT', 'BUTTON', 'TEXTAREA'].includes(el.tagName);
     const shown = text || (isField && (el.value || el.textContent || '').trim());
     if (!shown || !visible(el)) continue;
+    // Skip text covered by another layer (e.g. the header behind the sign-in overlay): only judge what's on top
+    {
+      const rr = el.getBoundingClientRect();
+      const cx = rr.left + rr.width / 2;
+      const cy = rr.top + rr.height / 2;
+      if (cx >= 0 && cy >= 0 && cx < innerWidth && cy < innerHeight) {
+        const top = document.elementFromPoint(cx, cy);
+        if (top && top !== el && !el.contains(top) && !top.contains(el)) continue;
+      }
+    }
     const cs = getComputedStyle(el);
     let fg = parse(cs.color);
     if (!fg) continue;
