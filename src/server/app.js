@@ -10,6 +10,7 @@ const { createAlertsRouter } = require('./routes/alerts');
 const { createAuthRouter } = require('./routes/auth');
 const { createSessionRouter } = require('./routes/session');
 const { createHealthRouter, createSystemRouter } = require('./routes/system');
+const { createMetricsRouter } = require('./routes/metrics');
 const { getAuthStatus } = require('../bambu/auth');
 const config = require('../config');
 
@@ -43,6 +44,8 @@ function createApp(printerManager, authCallbacks, adminAuth, deps = {}) {
 
   // Liveness/readiness probes — public, before static files and the /api guard
   app.use(createHealthRouter(printerManager, { backupService, getCloudAuthStatus }));
+  // Prometheus scrape endpoint (BAM-37) — checks the admin token itself (not under /api)
+  app.use(createMetricsRouter({ printerManager, adminAuth, backupService, getCloudAuthStatus, dataDir }));
 
   // Static files
   app.use(express.static(path.resolve(__dirname, '..', '..', 'public')));

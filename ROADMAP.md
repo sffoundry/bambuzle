@@ -107,7 +107,7 @@ From the CODEX-SF371 × AGY-SF002 blind xval, merged and verified in `research/c
 | BAM-34 |Health/readiness endpoints + SQLite backup & restore|✅|HIGH|M|—|v0.5.0. `/healthz`, `/readyz` (public, no device detail), `/api/system`; daily online backup → integrity_check → sha256, keep 7 (0600, contains Bambu token); `npm run backup:restore`; Docker HEALTHCHECK → /healthz|
 | BAM-35 |Per-printer connection capability matrix (cloud / LAN / Dev Mode / camera)|❌|MEDIUM|M|—|Gate for BAM-9, BAM-44 and any LAN adapter|
 | BAM-36 |Telemetry rollups and tiered retention|❌|MEDIUM|L|BAM-34|Raw samples today: 5s active / 30s idle, 90-day delete|
-| BAM-37 |Prometheus `/metrics` (incl. MQTT connection count, last-message age)|❌|MEDIUM|S|BAM-34|Bambu bans accounts with >50 concurrent MQTT connections|
+| BAM-37 |Prometheus `/metrics` (incl. MQTT connection count, last-message age)|✅|MEDIUM|S|BAM-34|v0.5.0. No client lib; admin-token guarded; bounded labels (device_id + name). Install.md § Monitoring has scrape config + suggested alerts|
 | BAM-38 |Spoolman integration|❌|MEDIUM|M|—|Proposed to supersede bespoke BAM-11 inventory|
 | BAM-39 |Maintenance ledger (print hours, service intervals, repeat HMS)|❌|MEDIUM|M|BAM-10||
 | BAM-40 |Print-failure triage timeline (anomalies + xcam + HMS)|❌|MEDIUM|M|BAM-32|Builds on BAM-25 anomaly capture|

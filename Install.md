@@ -306,6 +306,21 @@ Bambuzle backs up its SQLite database automatically using SQLite's online-backup
 
 Health probes for monitoring: `GET /healthz` (liveness) and `GET /readyz` (readiness; returns `degraded` until BambuLab login completes and printers connect) need no token and expose no printer details.
 
+## Monitoring (Prometheus)
+
+`GET /metrics` serves Prometheus text format: per-printer connection, state, temperatures, fans, progress, last-message age, HMS/print-error flags, plus MQTT connection count, database size and backup status. It needs the admin token (or `BAMBUZLE_PUBLIC_READ=true`):
+
+```yaml
+scrape_configs:
+  - job_name: bambuzle
+    authorization:
+      credentials: <admin token>
+    static_configs:
+      - targets: ['bambuzle.local:3000']
+```
+
+Useful alerts: `bambuzle_printer_last_message_age_seconds > 300` (stale data), `bambuzle_backup_last_ok == 0`, `bambuzle_mqtt_connections > 40` (Bambu temporarily bans accounts above ~50 concurrent connections).
+
 ## Troubleshooting
 
 | Problem | Fix |

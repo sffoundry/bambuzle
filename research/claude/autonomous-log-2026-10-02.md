@@ -20,3 +20,4 @@
 - BAM-15 done (Claude): ntfy/Pushover/Telegram notifiers + print_error condition + UI fields (escaped). Test caught a real bug: header-based ntfy publish fails on non-ASCII (em dash in title) → switched to JSON publish. Not tested against live services (would send external messages). 40/40.
 - Docker re-verified on merged main (562e38d+): healthy via /healthz, 401 unauth / 200 token, token logged once; cleaned only own images.
 - BAM-10 merged (agent, f71001a): /api/stats + Stats view, per-job material/duration capture. Resolved CSS append conflict; hoisted inline require. Live-checked API (200 + 400 on bad date). 50/50.
+- BAM-37 done (Claude): /metrics (hand-rolled exposition, no dep), admin-token guarded, bounded labels, last-message age + MQTT connection count + backup status. Live-checked (401 unauth / 200 token). 52/52.

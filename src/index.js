@@ -31,8 +31,11 @@ let anomalyDetector = null;
 let cronJobs = [];
 let backupService = null;
 
+const lastMessageAt = {}; // deviceId -> ms timestamp of the last MQTT report (BAM-37 metrics)
+
 const printerManager = {
   getLiveStates: () => liveStates,
+  getLastMessageAt: (deviceId) => lastMessageAt[deviceId] || null,
   isConnected: (deviceId) => mqttClients[deviceId]?.connected ?? false,
   getClient: (deviceId) => mqttClients[deviceId] || null,
 };
@@ -215,6 +218,7 @@ function connectPrinter(device, auth) {
   client.on('state', (deviceId, state) => {
     const prevState = liveStates[deviceId];
     liveStates[deviceId] = state;
+    lastMessageAt[deviceId] = Date.now();
 
     broadcast('state', { deviceId, state, connected: true });
     handleJobTransition(deviceId, state, prevState);

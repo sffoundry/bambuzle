@@ -42,6 +42,7 @@ Browser
 | `src/server/routes/alerts.js` | Alert rules CRUD endpoints |
 | `src/server/routes/system.js` | `/healthz`, `/readyz`, `/api/system` |
 | `src/server/websocket.js` | WebSocket broadcast to dashboard |
+| `src/server/routes/metrics.js` | `GET /metrics` Prometheus exposition, admin-token guarded (BAM-37) |
 | `src/alerts/engine.js` | Alert condition evaluation (incl. `print_error`, BAM-15) |
 | `src/alerts/notifiers/` | console, webhook, `push.js` (ntfy JSON-publish, Pushover, Telegram) |
 | `src/index.js` | Main entry — orchestrates MQTT, sampling, jobs, alerts |
