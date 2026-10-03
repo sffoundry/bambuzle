@@ -54,3 +54,4 @@
 - v0.8.0 review (agent): 4M/5L, all fixed + regression tests (157/157). Incident: reviewer pkill'd live :3000 server; restarted in ~1 min; rule added to memory + review record.
 - BAM-16 backend (Claude): users (scrypt, server-side hashed sessions, revocation), central permission table (viewer/operator/admin; unlisted writes → admin), principal-based guard (403 vs 401), username/password sign-in with per-IP + per-username lockout, /api/users + /api/me, audit actors user:<name>. 161/161.
 - BAM-16 UI (Claude): username sign-in, header user chip + sign-out, role-gated UI (CSS html[data-role]), Users dialog (themed password reset, no native prompt), My account. Browser-verified role matrix (viewer/operator/admin/token) + contrast 0 (fixed disabled-row opacity; audit now skips covered text). v0.9.0.
+- BAM-16 review (agent): 2H/3M/7L, all fixed (48e221a), 167/167; live :3000 restarted on 0.9.0 (3/3 connected); tagged v0.9.0.
