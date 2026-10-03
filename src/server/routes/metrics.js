@@ -60,7 +60,7 @@ function fileSize(file) {
  * @param {function} [opts.getCloudAuthStatus]
  * @param {string} [opts.dataDir]
  */
-function createMetricsRouter({ printerManager, adminAuth, backupService = null, getCloudAuthStatus = () => 'unknown', dataDir }) {
+function createMetricsRouter({ printerManager, adminAuth, backupService = null, getCloudAuthStatus = () => 'unknown', dataDir, powerMonitor = null }) {
   const router = express.Router();
 
   router.get('/metrics', (req, res) => {
@@ -121,6 +121,12 @@ function createMetricsRouter({ printerManager, adminAuth, backupService = null, 
       const fw = s.diagnostics?.firmware;
       r.add('bambuzle_printer_firmware_update_available', '1 if the printer reports a firmware update', 'gauge',
         fw ? (fw.updateAvailable ? 1 : 0) : null, l);
+      const pw = powerMonitor?.snapshot(id); // BAM-18 smart plug
+      if (pw?.ok) r.add('bambuzle_printer_power_watts', 'Power draw measured by the printer\'s smart plug', 'gauge', pw.watts, l);
+    }
+    for (const c of powerMonitor?.circuitStatus() || []) {
+      r.add('bambuzle_circuit_power_watts', 'Summed smart-plug power per configured circuit', 'gauge', c.watts, { circuit: c.name });
+      if (c.limitW != null) r.add('bambuzle_circuit_limit_watts', 'Configured circuit limit', 'gauge', c.limitW, { circuit: c.name });
     }
 
     r.add('bambuzle_printers_configured', 'Printers known to Bambuzle', 'gauge', printers.length);

@@ -40,6 +40,10 @@ Browser
 | `src/db/printer-connections.js` | Connection settings; the ONLY reader of `printers.lan_access_code` (secret, never returned by the API) |
 | `src/printers/printer-files.js` | SD-card files over implicit FTPS (BAM-44): list/download, path allow-list, one session per printer, reuses LAN TLS policy |
 | `src/server/routes/printer-files.js` | `/api/printers/:id/files[/download]` (private under public-read) |
+| `src/power/plug-readers.js` | BAM-18 smart-plug readers (Shelly/Tasmota/HA/JSON) — read-only, no redirects, size/time capped |
+| `src/power/monitor.js` | Polls plugs every 15 s → per-minute `power_samples`; live snapshot + circuit totals |
+| `src/db/power.js` | Plug config (write-only secret), power settings, samples, job energy/cost |
+| `src/printers/camera-probe.js` | Camera capability: protocol by model + credential-less verified TLS check of the camera port |
 | `src/server/permissions.js` | **Role required per /api route (BAM-16).** Add new routes here; unlisted writes default to admin, reads to viewer |
 | `src/db/users.js` | Accounts (scrypt), server-side hashed sessions, last-admin guard |
 | `src/server/routes/printer-connections.js` | Connection settings API, LAN connection test, hand-added LAN printers |

@@ -1428,3 +1428,11 @@ html[data-role="viewer"] .maint-empty button { display: none !important; }
 .users-disabled td { color: var(--text-dim); font-style: italic; } /* not opacity — that failed contrast in LCARS */
 .users-add { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
 .users-add input, .users-role { background: var(--bg); color: var(--text); border: 1px solid var(--border); padding: 4px 6px; font-family: var(--font); }
+
+/* BAM-18 power settings */
+.conn-hint { font-size: 11px; color: var(--text-dim); text-transform: none; }
+.power-circuits { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.power-circuit-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.power-circuit-row input { background: var(--bg); color: var(--text); border: 1px solid var(--border); padding: 5px 7px; font-family: var(--font); }
+.power-circuit-row input[type="text"] { flex: 1 1 140px; min-width: 0; }
+.power-circuit-row input[type="number"] { width: 90px; }

@@ -18,7 +18,7 @@ info:
     ## Real-time Data
     For live updates, connect to the WebSocket endpoint at `ws://<host>:<port>/ws`.
     Messages are JSON with `{ type, data }` format. Types include `state`, `event`, and `auth`.
-  version: 0.9.0
+  version: 0.10.0
   contact:
     name: Bambuzle
   license:
@@ -220,6 +220,74 @@ paths:
       responses:
         '200':
           description: 'Result: { ok, stage: connected|auth|identity|tls|unreachable|error, message, developerMode }'
+
+  /api/power:
+    get:
+      tags: [Printers]
+      summary: Smart-plug readings, circuit totals, power settings and energy totals (BAM-18, viewer)
+      responses: { '200': { description: "{ settings, circuits, readings, totals }" } }
+  /api/power/history/{id}:
+    get:
+      tags: [Printers]
+      summary: Per-minute power history for one printer (viewer)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: hours, in: query, schema: { type: integer, minimum: 1, maximum: 744, default: 24 } }
+      responses: { '200': { description: "[{ minute, avgW, maxW, wh }]" }, '404': { description: Printer not found } }
+  /api/power/settings:
+    put:
+      tags: [Printers]
+      summary: Electricity price and circuit limits (admin)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                pricePerKwh: { type: number, nullable: true, minimum: 0, maximum: 100 }
+                currency: { type: string, maxLength: 8 }
+                circuits:
+                  type: array
+                  maxItems: 20
+                  items: { type: object, properties: { name: { type: string }, limitW: { type: integer, minimum: 100, maximum: 100000 } } }
+      responses: { '200': { description: Saved }, '400': { description: Invalid } }
+  /api/printers/{id}/power-plug:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [Printers]
+      summary: The printer's smart-plug config (admin). The secret is never returned (hasSecret only); URL credentials are hidden
+      responses: { '200': { description: "{ deviceId, plug, kinds }" } }
+    put:
+      tags: [Printers]
+      summary: Set the smart plug (admin). Read-only — Bambuzle never switches plugs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind]
+              properties:
+                kind: { type: string, enum: [shelly-gen2, shelly-gen1, tasmota, homeassistant, http-json] }
+                url: { type: string, description: 'http(s) URL; blank keeps the saved URL' }
+                channel: { type: integer, minimum: 0, maximum: 16 }
+                entity: { type: string, description: 'homeassistant: sensor.* entity id' }
+                jsonPath: { type: string, description: 'http-json: dotted path to watts' }
+                secret: { type: string, description: 'Write-only token/password. Omit to keep (only kept while the URL is unchanged); empty to clear' }
+                circuit: { type: string }
+                enabled: { type: boolean }
+      responses: { '200': { description: Saved }, '400': { description: Invalid }, '404': { description: Printer not found } }
+    delete:
+      tags: [Printers]
+      summary: Remove the smart plug (admin)
+      responses: { '200': { description: Removed }, '404': { description: No plug configured } }
+  /api/printers/{id}/power-plug/test:
+    post:
+      tags: [Printers]
+      summary: Read the plug once (admin). Body optional — defaults to the saved plug; the saved secret is only sent to the saved URL
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses: { '200': { description: "{ ok, watts, totalWh } or { ok: false, message }" } }
 
   /api/users:
     get:
@@ -1969,7 +2037,7 @@ components:
           nullable: true
         conditionType:
           type: string
-          enum: [state_change, hms_error, temp_anomaly, temp_threshold, progress_stall, print_error, ams_humidity]
+          enum: [state_change, hms_error, temp_anomaly, temp_threshold, progress_stall, print_error, ams_humidity, power_limit]
         conditionConfig:
           type: object
         notifyVia:

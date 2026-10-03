@@ -170,7 +170,7 @@ test('CSV: BOM, header, row values, quoting and formula-injection guard', async 
     assert.match(res.headers.get('content-type'), /^text\/csv; charset=utf-8/);
     assert.match(res.headers.get('content-disposition'), /^attachment; filename="bambuzle-jobs-all-\d{4}-\d{2}-\d{2}\.csv"$/);
     assert.equal(res.headers.get('x-bambuzle-truncated'), null);
-    assert.equal(res.headers.get('x-bambuzle-export-schema'), '2');
+    assert.equal(res.headers.get('x-bambuzle-export-schema'), '3');
     const buf = Buffer.from(await res.arrayBuffer());
     assert.deepEqual([...buf.subarray(0, 3)], [0xEF, 0xBB, 0xBF], 'UTF-8 BOM');
     const text = buf.toString('utf8');
@@ -242,7 +242,7 @@ test('JSON: shape, schema_version, typed values', async () => {
     assert.match(res.headers.get('content-type'), /^application\/json/);
     assert.match(res.headers.get('content-disposition'), /filename="bambuzle-jobs-all-\d{4}-\d{2}-\d{2}\.json"/);
     const body = await res.json();
-    assert.equal(body.schema_version, 2);
+    assert.equal(body.schema_version, 3);
     assert.match(body.generated_at, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
     assert.equal(body.truncated, false);
     assert.equal(body.window.from, null);

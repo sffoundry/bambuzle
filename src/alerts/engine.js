@@ -21,6 +21,7 @@ class AlertEngine {
     // Per rule+printer: the state that rule last actually evaluated. Rules in cooldown don't advance it,
     // so an edge that happens during cooldown still fires afterwards (review 2, #4).
     this.rulePrev = {}; // `${ruleId}/${deviceId}` -> state
+    this.powerArmed = {}; // BAM-18: `${ruleId}/dev/${deviceId}` or `${ruleId}/circuit/${name}` -> false once alerted
     this.humidityArmed = {}; // `${ruleId}/${deviceId}/${amsId}` -> false once alerted, re-armed below threshold - hysteresis
     // Track progress timestamps for stall detection
     this.progressTimestamps = {}; // { deviceId: { progress, ts } }
@@ -89,6 +90,8 @@ class AlertEngine {
         return this._checkPrintError(state, prev);
       case 'ams_humidity':
         return this._checkAmsHumidity(state, config, `${rule.id}/${deviceId}`);
+      case 'power_limit':
+        return this._checkPowerLimit(state, config, rule.id, deviceId);
       default:
         return null;
     }
@@ -152,6 +155,31 @@ class AlertEngine {
       severity: 'warning',
       message: `${parts.join(', ')} (limit ${thresholdPct}% RH) — dry the filament or replace the desiccant`,
     };
+  }
+
+  /**
+   * BAM-18 (advisory): fires when this printer's plug draws more than maxWatts (if set), or when the
+   * circuit its plug is on goes over that circuit's configured limit. Each fires once, then re-arms
+   * after dropping below 90% of the limit. A circuit alert fires once per circuit, not per printer.
+   * `state.power` is the power monitor's snapshot (src/power/monitor.js), injected by the caller.
+   */
+  _checkPowerLimit(state, config = {}, ruleId, deviceId) {
+    const p = state.power;
+    if (!p?.ok) return null;
+    const msgs = [];
+    const gate = (key, value, limit) => {
+      if (limit == null || !Number.isFinite(limit)) return false;
+      const armed = this.powerArmed[key] !== false;
+      if (value > limit && armed) { this.powerArmed[key] = false; return true; }
+      if (!armed && value < limit * 0.9) this.powerArmed[key] = true;
+      return false;
+    };
+    const maxWatts = Number.isFinite(config.maxWatts) ? config.maxWatts : null;
+    if (gate(`${ruleId}/dev/${deviceId}`, p.watts, maxWatts)) msgs.push(`Drawing ${p.watts} W (limit ${maxWatts} W)`);
+    if (p.circuit && gate(`${ruleId}/circuit/${p.circuit}`, p.circuitWatts ?? 0, p.circuitLimitW)) {
+      msgs.push(`Circuit "${p.circuit}" at ${p.circuitWatts} W — over its ${p.circuitLimitW} W limit`);
+    }
+    return msgs.length ? { severity: 'warning', message: msgs.join('; ') } : null;
   }
 
   _checkTempAnomaly(state, config) {

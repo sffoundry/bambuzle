@@ -1,5 +1,5 @@
 import { openAccountDialog } from './users-ui.js';
-import { setUserRole } from './dashboard.js';
+import { setUserRole, setPowerReading, setPowerReadings } from './dashboard.js';
 import { initFleetToggle, renderFleet, scheduleFleetRender } from './fleet.js';
 import { initTheme } from './themes.js';
 import { renderPrinterCards, updatePrinterCard } from './dashboard.js';
@@ -339,6 +339,12 @@ function handleWsMessage(msg) {
       pushLivePoint(deviceId, printerState);
       break;
     }
+    case 'power': { // BAM-18 smart-plug reading
+      const { deviceId, reading } = msg.data;
+      setPowerReading(deviceId, reading);
+      if (state.printers[deviceId]) updatePrinterCard(deviceId, state.printers[deviceId], uiConfig, dashFilters);
+      break;
+    }
     case 'event': {
       addEventRow(msg.data);
       addDashEvent(msg.data);
@@ -563,6 +569,7 @@ async function loadPrinters() {
   try {
     const res = await fetch('/api/printers');
     const printers = await res.json();
+    try { setPowerReadings((await (await fetch('/api/power')).json()).readings); } catch { /* no power data */ }
     for (const p of printers) {
       state.printers[p.device_id] = {
         db: p,

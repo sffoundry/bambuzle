@@ -152,6 +152,9 @@ function runMigrations(database) {
   try { database.exec('ALTER TABLE print_jobs ADD COLUMN anomaly_count INTEGER NOT NULL DEFAULT 0'); } catch { /* already exists */ }
   try { database.exec('ALTER TABLE print_jobs ADD COLUMN hms_codes TEXT'); } catch { /* already exists */ }
   try { database.exec('ALTER TABLE print_jobs ADD COLUMN total_layers INTEGER'); } catch { /* already exists */ }
+  // BAM-18: smart-plug energy for the job (src/db/power.js recordJobEnergy)
+  try { database.exec('ALTER TABLE print_jobs ADD COLUMN energy_wh REAL'); } catch { /* already exists */ }
+  try { database.exec('ALTER TABLE print_jobs ADD COLUMN energy_cost REAL'); } catch { /* already exists */ }
 
   // Job statistics columns (BAM-10). Nullable: historical rows predate them.
   try { database.exec('ALTER TABLE print_jobs ADD COLUMN material TEXT'); } catch { /* already exists */ }

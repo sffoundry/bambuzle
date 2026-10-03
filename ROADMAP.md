@@ -7,26 +7,24 @@
 
 ---
 
-## Next up (as of v0.7.0, 2026-10-03)
+## Next up (as of v0.10.0, 2026-10-03)
 
-Bambuzle is now at **v0.7.0**:
-- monitoring over Cloud or LAN;
-- diagnostics, stats, maintenance, export, humidity history and alerts;
-- six WCAG-checked themes;
-- admin auth, backups, metrics and Docker.
+Bambuzle is now at **v0.10.0**:
+- **Monitoring and connections:** monitoring over Cloud or LAN, camera detection, and SD-card file access.
+- **Data and alerts:** diagnostics, stats, maintenance, export, humidity history and alerts.
+- **Accounts and themes:** user accounts with viewer/operator/admin roles, and six WCAG-checked themes.
+- **Power:** read-only smart-plug energy and cost per job, with circuit-limit alerts.
+- **Operations:** audit trail, backups, metrics and Docker.
 
-Printer **control** is built but only works over LAN with Developer Mode on, because of Bambu's authorization firmware. The plan, in order:
+Printer **control** is built, but Bambu's authorization firmware means it only works over LAN with Developer Mode on.
 
 | # | Item | Why now | Size |
 |---|---|---|---|
-| 1 | **BAM-28 / BAM-35: verify LAN control on hardware** | Built and tested against fakes only. Needs one printer on LAN with Developer Mode on to confirm pause/resume/stop/speed replies and the "confirmed" path. Owner action: enable Developer Mode on a spare printer. | S |
-| 2 | **BAM-49: verify the arm64 image on a Pi 4/5, document publishing** | ARM64 is a stated deployment target and the image has never been built for it. Also decide where images get published (no registry push exists today). | S |
-| 3 | **BAM-35 (rest): camera capability** | Detect per printer whether a camera stream is reachable (LAN RTSPS on X1/H2, port 6000 on P1/A1) so BAM-9 and BAM-44 have a gate. | M |
-| 4 | **BAM-44: SD-card timelapse / file harvester (FTPS)** | Now unblocked. FTPS uses the same LAN host and access code as BAM-35. The printer already records MP4 timelapses, so it's cheaper than BAM-9/13. | M |
-| 5 | **BAM-41: operator audit trail** | Command attempts are already logged as events. Add auth, config and connection-setting changes and a filterable view, ahead of making controls more reachable. | M |
-| 6 | **BAM-12: mobile layout** | People check prints from their phone. The dashboard is desktop-only. | M |
-| 7 | **BAM-50 + BAM-51: small accuracy fixes** | Model-specific HMS text (BAM-31 caveat). Print hours excluding pauses in Stats, Maintenance and Export. | S + S |
-| 8 | **BAM-9: live camera feed** | After #3 gives it a capability gate. LAN only. | XL |
+| 1 | **BAM-28 / BAM-35: verify LAN control on hardware** | Built and tested against fakes only. It needs one printer on LAN with Developer Mode on, to confirm the pause/resume/stop/speed replies. Owner action. | S |
+| 2 | **BAM-44: verify SD-card files on hardware** | FTPS on authorization firmware may need Developer Mode. Owner action: open "SD files" on a LAN printer. | S |
+| 3 | **BAM-18: verify with a real smart plug** | Readers are tested against each vendor's documented JSON, not against real plugs. Owner action: add a plug under Configuration → Power plug. | S |
+| 4 | **BAM-49: verify the arm64 image on a Pi 4/5, document publishing** | arm64 is a stated deployment target and the image has never been built for it. Also decide where images get published. | S |
+| 5 | **BAM-9: live camera feed** | Camera detection now exists. Turning on "LAN Only Liveview" on an X1/H2 opens port 322 (RTSPS). P1/A1 use JPEG over TLS on port 6000. LAN only. | XL |
 
 **Waiting on others**
 
@@ -36,11 +34,6 @@ Printer **control** is built but only works over LAN with Developer Mode on, bec
 | **BAM-11 → BAM-38: Spoolman instead of a bespoke filament inventory** | Owner decision (Francisco) |
 | **BAM-17: print queue** | Owner decision. Recommend ➖: print start is authorization-gated and Bambu Farm Manager already queues |
 | **BAM-14: G-code viewer** | Owner decision (low value; consider ➖) |
-| **BAM-18: power tracking** | Whether smart plugs are in use |
-
-Later, no urgency: BAM-16 per-user accounts, BAM-36 telemetry rollups, BAM-40 failure triage, BAM-42 Home Assistant bridge, BAM-45 fleet view.
-
----
 
 ## Legend
 
@@ -125,7 +118,7 @@ Shipped Feb 2026 but never recorded on the roadmap. Effort sizes are retrospecti
 | BAM-15 |Push notifications (Pushover, ntfy, Telegram) in addition to webhook alerts|✅|M|v0.5.0. `src/alerts/notifiers/push.js`; new `print_error` alert condition. ntfy uses JSON publish (header publish breaks on non-ASCII printer names). Not tested against live services|
 | BAM-16 |Multi-user auth (currently single-session)|✅|L|v0.9.0. Accounts with viewer / operator / admin roles; scrypt passwords; server-side hashed sessions revoked on sign-out, password/role change, disable; one permission table enforced by the /api guard (unlisted writes → admin); per-IP + per-username lockout; Users dialog + My account; admin token stays as break-glass + API access; last-admin guard|
 | BAM-17 |Print queue / job scheduling|❌|XL|Submit jobs from bambuzle to printer. 2026-10-02 xval: both partners say blocked — print start is authorization-gated (Jan 2025 firmware) and Bambu Farm Manager (free, local) already queues|
-| BAM-18 |Power consumption tracking (smart plug integration)|❌|M|Match printer-on intervals against smart-plug telemetry. 2026-10-02 xval: start advisory-only (draw, cost, circuit-limit alerts); no plug switching before BAM-16|
+| BAM-18 |Power consumption tracking (smart plug integration)|✅|M|v0.10.0. Read-only plug readers (Shelly Gen1/Gen2+, Tasmota, Home Assistant sensor, generic JSON). 15 s polling into per-minute avg/peak/energy rows. Job energy + cost (price per kWh), Stats energy tile, export schema v3 `energy_wh`/`energy_cost`, Power chip on cards, `power_limit` alert (per-printer watts + per-circuit limit, hysteresis), Prometheus gauges. Never switches a plug. Secret write-only, only sent to the saved URL. **Not yet tried with a real plug**|
 
 ---
 

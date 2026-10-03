@@ -1,6 +1,6 @@
 # Job export — data dictionary
 
-`GET /api/export/jobs?format=csv|json&printer=&from=&to=` (Stats view → **Export CSV** / **Export JSON**) returns one row per print job. This page describes every column of **export schema version 2** (v2 added `active_sec`, v0.8.0).
+`GET /api/export/jobs?format=csv|json&printer=&from=&to=` (Stats view → **Export CSV** / **Export JSON**) returns one row per print job. This page describes every column of **export schema version 3** (v2 added `active_sec` in v0.8.0; v3 added `energy_wh` and `energy_cost` in v0.10.0).
 
 ## The file
 
@@ -49,6 +49,8 @@ Some columns come from per-job values on `print_jobs` and are kept forever. That
 | `nozzle_temp_max` | number | °C | telemetry | Maximum nozzle temperature over the job's samples. |
 | `bed_temp_avg` | number | °C | telemetry | Mean bed temperature over the job's samples, rounded to 0.1. |
 | `bed_temp_max` | number | °C | telemetry | Maximum bed temperature over the job's samples. |
+| `energy_wh` | number | Wh | power | Energy measured by the printer's smart plug during the job (BAM-18), summed from per-minute readings in the job window. Includes heat-up and idle draw in that window. Empty without a plug, while running, or if the plug was unreachable throughout. |
+| `energy_cost` | number | currency | power | `energy_wh / 1000 × price per kWh` at the time the job ended, in the currency set under Power settings. Empty when no price is set. |
 
 ## Notes for analysis
 

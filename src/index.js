@@ -20,6 +20,8 @@ const { chooseTransport, computeCapabilities } = require('./printers/transport-p
 const { modelKeyFromCloudCode } = require('./utils/printer-models');
 const { getFilesStatus } = require('./printers/printer-files');
 const { createCameraMonitor } = require('./printers/camera-probe');
+const { createPowerMonitor } = require('./power/monitor');
+const power = require('./db/power');
 const { getDb, closeDb } = require('./db/database');
 const { createBackupService } = require('./db/backup');
 const queries = require('./db/queries');
@@ -44,6 +46,7 @@ let cronJobs = [];
 let tokenRefreshJob = null;
 let haBridge = null;
 let backupService = null;
+let powerMonitor = null; // BAM-18
 
 const lastMessageAt = {}; // deviceId -> ms timestamp of the last MQTT report (BAM-37 metrics)
 
@@ -111,12 +114,19 @@ async function main() {
   // Anomaly detector
   anomalyDetector = new AnomalyDetector(log, config);
 
+  // Smart-plug power readings (BAM-18): read-only polling of configured plugs
+  powerMonitor = createPowerMonitor({
+    log,
+    onReading: (deviceId) => broadcast('power', { deviceId, reading: powerMonitor.snapshot(deviceId) }),
+  }).start();
+
   // Start HTTP server unconditionally so the dashboard is always reachable
   const adminAuth = createAdminAuth({ auth: config.auth, dataDir: config.dataDir, log });
   const app = createApp(printerManager, { onAuthenticated, onLoggedOut }, adminAuth, {
     backupService,
     getCloudAuthStatus: getAuthStatus,
     dataDir: config.dataDir,
+    powerMonitor,
   });
   const server = http.createServer(app);
   createWebSocket(server, log, { verifyRequest: adminAuth.verifyWsRequest });
@@ -167,6 +177,7 @@ async function main() {
       client.destroy();
     }
 
+    powerMonitor?.stop();
     closeWebSocket(); // terminates open dashboard sockets, otherwise server.close() never resolves
 
     await new Promise((resolve) => server.close(resolve));
@@ -263,6 +274,7 @@ function startCronJobs() {
     const pausesDeleted = queries.deleteOldJobPauses(days);
     const amsHumidityDeleted = amsHumidity.deleteOldAmsHumidity(days);
     require('./db/users').pruneExpiredSessions();
+    power.deleteOldSamples(config.retention.days); // per-minute plug readings (BAM-18)
     const auditDeleted = auditLog.deleteOldAudit(config.audit.retentionDays); // own retention (BAM-41)
     log.info({
       samplesDeleted: samplesDeleted.changes,
@@ -367,7 +379,7 @@ function connectPrinter(deviceId, kind, conn, signature, carriedState = null) {
     handlePrintError(deviceId, state, prevState, activeJob);
 
     const printer = queries.getPrinter(deviceId);
-    alertEngine.evaluate(deviceId, state, printer?.name || deviceId);
+    alertEngine.evaluate(deviceId, { ...state, power: powerMonitor?.snapshot(deviceId) || null }, printer?.name || deviceId);
   });
 
   client.on('connected', (deviceId) => {
@@ -465,6 +477,7 @@ function handleJobTransition(deviceId, state, prevState) {
       if (prev === GCODE_STATE.PAUSE) anomalyDetector.handleResume(deviceId);
       const endState = jobEndState(curr, state);
       queries.endJob(activeJob.id, endState, state.progress);
+      try { power.recordJobEnergy(activeJob.id); } catch (err) { log.warn({ err: err.message }, 'Job energy not recorded'); } // BAM-18
       log.info({ deviceId, jobId: activeJob.id, endState }, 'Print job ended');
     }
   }

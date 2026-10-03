@@ -2,6 +2,7 @@ import { getThemeList, getCurrentThemeId, getThemeSwatchColors, applyTheme } fro
 import { openConnectionDialog, openAddLanPrinterDialog } from './connection-ui.js';
 import { openFilesDialog } from './files-ui.js';
 import { openUsersDialog } from './users-ui.js';
+import { openPlugDialog, openPowerSettings } from './power-ui.js';
 // ─── Config UI — Widget Visibility Toggles ───
 // Persists per-printer and chart visibility to localStorage.
 
@@ -81,7 +82,12 @@ export function openConfigModal(cfg, printers, onChanged) {
     connBtn.className = 'btn-secondary config-conn-btn requires-admin';
     connBtn.textContent = 'Connection…';
     connBtn.addEventListener('click', () => openConnectionDialog(deviceId, name));
-    row.append(label, via, connBtn);
+    const plugBtn = document.createElement('button');
+    plugBtn.type = 'button';
+    plugBtn.className = 'btn-secondary config-conn-btn requires-admin';
+    plugBtn.textContent = 'Power plug…';
+    plugBtn.addEventListener('click', () => openPlugDialog(deviceId, name));
+    row.append(label, via, connBtn, plugBtn);
     if (printer.capabilities?.files && printer.capabilities.files !== 'needs_lan') {
       const filesBtn = document.createElement('button');
       filesBtn.type = 'button';
@@ -107,6 +113,16 @@ export function openConfigModal(cfg, printers, onChanged) {
     usersBtn.textContent = 'Users…';
     usersBtn.addEventListener('click', () => openUsersDialog());
     printersList.parentElement.appendChild(usersBtn);
+  }
+  // BAM-18: electricity price + circuit limits (admins)
+  if (!document.getElementById('config-power-btn')) {
+    const powerBtn = document.createElement('button');
+    powerBtn.type = 'button';
+    powerBtn.id = 'config-power-btn';
+    powerBtn.className = 'btn-secondary config-add-lan requires-admin';
+    powerBtn.textContent = 'Power settings…';
+    powerBtn.addEventListener('click', () => openPowerSettings());
+    printersList.parentElement.appendChild(powerBtn);
   }
 
   if (Object.keys(printers).length === 0) {

@@ -21,6 +21,7 @@ const RULES = [
   { re: /^\/api\/audit(\/|$)/, role: 'admin' },
   { re: /\/debug\//, role: 'admin' },
   { re: /^\/api\/printers\/[^/]+\/connection(\/|$)/, role: 'admin' }, // LAN settings + connection tests
+  { re: /^\/api\/printers\/[^/]+\/power-plug(\/|$)/, role: 'admin' }, // plug URL / secret + plug tests (BAM-18)
   { re: /^\/api\/auth\/status$/, methods: READ, role: 'viewer' },
   { re: /^\/api\/auth(\/|$)/, role: 'admin' }, // BambuLab Cloud login / verify / logout
 

@@ -103,9 +103,14 @@ function renderTiles(overall) {
   const tiles = [
     ['Jobs', overall.jobs, overall.running ? `${overall.running} running` : `${overall.finished} finished`],
     ['Success Rate', fmtPct(overall.successRate), `${overall.finished} ok / ${overall.failed} failed / ${overall.cancelled} cancelled`],
-    ['Print Hours', fmtHours(overall.totalPrintHours), 'wall-clock, incl. pauses'],
+    ['Print Hours', fmtHours(overall.totalPrintHours), 'excluding pauses'],
     ['Avg Duration', fmtMinutes(overall.avgDurationMin), 'ended jobs'],
   ];
+  // BAM-18: energy only when at least one job was measured by a smart plug
+  if (overall.energyJobs > 0) {
+    const cost = overall.energyCost != null ? ` · ${overall.energyCost.toFixed(2)}${powerCurrency ? ` ${powerCurrency}` : ''}` : '';
+    tiles.push(['Energy', `${overall.energyKwh.toFixed(2)} kWh`, `${overall.energyJobs} measured job${overall.energyJobs === 1 ? '' : 's'}${cost}`]);
+  }
   wrap.replaceChildren(...tiles.map(([label, value, sub]) => {
     const tile = el('div', 'stats-tile');
     tile.append(el('div', 'stats-tile-label', label), el('div', 'stats-tile-value', value), el('div', 'stats-tile-sub', sub));
@@ -208,7 +213,13 @@ function render(data) {
   renderRecentTriage(document.getElementById('stats-triage'), ui.printer, name);
 }
 
+let powerCurrency = '';
+
 async function loadStats() {
+  try {
+    const p = await (await fetch('/api/power')).json();
+    powerCurrency = p?.settings?.currency || '';
+  } catch { /* no power data — energy tile shows without a currency */ }
   const status = document.getElementById('stats-status');
   const seq = ++ui.loadSeq;
   status.textContent = 'Loading…';

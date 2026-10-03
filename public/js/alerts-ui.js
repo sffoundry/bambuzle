@@ -209,6 +209,14 @@ function updateConditionFields(type, config) {
         </label>
       `;
       break;
+    case 'power_limit':
+      container.innerHTML = `
+        <label>Alert when this printer draws more than (W, blank = off)
+          <input type="number" name="cc_maxWatts" value="${escapeHtml(String(config.maxWatts ?? ''))}" min="1" max="100000">
+        </label>
+        <p class="conn-intro">Also alerts once when the circuit its smart plug is on goes over that circuit's limit (Configuration → Power settings). Advisory only — Bambuzle never switches plugs.</p>
+      `;
+      break;
     case 'progress_stall':
       container.innerHTML = `
         <label>Stall duration (minutes)
@@ -272,6 +280,10 @@ function getConditionConfig(form) {
       };
     case 'progress_stall':
       return { minutes: parseInt(form.cc_minutes?.value || '15', 10) };
+    case 'power_limit': {
+      const w = parseInt(form.cc_maxWatts?.value || '', 10);
+      return Number.isFinite(w) && w > 0 ? { maxWatts: w } : {};
+    }
     case 'ams_humidity':
       return {
         thresholdPct: parseInt(form.cc_thresholdPct?.value || '40', 10),
@@ -314,6 +326,8 @@ function describeCondition(type, config) {
       return 'Printer error (print_error)';
     case 'ams_humidity':
       return `AMS humidity ≥ ${config.thresholdPct ?? 40}% RH`;
+    case 'power_limit':
+      return config.maxWatts ? `Power > ${config.maxWatts} W, or circuit over limit` : 'Circuit over its limit';
     default:
       return type;
   }

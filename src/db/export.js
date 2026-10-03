@@ -7,7 +7,7 @@
 const { getDb } = require('./database');
 const { JOB_DURATION_SQL, JOB_ACTIVE_SQL } = require('./queries');
 
-const EXPORT_SCHEMA_VERSION = 2; // v2: + active_sec (BAM-51)
+const EXPORT_SCHEMA_VERSION = 3; // v2: + active_sec (BAM-51); v3: + energy_wh, energy_cost (BAM-18)
 const EXPORT_MAX_ROWS = 50000;
 
 /** Ordered column set. `type` is the JSON/CSV value type: string | integer | number. */
@@ -41,6 +41,8 @@ const EXPORT_COLUMNS = [
   { name: 'nozzle_temp_max', type: 'number', unit: '°C' },
   { name: 'bed_temp_avg', type: 'number', unit: '°C' },
   { name: 'bed_temp_max', type: 'number', unit: '°C' },
+  { name: 'energy_wh', type: 'number', unit: 'Wh' },
+  { name: 'energy_cost', type: 'number', unit: 'currency (Power settings)' },
 ];
 
 const ISO_UTC = (col) => `CASE WHEN ${col} IS NULL THEN NULL ELSE strftime('%Y-%m-%dT%H:%M:%SZ', ${col}) END`;
@@ -128,7 +130,9 @@ function getJobExportRows({ deviceId, from, to, maxRows = EXPORT_MAX_ROWS } = {}
       COALESCE(j.nozzle_temp_avg, ROUND(s.nozzle_avg, 1)) AS nozzle_temp_avg,
       COALESCE(j.nozzle_temp_max, s.nozzle_max) AS nozzle_temp_max,
       COALESCE(j.bed_temp_avg, ROUND(s.bed_avg, 1)) AS bed_temp_avg,
-      COALESCE(j.bed_temp_max, s.bed_max) AS bed_temp_max
+      COALESCE(j.bed_temp_max, s.bed_max) AS bed_temp_max,
+      j.energy_wh,
+      j.energy_cost
     FROM sel j
     LEFT JOIN printers p ON p.device_id = j.device_id
     LEFT JOIN s ON s.job_id = j.id

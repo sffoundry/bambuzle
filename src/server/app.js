@@ -16,6 +16,7 @@ const { createMaintenanceRouter } = require('./routes/maintenance');
 const { createPrinterConnectionsRouter } = require('./routes/printer-connections');
 const { createPrinterFilesRouter } = require('./routes/printer-files');
 const { createUsersRouter } = require('./routes/users');
+const { createPowerRouter } = require('./routes/power');
 const { createAuditRouter } = require('./routes/audit');
 const { attachAuditActor } = require('./audit');
 const { getAuthStatus } = require('../bambu/auth');
@@ -57,7 +58,7 @@ function createApp(printerManager, authCallbacks, adminAuth, deps = {}) {
   // Liveness/readiness probes — public, before static files and the /api guard
   app.use(createHealthRouter(printerManager, { backupService, getCloudAuthStatus }));
   // Prometheus scrape endpoint (BAM-37) — checks the admin token itself (not under /api)
-  app.use(createMetricsRouter({ printerManager, adminAuth, backupService, getCloudAuthStatus, dataDir }));
+  app.use(createMetricsRouter({ printerManager, adminAuth, backupService, getCloudAuthStatus, dataDir, powerMonitor: deps.powerMonitor || null }));
 
   // Static files
   app.use(express.static(path.resolve(__dirname, '..', '..', 'public')));
@@ -82,6 +83,7 @@ function createApp(printerManager, authCallbacks, adminAuth, deps = {}) {
   app.use('/api', createPrinterConnectionsRouter(printerManager, { probe: deps.lanProbe }));
   app.use('/api', createPrinterFilesRouter({ fileOps: deps.fileOps }));
   app.use('/api', createUsersRouter(adminAuth));
+  app.use('/api', createPowerRouter({ powerMonitor: deps.powerMonitor || null, read: deps.plugReader }));
   app.use('/api/alerts', createAlertsRouter());
   app.use('/api/system', createSystemRouter({ backupService, dataDir }));
   app.use('/api/export', createExportRouter({ maxRows: deps.exportMaxRows }));

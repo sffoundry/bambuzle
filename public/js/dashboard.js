@@ -216,6 +216,17 @@ const CMD_STATUS_MS = 20000;
 // BAM-16: the signed-in role; the server enforces permissions, this only hides what can't be used
 let userRole = 'viewer'; // least privilege until /api/session says otherwise
 const ROLE_RANK = { viewer: 1, operator: 2, admin: 3 };
+// BAM-18: latest smart-plug readings by deviceId (from /api/power and 'power' WebSocket messages)
+const powerReadings = {};
+export function setPowerReading(deviceId, reading) {
+  if (reading) powerReadings[deviceId] = reading;
+  else delete powerReadings[deviceId];
+}
+export function setPowerReadings(map) {
+  for (const k of Object.keys(powerReadings)) delete powerReadings[k];
+  Object.assign(powerReadings, map || {});
+}
+
 export function setUserRole(role) { userRole = role || 'viewer'; }
 const canOperate = () => (ROLE_RANK[userRole] || 0) >= ROLE_RANK.operator;
 const signatureRejected = {}; // deviceId -> true once the printer rejected a command as unsigned
@@ -357,6 +368,17 @@ function renderDiagnostics(d, caps, deviceId) {
   const chips = [];
   if (caps?.transport) {
     chips.push(chip('Via', caps.transport === 'lan' ? 'LAN' : 'Cloud', { title: caps.transport === 'lan' ? 'Connected directly to the printer on the local network' : 'Connected through BambuLab Cloud' }));
+  }
+  // BAM-18: smart-plug power draw (read-only)
+  const pw = deviceId ? powerReadings[deviceId] : null;
+  if (pw) {
+    const circuitTxt = pw.circuit && pw.circuitWatts != null ? ` · circuit ${pw.circuit}: ${pw.circuitWatts}${pw.circuitLimitW ? ` / ${pw.circuitLimitW}` : ''} W` : '';
+    if (pw.ok) {
+      const over = pw.circuitLimitW != null && pw.circuitWatts > pw.circuitLimitW;
+      chips.push(chip('Power', `${Math.round(pw.watts)} W`, { tone: over ? 'diag-warn' : '', title: `Smart plug reading${circuitTxt}${over ? ' — circuit over its limit' : ''}` }));
+    } else if (pw.ok === false) {
+      chips.push(chip('Power', 'no reading', { tone: 'diag-warn', title: pw.error || 'Smart plug unreachable' }));
+    }
   }
   // BAM-35: camera reachability (detection only — no stream yet). Unknown / no camera → no chip.
   const CAM = { available: ['LAN', ''], disabled: ['liveview off', ''], unreachable: ['unreachable', 'diag-warn'] };

@@ -319,6 +319,30 @@ Printers that aren't on your Bambu account (e.g. LAN-only / Developer Mode) can 
 
 With a LAN connection configured, the **SD files** chip on a printer card (or **SD files…** in Configuration) lists the printer's timelapse videos and print files and downloads them over FTPS. Uses the same certificate checks as the LAN connection. On current Bambu firmware this may require Developer Mode; if the printer refuses, the dialog says why.
 
+## Power tracking (smart plugs)
+
+If a printer is powered through a smart plug with a power meter, Bambuzle can read it. It shows live watts on the printer card and records each job's energy (kWh) and cost.
+
+**Read-only:** Bambuzle never switches a plug on or off.
+
+**Setup** (admin): **⚙ Configuration**
+1. **Power plug…** next to a printer: choose the plug type, enter its local address, and press **Test plug**.
+2. **Power settings…**: set your electricity price per kWh, and optionally circuits with a watt limit. Assign each plug to the circuit it's on.
+3. **Alerts → Power / circuit limit**: get notified when a printer draws more than a set wattage, or a circuit goes over its limit.
+
+| Plug | Type to choose | Address example |
+|---|---|---|
+| Shelly Plus Plug S, Plus 1PM, Pro, Gen3/Gen4 | Shelly Plus / Pro / Gen3+ | `http://10.0.0.20` |
+| Shelly Plug / Plug S (Gen1), Shelly 1PM | Shelly Gen1 | `http://10.0.0.20` |
+| Any plug running Tasmota with an energy sensor (e.g. Sonoff S31, Athom) | Tasmota | `http://10.0.0.20` (web password: `http://admin:PASSWORD@10.0.0.20`) |
+| Anything already in Home Assistant (Kasa, Tapo, Zigbee plugs…) | Home Assistant sensor | `http://homeassistant.local:8123` + entity `sensor.…_power` + a long-lived access token |
+| Other plugs with a local JSON API | Other — JSON over HTTP | the full URL + a dotted path to the watts value |
+
+**How the numbers are measured:**
+- Plugs are read every 15 s.
+- Job energy is the sum of per-minute readings between the job's start and end, so it includes heat-up.
+- The token or password is stored on the server, is never shown again, and is only ever sent to the address it was saved with.
+
 ## Home Assistant
 
 Set `BAMBUZLE_HA_MQTT_URL` (plus `BAMBUZLE_HA_MQTT_USERNAME` / `BAMBUZLE_HA_MQTT_PASSWORD`) to your Home Assistant MQTT broker, e.g. the Mosquitto add-on. Each printer then appears in HA automatically (MQTT discovery) with print state, progress, time remaining, layer, temperatures, current job, active HMS errors and a print-error problem sensor. The bridge is read-only: it never subscribes, so nothing in HA can command a printer through it.

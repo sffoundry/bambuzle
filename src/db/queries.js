@@ -109,7 +109,10 @@ const JOB_COUNTERS_SQL = `
   COALESCE(SUM(CASE WHEN j.end_state IN ('IDLE', 'CANCELLED') THEN 1 ELSE 0 END), 0) AS cancelled,
   COALESCE(SUM(CASE WHEN j.ended_at IS NULL THEN 1 ELSE 0 END), 0) AS running,
   COALESCE(SUM(${JOB_ACTIVE_SQL}), 0) AS total_sec,
-  AVG(${JOB_ACTIVE_SQL}) AS avg_sec`;
+  AVG(${JOB_ACTIVE_SQL}) AS avg_sec,
+  COALESCE(SUM(CASE WHEN j.energy_wh IS NOT NULL THEN 1 ELSE 0 END), 0) AS energy_jobs,
+  SUM(j.energy_wh) AS energy_wh,
+  SUM(j.energy_cost) AS energy_cost`;
 
 function round(n, digits) {
   const f = 10 ** digits;
@@ -131,6 +134,10 @@ function shapeCounters(row) {
     successRate: completed > 0 ? round(finished / completed, 4) : null,
     totalPrintHours: round((row.total_sec || 0) / 3600, 2),
     avgDurationMin: row.avg_sec != null ? round(row.avg_sec / 60, 1) : null,
+    // BAM-18: only jobs measured by a smart plug count here
+    energyJobs: row.energy_jobs || 0,
+    energyKwh: row.energy_wh != null ? round(row.energy_wh / 1000, 3) : null,
+    energyCost: row.energy_cost != null ? round(row.energy_cost, 2) : null,
   };
 }
 
