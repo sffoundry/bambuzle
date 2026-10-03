@@ -1,9 +1,44 @@
 # Bambuzle Roadmap
 
-> **Mission:** Self-hosted monitoring dashboard for BambuLab 3D printers. Connects to BambuLab Cloud via MQTT, stores telemetry in SQLite, and serves a real-time web dashboard.
+> **Mission:** Self-hosted monitoring dashboard for BambuLab 3D printers. Connects through BambuLab Cloud or directly over the LAN (MQTT), stores telemetry in SQLite, and serves a real-time web dashboard. Runs headless on Linux (x86_64 + ARM64); no Windows dependency.
 > **Adoption surface for `aiw feature adopt BAM-<N>`.**
 
-**Last updated:** 2026-10-02 (backfilled v0.3.0–v0.4.1 shipped work as BAM-19..29; flagged requester-auth gap on BAM-16/BAM-28; added BAM-30..46 proposals from enhancement xval)
+**Last updated:** 2026-10-03 (v0.7.0: transport layer — cloud + LAN; added Next up plan and BAM-48..51)
+
+---
+
+## Next up (as of v0.7.0, 2026-10-03)
+
+Bambuzle is now at **v0.7.0**:
+- monitoring over Cloud or LAN;
+- diagnostics, stats, maintenance, export, humidity history and alerts;
+- six WCAG-checked themes;
+- admin auth, backups, metrics and Docker.
+
+Printer **control** is built but only works over LAN with Developer Mode on, because of Bambu's authorization firmware. The plan, in order:
+
+| # | Item | Why now | Size |
+|---|---|---|---|
+| 1 | **BAM-28 / BAM-35: verify LAN control on hardware** | Built and tested against fakes only. Needs one printer on LAN with Developer Mode on to confirm pause/resume/stop/speed replies and the "confirmed" path. Owner action: enable Developer Mode on a spare printer. | S |
+| 2 | **BAM-49: verify the arm64 image on a Pi 4/5, document publishing** | ARM64 is a stated deployment target and the image has never been built for it. Also decide where images get published (no registry push exists today). | S |
+| 3 | **BAM-35 (rest): camera capability** | Detect per printer whether a camera stream is reachable (LAN RTSPS on X1/H2, port 6000 on P1/A1) so BAM-9 and BAM-44 have a gate. | M |
+| 4 | **BAM-44: SD-card timelapse / file harvester (FTPS)** | Now unblocked. FTPS uses the same LAN host and access code as BAM-35. The printer already records MP4 timelapses, so it's cheaper than BAM-9/13. | M |
+| 5 | **BAM-41: operator audit trail** | Command attempts are already logged as events. Add auth, config and connection-setting changes and a filterable view, ahead of making controls more reachable. | M |
+| 6 | **BAM-12: mobile layout** | People check prints from their phone. The dashboard is desktop-only. | M |
+| 7 | **BAM-50 + BAM-51: small accuracy fixes** | Model-specific HMS text (BAM-31 caveat). Print hours excluding pauses in Stats, Maintenance and Export. | S + S |
+| 8 | **BAM-9: live camera feed** | After #3 gives it a capability gate. LAN only. | XL |
+
+**Waiting on others**
+
+| Item | Waiting on |
+|---|---|
+| **BAM-48: Bambu Local Server SDK transport** | Bambu approving SDK access *and* shipping a Linux/ARM64 build. Request drafted in `research/claude/2026-10-03-bambu-sdk-access-request-draft.md`, to be submitted by Steve/Francisco. This is the only path to control on cloud-connected printers without Developer Mode. |
+| **BAM-11 → BAM-38: Spoolman instead of a bespoke filament inventory** | Owner decision (Francisco) |
+| **BAM-17: print queue** | Owner decision. Recommend ➖: print start is authorization-gated and Bambu Farm Manager already queues |
+| **BAM-14: G-code viewer** | Owner decision (low value; consider ➖) |
+| **BAM-18: power tracking** | Whether smart plugs are in use |
+
+Later, no urgency: BAM-16 per-user accounts, BAM-36 telemetry rollups, BAM-40 failure triage, BAM-42 Home Assistant bridge, BAM-45 fleet view.
 
 ---
 
@@ -116,6 +151,10 @@ From the CODEX-SF371 × AGY-SF002 blind xval, merged and verified in `research/c
 | BAM-43 |AMS humidity / desiccant trend + alert|✅|LOW|S|—|v0.6.0. `ams_humidity_samples` (15-min / on-change, retention-pruned), `GET /api/printers/:id/ams-humidity`, 7-day sparkline + 24h trend in the AMS widget, edge-triggered `ams_humidity` alert (% RH threshold, level fallback for older AMS). Also fixed: alert cooldown 0 was silently stored as 300|
 | BAM-44 |SD-card timelapse/file harvester over FTPS|❌|LOW|M|BAM-35|Proposed replacement for BAM-13's frame-stitching approach|
 | BAM-45 |Compact fleet matrix view (read-only)|❌|LOW|M|—|No control buttons until BAM-30|
+| BAM-48 |Bambu Local Server SDK transport (Linux x86_64 + ARM64)|❌|HIGH|L|BAM-35|Implements the transport contract in `docs/architecture-transports.md` via Bambu's authorized API: control without Developer Mode. **Blocked:** needs Bambu SDK approval and a Linux/ARM64 build (request drafted 2026-10-03). No Windows hop|
+| BAM-49 |Verify arm64 Docker image on a Raspberry Pi 4/5; decide image publishing|❌|HIGH|S|BAM-33|arm64 never built (no buildx/QEMU on the dev host). Native `docker build` on a Pi or buildx in CI. No registry push exists today|
+| BAM-50 |Model-specific HMS text and wiki links|❌|LOW|S|BAM-31|Map the cloud `dev_model_name` to the HMS dataset's model keys so per-model descriptions/links apply|
+| BAM-51 |Print hours exclude pauses (Stats, Maintenance, Export)|❌|LOW|S|BAM-10|Durations are wall-clock today; subtract `total_pause_sec`|
 | BAM-47 |UI themes (ported from HamTab)|✅|MEDIUM|M|—|v0.6.0. Terminal (classic, default), Modern, LCARS, HamClock, Radio Face, Accessible; picker in Configuration; per-browser; charts/gauges follow the theme. Requested by Steve 2026-10-03|
 | BAM-46 |Job data export (CSV/JSON + data dictionary)|✅|LOW|S|BAM-10|v0.6.0. `GET /api/export/jobs?format=csv|json`, versioned columns (`docs/export-data-dictionary.md`), CSV formula-injection guard + BOM, 50k-row cap; Export buttons on the Stats view|
 
