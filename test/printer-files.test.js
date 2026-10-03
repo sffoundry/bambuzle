@@ -104,6 +104,9 @@ test('files API: needs LAN settings, validates input, private under public-read,
     assert.equal(dl.headers.get('content-type'), 'video/mp4');
     assert.match(dl.headers.get('content-disposition'), /attachment; filename="a.mp4"/);
     assert.equal(await dl.text(), 'abc');
+    const { queryAudit } = require('../src/db/audit');
+    const rows = queryAudit({ action: 'printer.files', limit: 10 });
+    assert.ok(rows.some((r) => r.action === 'printer.files.download' && r.result === 'ok'), 'download audited');
     assert.equal((await get('/api/printers/FILES0001/files', {})).status, 401);
   } finally {
     await srv.close();

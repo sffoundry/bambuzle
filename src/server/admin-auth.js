@@ -14,6 +14,7 @@
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const { auditThrottled } = require('./audit');
 
 const COOKIE_NAME = 'bambuzle_session';
 const COOKIE_MAX_AGE_SEC = 30 * 24 * 60 * 60;
@@ -103,7 +104,7 @@ function createAdminAuth({ auth, dataDir, log }) {
    */
   function isPrivateRead(req) {
     const p = (req.baseUrl + req.path).toLowerCase();
-    return p.startsWith('/api/alerts') || p.startsWith('/api/system') || p.includes('/debug/') || /^\/api\/printers\/[^/]+\/files/.test(p);
+    return p.startsWith('/api/alerts') || p.startsWith('/api/system') || p.startsWith('/api/audit') || p.includes('/debug/') || /^\/api\/printers\/[^/]+\/files/.test(p);
   }
 
   /**
@@ -122,12 +123,29 @@ function createAdminAuth({ auth, dataDir, log }) {
     }
   }
 
+  /** BAM-41: audit a refused mutating request (throttled per IP + action; reads are never audited). */
+  function auditDenial(req, action, status) {
+    const credential = /^Bearer\s/i.test(req.headers.authorization || '') ? 'bearer'
+      : (parseCookies(req.headers.cookie)[COOKIE_NAME] ? 'cookie' : 'none');
+    auditThrottled(req, {
+      action,
+      result: 'denied',
+      actor: 'anonymous',
+      target: (req.baseUrl + req.path).slice(0, 200),
+      detail: { status, method: req.method, credential },
+    });
+  }
+
   /** Express middleware guarding /api. */
   function requireAdmin(req, res, next) {
     // Same-host cross-origin writes are refused even with auth off (review 2, #8)
-    if (crossOriginWrite(req)) return res.status(403).json({ error: 'cross_origin_write_rejected' });
+    if (crossOriginWrite(req)) {
+      auditDenial(req, 'access.cross_origin', 403);
+      return res.status(403).json({ error: 'cross_origin_write_rejected' });
+    }
     if (isAuthorized(req)) return next();
     if (publicRead && isReadOnly(req) && !isPrivateRead(req)) return next();
+    if (!isReadOnly(req)) auditDenial(req, 'access.denied', 401);
     res.status(401).json({ error: 'admin_auth_required' });
   }
 

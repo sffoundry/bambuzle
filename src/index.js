@@ -12,6 +12,7 @@ const { getActiveTrayMaterial } = require('./utils/material');
 const { jobEndState, JOB_END_CANCELLED } = require('./utils/job-state');
 const amsHumidity = require('./db/ams-humidity');
 const { reconcileHms } = require('./db/hms-active');
+const auditLog = require('./db/audit');
 const printerConnections = require('./db/printer-connections');
 const { chooseTransport, computeCapabilities } = require('./printers/transport-policy');
 const { modelKeyFromCloudCode } = require('./utils/printer-models');
@@ -229,6 +230,7 @@ function startCronJobs() {
     const anomaliesDeleted = queries.deleteOldTempAnomalies(days);
     const pausesDeleted = queries.deleteOldJobPauses(days);
     const amsHumidityDeleted = amsHumidity.deleteOldAmsHumidity(days);
+    const auditDeleted = auditLog.deleteOldAudit(config.audit.retentionDays); // own retention (BAM-41)
     log.info({
       samplesDeleted: samplesDeleted.changes,
       eventsDeleted: eventsDeleted.changes,
@@ -236,6 +238,7 @@ function startCronJobs() {
       anomaliesDeleted: anomaliesDeleted.changes,
       pausesDeleted: pausesDeleted.changes,
       amsHumidityDeleted: amsHumidityDeleted.changes,
+      auditDeleted: auditDeleted.changes,
     }, 'Cleanup complete');
   });
 

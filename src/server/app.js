@@ -15,6 +15,8 @@ const { createExportRouter } = require('./routes/export');
 const { createMaintenanceRouter } = require('./routes/maintenance');
 const { createPrinterConnectionsRouter } = require('./routes/printer-connections');
 const { createPrinterFilesRouter } = require('./routes/printer-files');
+const { createAuditRouter } = require('./routes/audit');
+const { attachAuditActor } = require('./audit');
 const { getAuthStatus } = require('../bambu/auth');
 const config = require('../config');
 
@@ -70,6 +72,8 @@ function createApp(printerManager, authCallbacks, adminAuth, deps = {}) {
   // Dashboard session (token entry) is reachable without a session; everything else under /api is guarded
   app.use('/api/session', createSessionRouter(adminAuth));
   app.use('/api', adminAuth.requireAdmin);
+  // Who is acting (BAM-41 audit trail): 'admin-token' / 'session' / 'anonymous' (BAM-16 will add users)
+  app.use('/api', attachAuditActor(adminAuth));
 
   // API routes
   app.use('/api/auth', createAuthRouter(authCallbacks));
@@ -80,6 +84,7 @@ function createApp(printerManager, authCallbacks, adminAuth, deps = {}) {
   app.use('/api/system', createSystemRouter({ backupService, dataDir }));
   app.use('/api/export', createExportRouter({ maxRows: deps.exportMaxRows }));
   app.use('/api/maintenance', createMaintenanceRouter());
+  app.use('/api/audit', createAuditRouter());
 
   // JSON errors for the API — never Express's HTML page with stack traces and paths (review BAM-35 #4)
   // eslint-disable-next-line no-unused-vars

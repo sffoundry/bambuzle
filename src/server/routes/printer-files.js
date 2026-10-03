@@ -8,6 +8,7 @@ const path = require('path');
 const conns = require('../../db/printer-connections');
 const files = require('../../printers/printer-files');
 const config = require('../../config');
+const { audit } = require('../audit');
 
 const CONTENT_TYPES = { '.mp4': 'video/mp4', '.avi': 'video/x-msvideo', '.3mf': 'application/vnd.ms-package.3dmanufacturing-3dmodel+xml', '.gcode': 'text/plain' };
 
@@ -30,8 +31,11 @@ function createPrinterFilesRouter({ fileOps = files } = {}) {
     const r = lanConn(req.params.id);
     if (r.error) return res.status(r.status).json({ error: r.error });
     try {
-      res.json({ kind, files: await fileOps.listFiles(req.params.id, r.conn, kind, ftpOpts()) });
+      const list = await fileOps.listFiles(req.params.id, r.conn, kind, ftpOpts());
+      audit(req, { action: 'printer.files.list', target: req.params.id, result: 'ok', detail: { kind, count: list.length } });
+      res.json({ kind, files: list });
     } catch (err) {
+      audit(req, { action: 'printer.files.list', target: req.params.id, result: 'error', detail: { kind, stage: err.stage || 'error' } });
       res.status(err.status || 502).json({ error: err.message, stage: err.stage || 'error' });
     }
   });
@@ -55,7 +59,9 @@ function createPrinterFilesRouter({ fileOps = files } = {}) {
         },
       });
       if (!res.writableEnded) res.end();
+      audit(req, { action: 'printer.files.download', target: req.params.id, result: 'ok', detail: { kind, file: name } });
     } catch (err) {
+      audit(req, { action: 'printer.files.download', target: req.params.id, result: 'error', detail: { kind, file: name, stage: err.stage || 'error' } });
       if (res.headersSent) return res.destroy(err); // mid-stream failure: abort so the browser sees an error
       res.status(err.status || 502).json({ error: err.message, stage: err.stage || 'error' });
     }

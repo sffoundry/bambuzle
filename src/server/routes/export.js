@@ -26,9 +26,12 @@ function csvCell(value) {
   return CSV_NEEDS_QUOTES_RE.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
-/** Build the CSV body: BOM, header row, CRLF line endings. */
-function toCsv(rows) {
-  const names = EXPORT_COLUMNS.map((c) => c.name);
+/**
+ * Build the CSV body: BOM, header row, CRLF line endings.
+ * @param {object[]} rows
+ * @param {string[]} [names] — column order (default: the job export columns; the audit export passes its own)
+ */
+function toCsv(rows, names = EXPORT_COLUMNS.map((c) => c.name)) {
   const lines = [names.join(',')];
   for (const row of rows) lines.push(names.map((n) => csvCell(row[n])).join(','));
   return `${UTF8_BOM}${lines.join('\r\n')}\r\n`;

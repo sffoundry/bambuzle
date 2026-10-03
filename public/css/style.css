@@ -1149,3 +1149,11 @@ a:hover { color: var(--text); }
 .files-name { word-break: break-all; }
 .files-dl { padding: 2px 8px; font-size: 10px; text-decoration: none; display: inline-block; }
 button.diag-files { cursor: pointer; background: transparent; font-family: var(--font); }
+/* ── Audit view (BAM-41) ── */
+.audit-note { color: var(--text-dim); font-size: 11px; margin: 0 0 10px; }
+.audit-table-wrap { overflow-x: auto; }
+.audit-table td { vertical-align: top; }
+.audit-time, .audit-source { white-space: nowrap; }
+.audit-action { white-space: nowrap; color: var(--accent); }
+.audit-target, .audit-detail { overflow-wrap: anywhere; }
+.audit-detail { color: var(--text-dim); font-size: 11px; }

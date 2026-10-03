@@ -21,7 +21,8 @@ Browser
         ├─> public/js/charts.js — uPlot temperature/progress charts
         ├─> public/js/stats.js — Stats view (job totals, by printer/material/day)
         ├─> public/js/maintenance.js — Maintenance view (service tasks, repeat errors)
-        └─> public/js/alerts-ui.js — alert rules CRUD
+        ├─> public/js/alerts-ui.js — alert rules CRUD
+        └─> public/js/audit.js — Audit view (operator audit trail, BAM-41)
 ```
 
 ## Key Files
@@ -65,6 +66,10 @@ Browser
 | `src/server/routes/export.js` | `GET /api/export/jobs` CSV/JSON job export (BAM-46) |
 | `src/db/export.js` | Export SQL + versioned column set; columns documented in `docs/export-data-dictionary.md` |
 | `public/js/maintenance.js` | Maintenance view — tasks, due badges, service log, repeat errors (`/api/maintenance`) |
+| `src/db/audit.js` | Operator audit trail (BAM-41): self-creating `audit_log` table, append-only (`insertAudit`, `queryAudit`, retention-only `deleteOldAudit`) |
+| `src/server/audit.js` | `audit(req, { action, target, result, detail })` helper, throttled `auditThrottled` for denials, `attachAuditActor` (actor = `admin-token` / `session` / `anonymous`) |
+| `src/server/routes/audit.js` | `GET /api/audit`, `GET /api/audit/export?format=csv` (BAM-41) |
+| `public/js/audit.js` | Audit view — filterable trail (range / action category / result), Download CSV |
 | `src/utils/material.js` | Active AMS tray → filament type/colour (job material capture) |
 
 ## API Endpoints
@@ -114,6 +119,10 @@ Every other `/api/*` route and `/ws` is guarded by `src/server/admin-auth.js` (B
 - `POST /api/maintenance/tasks/:id/done` — log + reset (optional `note`)
 - `POST /api/maintenance/:deviceId/templates` — add the recommended task set (idempotent by name)
 
+### Audit (BAM-41) — private even under `BAMBUZLE_PUBLIC_READ`
+- `GET /api/audit` — operator audit trail, newest first (query: from, to, action = exact or category prefix, result = ok|denied|rejected|error, limit ≤ 2000; default last 30 days)
+- `GET /api/audit/export?format=csv` — same filters, CSV (formula-injection guarded, cap 50k rows). Design: `docs/audit-trail.md`
+
 ### Events
 - `GET /api/events` — recent events across all printers (query: limit)
 
@@ -137,13 +146,14 @@ Every other `/api/*` route and `/ws` is guarded by `src/server/admin-auth.js` (B
 - BambuLab credentials stored in `.env` (gitignored)
 - Dashboard requester auth: shared admin token (`BAMBUZLE_ADMIN_TOKEN` or generated `<data dir>/admin-token`); env `BAMBUZLE_PUBLIC_READ`, `BAMBUZLE_AUTH=off`. Never add an `/api` route outside the guard without a reason.
 - `?limit=` params are clamped (`clampLimit` in `routes/api.js`)
+- **Audit trail (BAM-41): every new state-changing or security-relevant route must call `audit(req, { action, target, result, detail })` from `src/server/audit.js`** on each exit (ok / rejected / error). `detail` must never hold secret values — record field names or flags (`accessCodeChanged: true`), never access codes, passwords, verification codes, tokens or notifier config. Don't audit plain reads. Retention: `audit.retentionDays` / `BAMBUZLE_AUDIT_RETENTION_DAYS` (default 365, separate from telemetry)
 - Frontend uses `escapeHtml()` (via textContent) for all user-visible strings
 - No eval, no innerHTML with raw data
 - SQLite parameterized queries throughout
 
 ## Database Schema
 
-Tables: `printers`, `print_jobs`, `samples`, `events`, `alert_rules`, `maintenance_tasks`, `maintenance_log`
+Tables: `printers`, `print_jobs`, `samples`, `events`, `alert_rules`, `maintenance_tasks`, `maintenance_log`, `audit_log` (BAM-41, self-created by `src/db/audit.js`; append-only, ISO-8601 `ts`)
 
 Maintenance (BAM-39): `maintenance_tasks` (interval_hours / interval_days, last_done_at), `maintenance_log` (ON DELETE CASCADE from its task). Print hours reuse the `getJobStats` duration fallback (`JOB_DURATION_SQL`); running jobs excluded. Due at ≥ 100% of either interval, due soon at ≥ 90%.
 

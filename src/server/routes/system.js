@@ -8,8 +8,10 @@
 
 const express = require('express');
 const fs = require('fs');
+const path = require('path');
 const { getDb, DB_PATH } = require('../../db/database');
 const { version } = require('../../../package.json');
+const { audit } = require('../audit');
 
 const COUNTED_TABLES = ['samples', 'events', 'print_jobs'];
 
@@ -115,8 +117,16 @@ function createSystemRouter({ backupService = null, dataDir } = {}) {
   });
 
   router.post('/backup', async (req, res) => {
-    if (!backupService) return res.status(503).json({ error: 'backups_not_configured' });
+    if (!backupService) {
+      audit(req, { action: 'system.backup', result: 'rejected', detail: { reason: 'backups_not_configured' } });
+      return res.status(503).json({ error: 'backups_not_configured' });
+    }
     const result = await backupService.runBackup();
+    audit(req, {
+      action: 'system.backup',
+      result: result.ok ? 'ok' : 'error',
+      detail: result.ok ? { file: result.path ? path.basename(result.path) : null, size: result.size ?? null } : { reason: 'backup_failed' },
+    });
     res.status(result.ok ? 200 : 500).json(result);
   });
 
