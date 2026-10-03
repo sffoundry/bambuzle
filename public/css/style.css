@@ -349,7 +349,8 @@ main { padding: 12px; }
 .state-badge.finish { background: #002a1a; color: var(--accent); border: 1px solid #004d33; }
 .state-badge.failed { background: #330000; color: var(--red); border: 1px solid #550000; }
 .state-badge.prepare, .state-badge.slicing { background: #1a0033; color: var(--purple); border: 1px solid #330055; }
-.state-badge.offline { background: #1a0000; color: #663333; border: 1px solid #330000; }
+/* offline: theme colours (the old #663333 on #1a0000 was 2:1, below WCAG AA) */
+.state-badge.offline { background: var(--bg); color: var(--text-dim); border: 1px dashed var(--border); }
 .state-badge.unknown { background: #0d200d; color: var(--text-dim); border: 1px solid var(--border); }
 
 .card-stats {
@@ -790,6 +791,8 @@ main { padding: 12px; }
   text-align: left;
 }
 .login-error.hidden { display: none; }
+/* The admin / sign-in / verify forms toggle a .hidden class that had no rule, so all three showed at once */
+.login-card form.hidden { display: none; }
 
 .verify-hint {
   color: var(--text-dim);
@@ -1097,6 +1100,7 @@ a:hover { color: var(--text); }
 .theme-lcars .chart-header *,
 .theme-lcars .ams-unit-header * { color: var(--on-accent); }
 .theme-lcars .printer-card .card-header .printer-model { border-color: var(--on-accent); opacity: 1; }
+.theme-lcars .printer-card .card-header .state-badge.offline,
 .theme-lcars .printer-card .card-header .state-badge.idle,
 .theme-lcars .printer-card .card-header .state-badge.unknown { color: var(--text-dim); }
 .theme-lcars .printer-card .card-header .state-badge.running { color: var(--green); }
@@ -1140,3 +1144,218 @@ a:hover { color: var(--text); }
 .conn-test-result.conn-bad { color: var(--red); }
 .conn-dialog .form-actions { display: flex; gap: 8px; justify-content: flex-end; }
 .conn-remove { margin-right: auto; }
+
+/* ════════════════════════════════════════════════════════════════
+   BAM-12: mobile-friendly responsive layout.
+   Phones 360–430 px, tablets 768–1024 px; nothing here applies at
+   ≥ 1280 px with a mouse, so the desktop layout is unchanged.
+   Layout only — no colours (themes own those via CSS variables).
+   ════════════════════════════════════════════════════════════════ */
+
+/* Wide tables scroll inside their own box instead of widening the page */
+.table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; }
+
+/* Long unbroken strings (file names, printer names) never push a card wider than the screen */
+.printer-card, .chart-panel, .alert-rule-card, .modal-content, .login-card { min-width: 0; overflow-wrap: anywhere; }
+.printer-card .printer-name { min-width: 0; }
+.gauge-file { max-width: 100%; }
+.efficiency-legend { flex-wrap: wrap; gap: 4px 16px; }
+/* Config-modal toggles are <span class="toggle"> inside a label that `.modal-content label` turns into a block,
+   so the span stayed inline and its width/height were ignored (slider invisible, knob over the text). */
+.toggle { display: inline-block; vertical-align: middle; }
+.modal-content .toggle input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; }
+
+/* Tablet and below (≤ 1024 px) */
+@media (max-width: 1024px) {
+  /* iOS zooms the page when a focused field is < 16 px */
+  input, select, textarea,
+  .modal-content input, .modal-content select,
+  .login-card input, .dashboard-filters select, .event-filters select,
+  .dash-custom-time, .maint-form input, .maint-done-form input,
+  .conn-field input, .conn-field select, .ctl-speed { font-size: 16px; }
+  .dash-pane-right { width: 300px; }
+  select, input { max-width: 100%; }
+  .diag-chip { white-space: normal; max-width: 100%; }
+  /* Tabs never push the header wider than the screen (a new tab just scrolls) */
+  nav { min-width: 0; overflow-x: auto; scrollbar-width: none; }
+  nav::-webkit-scrollbar { display: none; }
+  .nav-btn { flex: 0 0 auto; white-space: nowrap; }
+  .stats-tables { grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr)); }
+}
+
+/* Phones and portrait tablets (≤ 768 px). Panes stack (earlier block); this adds the rest. */
+@media (max-width: 768px) {
+  /* Header: title + gear + status on one row, the tabs on a full-width row that scrolls sideways */
+  header { flex-wrap: wrap; row-gap: 4px; column-gap: 8px; }
+  header h1 { flex: 0 1 auto; min-width: 0; }
+  .config-btn { margin-left: auto; }
+  nav {
+    order: 10;
+    flex: 1 0 100%;
+    margin-left: 0;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+  nav::-webkit-scrollbar { display: none; }
+  .nav-btn { flex: 0 0 auto; padding: 4px 10px; white-space: nowrap; }
+
+  main { padding: 8px; }
+  /* Filter rows: selects share the row and shrink instead of running off the edge */
+  .dashboard-filters > select, .event-filters > select { flex: 1 1 140px; min-width: 0; }
+  .stats-filters { flex: 1 1 100%; min-width: 0; }
+  .stats-header > h2 { min-width: 0; }
+  .dash-pane-left { min-width: 0; overflow: visible; }
+  .dash-pane-right { overflow: visible; }
+
+  /* Printer cards */
+  .printer-grid { grid-template-columns: minmax(0, 1fr); }
+  .printer-card .card-header { flex-wrap: wrap; row-gap: 4px; }
+  .printer-card .printer-name { flex: 1 1 60%; }
+  .card-stats { gap: 4px 12px; }
+  .stat { flex-wrap: wrap; column-gap: 6px; }
+  .stat-value { margin-left: auto; text-align: right; }
+  .diag-chip { white-space: normal; }
+  .gauge-row { gap: 8px; }
+  .semi-gauge { width: auto; flex: 1 1 0; max-width: 140px; min-width: 0; }
+  .semi-gauge-svg { width: 100%; max-width: 110px; height: auto; aspect-ratio: 5 / 3; }
+
+  /* Charts: title above the toggles; uPlot follows the container width (ResizeObserver in charts.js) */
+  .chart-panel { padding: 8px; }
+  .chart-header { flex-wrap: wrap; gap: 6px; }
+  .chart-container, .chart-container-sm { overflow: hidden; }
+
+  /* AMS trays: four slots wrap to two rows when there is no room */
+  .ams-trays { flex-wrap: wrap; }
+  .ams-tray { flex: 1 1 60px; }
+
+  /* Wide tables keep their columns and scroll sideways inside their wrapper */
+  .table-scroll .data-table td { white-space: nowrap; }
+  .table-scroll .data-table td:last-child { white-space: normal; min-width: 220px; }
+  .data-table th, .data-table td { padding-left: 6px; padding-right: 6px; }
+  .maint-table td:first-child, .stats-table td:first-child { min-width: 150px; }
+
+  /* Alerts */
+  .alerts-header { flex-wrap: wrap; gap: 8px; }
+  .alert-rule-card { flex-wrap: wrap; }
+  .alert-rule-card .rule-info { flex: 1 1 180px; min-width: 0; }
+
+  /* Stats / maintenance */
+  .stats-tiles { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+  .stats-range { flex-wrap: wrap; }
+  .stats-export { margin-left: 0; }
+  .maint-form-fields label { flex: 1 1 140px; }
+  .maint-form-fields input { width: 100%; }
+  .maint-done-form { flex-wrap: wrap; }
+
+  /* Modals: full width with 16 px gutters, scroll when taller than the screen */
+  .modal { padding: 16px; align-items: flex-start; overflow-y: auto; }
+  .modal-content {
+    max-width: none;
+    width: 100%;
+    max-height: calc(100vh - 32px);
+    max-height: calc(100dvh - 32px);
+    padding: 16px;
+    margin: auto 0;
+  }
+  .form-actions { flex-wrap: wrap; }
+  .config-printer-row { flex-wrap: wrap; }
+  .config-printer-via { min-width: 0; text-align: left; }
+  .theme-swatch { flex: 1 1 96px; width: auto; }
+  .login-overlay { padding: 16px; overflow-y: auto; }
+  .login-card { padding: 20px 16px; margin: auto 0; }
+}
+
+/* Touch screens: ≥ 44 px targets for anything you tap */
+@media (pointer: coarse) {
+  .dash-resize-handle { display: none; }
+  .nav-btn, .config-btn,
+  .btn-primary, .btn-secondary, .btn-danger, .btn-sm,
+  .ctl-btn, .ctl-speed,
+  .chart-toggle-btn, .stats-range-btn,
+  .config-conn-btn, .config-add-lan,
+  .dashboard-filters select, .event-filters select, .dash-custom-time {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  .ctl-btn { padding: 0 16px; }
+  .chart-toggles { gap: 4px; }
+  .chart-toggle-btn { flex: 1 0 auto; padding: 0 8px; font-size: 11px; }
+  .stats-range-btn.stats-export-btn { display: inline-flex; align-items: center; }
+  .card-controls { gap: 8px; }
+  .toggle { width: 44px; height: 24px; }
+  .toggle .slider::before { width: 16px; height: 16px; left: 4px; bottom: 4px; }
+  .toggle input:checked + .slider::before { transform: translateX(20px); }
+  .data-table th { padding-top: 10px; padding-bottom: 10px; }
+}
+
+/* Event rows reflow into stacked cards — time + severity, printer + type, then the message full width.
+   The header row stays as a strip of sort buttons. Events view: phones (≤ 600 px). Dashboard events
+   pane: ≤ 1024 px, because on tablets it is a narrow side pane. */
+@media (max-width: 600px) {
+  #events-table { display: block; }
+  #events-table thead,
+  #events-table tbody { display: block; }
+  #events-table thead tr {
+    display: flex; flex-wrap: wrap; gap: 4px; padding-bottom: 6px; border-bottom: 1px solid var(--border);
+  }
+  #events-table thead th {
+    display: block; border: 1px solid var(--border); border-radius: var(--radius); padding: 4px 8px;
+  }
+  #events-table tbody tr {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 8px;
+    padding: 6px 2px; border-bottom: 1px solid var(--border);
+  }
+  #events-table tbody td {
+    display: block; border: 0; padding: 1px 4px; min-width: 0; white-space: normal;
+  }
+  #events-table tbody td:nth-child(1) { grid-area: 1 / 1; color: var(--text-dim); }
+  #events-table tbody td:nth-child(4) { grid-area: 1 / 2; text-align: right; text-transform: uppercase; }
+  #events-table tbody td:nth-child(2) { grid-area: 2 / 1; font-weight: 700; }
+  #events-table tbody td:nth-child(3) { grid-area: 2 / 2; text-align: right; color: var(--text-dim); }
+  #events-table tbody td:nth-child(5) { grid-area: 3 / 1 / 4 / 3; min-width: 0; }
+}
+@media (max-width: 1024px) {
+  #dash-events-table { display: block; }
+  #dash-events-table thead,
+  #dash-events-table tbody { display: block; }
+  #dash-events-table thead tr {
+    display: flex; flex-wrap: wrap; gap: 4px; padding-bottom: 6px; border-bottom: 1px solid var(--border);
+  }
+  #dash-events-table thead th {
+    display: block; border: 1px solid var(--border); border-radius: var(--radius); padding: 4px 8px;
+  }
+  #dash-events-table tbody tr {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 8px;
+    padding: 6px 2px; border-bottom: 1px solid var(--border);
+  }
+  #dash-events-table tbody td {
+    display: block; border: 0; padding: 1px 4px; min-width: 0; white-space: normal;
+  }
+  #dash-events-table tbody td:nth-child(1) { grid-area: 1 / 1; color: var(--text-dim); }
+  #dash-events-table tbody td:nth-child(4) { grid-area: 1 / 2; text-align: right; text-transform: uppercase; }
+  #dash-events-table tbody td:nth-child(2) { grid-area: 2 / 1; font-weight: 700; }
+  #dash-events-table tbody td:nth-child(3) { grid-area: 2 / 2; text-align: right; color: var(--text-dim); }
+  #dash-events-table tbody td:nth-child(5) { grid-area: 3 / 1 / 4 / 3; min-width: 0; }
+}
+
+/* Narrow phones: the seven chart toggles sit in an even 4 + 3 grid instead of a ragged wrap */
+@media (max-width: 480px) {
+  .chart-toggles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); width: 100%; }
+  .chart-toggle-btn { padding: 0 4px; }
+}
+
+/* Phones in landscape (wide but short): two 300 px-tall scrolling panes are unusable, so stack them */
+@media (max-width: 1024px) and (max-height: 500px) {
+  .dashboard-panes { flex-direction: column; height: auto; }
+  .dash-pane-left { min-width: 0; overflow: visible; }
+  .dash-pane-right { width: 100% !important; max-width: none; overflow: visible; border-left: none; border-top: 1px solid var(--border); padding-left: 0; padding-top: 8px; }
+  .dash-resize-handle { display: none; }
+  header { position: static; }
+}
+
+/* Touch: the stacked-table sort strip gets full-size targets too */
+@media (pointer: coarse) and (max-width: 1024px) {
+  #events-table thead th, #dash-events-table thead th { min-height: 44px; display: flex; align-items: center; padding: 0 12px; }
+}
