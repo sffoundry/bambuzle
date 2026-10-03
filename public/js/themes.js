@@ -2,6 +2,8 @@
 // Each theme sets Bambuzle's CSS custom properties plus an optional body class for shape/font
 // overrides (see the "Themes" section of style.css). Choice is per-browser (localStorage).
 // Default is 'terminal' — Bambuzle's original green-on-black look — so upgrades change nothing.
+// Every text/background pairing meets WCAG AA (4.5:1); a few HamTab colours were adjusted for that
+// (Modern accent/red, Radio Face dim text, Terminal dim text). Re-check with a contrast audit when editing.
 
 const STORAGE_KEY = 'bambuzle_theme';
 const DEFAULT_THEME = 'terminal';
@@ -13,7 +15,7 @@ const THEMES = {
     bodyClass: 'theme-terminal',
     vars: {
       '--bg': '#000000', '--bg-card': '#0a1a0a', '--bg-hover': '#0d2b0d',
-      '--border': '#1a4a2a', '--text': '#00ff88', '--text-dim': '#338855',
+      '--border': '#1a4a2a', '--text': '#00ff88', '--text-dim': '#3fa86a',
       '--accent': '#00cc66', '--accent-dim': '#009944', '--on-accent': '#000000',
       '--green': '#00ff44', '--yellow': '#cccc00', '--red': '#ff3333', '--orange': '#ff8800', '--purple': '#cc66ff',
       '--font': "'Courier New', 'Lucida Console', monospace",
@@ -26,8 +28,8 @@ const THEMES = {
     vars: {
       '--bg': '#1a1a2e', '--bg-card': '#16213e', '--bg-hover': '#1f2d52',
       '--border': '#2a3a5e', '--text': '#e0e0e0', '--text-dim': '#8899aa',
-      '--accent': '#e94560', '--accent-dim': '#b8364c', '--on-accent': '#ffffff',
-      '--green': '#00c853', '--yellow': '#ffd600', '--red': '#ff1744', '--orange': '#ff9100', '--purple': '#b388ff',
+      '--accent': '#ff6b81', '--accent-dim': '#b8364c', '--on-accent': '#000000',
+      '--green': '#00c853', '--yellow': '#ffd600', '--red': '#ff5370', '--orange': '#ff9100', '--purple': '#b388ff',
       '--font': "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
     },
   },
@@ -61,9 +63,9 @@ const THEMES = {
     bodyClass: 'theme-radioface',
     vars: {
       '--bg': '#060a12', '--bg-card': '#0c1220', '--bg-hover': '#141e30',
-      '--border': '#1a2a44', '--text': '#d0e0f0', '--text-dim': '#4a6080',
+      '--border': '#1a2a44', '--text': '#d0e0f0', '--text-dim': '#8aa4c4',
       '--accent': '#00e5ff', '--accent-dim': '#0099aa', '--on-accent': '#000000',
-      '--green': '#00c853', '--yellow': '#ffd600', '--red': '#ff1744', '--orange': '#ff9100', '--purple': '#b388ff',
+      '--green': '#00c853', '--yellow': '#ffd600', '--red': '#ff4d6a', '--orange': '#ff9100', '--purple': '#b388ff',
       '--font': "'Segoe UI', Roboto, 'Helvetica Neue', sans-serif",
     },
   },

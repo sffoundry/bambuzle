@@ -8,7 +8,7 @@
   --bg-hover: #0d2b0d;
   --border: #1a4a2a;
   --text: #00ff88;
-  --text-dim: #338855;
+  --text-dim: #3fa86a;
   --accent: #00cc66;
   --accent-dim: #009944;
   --on-accent: #000000;   /* text on accent-coloured backgrounds */
@@ -940,8 +940,8 @@ main { padding: 12px; }
 /* BAM-28: printer controls */
 .card-controls { display: flex; gap: 6px; margin-top: 8px; align-items: center; flex-wrap: wrap; }
 .ctl-btn { padding: 2px 10px; font-size: 11px; }
-.btn-danger { background: transparent; color: var(--red); border: 1px solid var(--red); border-radius: var(--radius); cursor: pointer; font-family: var(--font); }
-.btn-danger:hover { background: var(--red); color: #000; }
+.ctl-btn.btn-danger { background: transparent; color: var(--red); border: 1px solid var(--red); border-radius: var(--radius); cursor: pointer; font-family: var(--font); }
+.ctl-btn.btn-danger:hover { background: var(--red); color: var(--on-accent); }
 .ctl-speed { font-size: 11px; background: var(--bg); color: var(--text); border: 1px solid var(--border); font-family: var(--font); }
 .ctl-status { margin-top: 4px; font-size: 10px; color: var(--text-dim); }
 .ctl-status.ctl-ok { color: var(--green); }
@@ -1085,3 +1085,26 @@ main { padding: 12px; }
 .high-contrast .theme-swatch-desc { font-size: 12px; }
 .high-contrast :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 .high-contrast .stat-label { color: var(--text); }
+
+/* Links follow the theme (the browser default blue is unreadable on dark themes) */
+a { color: var(--accent); }
+a:visited { color: var(--accent-dim); }
+a:hover { color: var(--text); }
+
+/* LCARS header bars: everything on the gold bar uses --on-accent (contrast pass 2026-10-03).
+   Elements that bring their own background (state badges) keep their colours. */
+.theme-lcars .printer-card .card-header *,
+.theme-lcars .chart-header *,
+.theme-lcars .ams-unit-header * { color: var(--on-accent); }
+.theme-lcars .printer-card .card-header .printer-model { border-color: var(--on-accent); opacity: 1; }
+.theme-lcars .printer-card .card-header .state-badge.idle,
+.theme-lcars .printer-card .card-header .state-badge.unknown { color: var(--text-dim); }
+.theme-lcars .printer-card .card-header .state-badge.running { color: var(--green); }
+.theme-lcars .printer-card .card-header .state-badge.pause { color: var(--yellow); }
+.theme-lcars .printer-card .card-header .state-badge.finish { color: var(--accent); }
+.theme-lcars .printer-card .card-header .state-badge.failed { color: var(--red); }
+.theme-lcars .printer-card .card-header .state-badge.prepare,
+.theme-lcars .printer-card .card-header .state-badge.slicing { color: var(--purple); }
+.theme-lcars .chart-header .chart-toggle-btn { border-color: var(--on-accent); background: transparent; }
+.theme-lcars .chart-header .chart-toggle-btn.active { background: var(--on-accent); color: var(--accent); }
+.theme-lcars .ams-trend-up, .theme-lcars .ams-trend-down, .theme-lcars .ams-spark { color: var(--on-accent); }

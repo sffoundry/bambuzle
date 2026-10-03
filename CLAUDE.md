@@ -119,7 +119,7 @@ Every other `/api/*` route and `/ws` is guarded by `src/server/admin-auth.js` (B
 - Backend: CommonJS (`require`), strict mode
 - Frontend: ES modules (`import/export`)
 - Naming: camelCase in JS, snake_case in SQL columns
-- CSS: theme-driven — colours ONLY via CSS variables (`var(--text)`, `var(--accent)`, `var(--on-accent)` …) defined per theme in `public/js/themes.js` (ported from HamTab); never hardcode colours. Default theme `terminal` = the original green-on-black
+- CSS: theme-driven — colours ONLY via CSS variables (`var(--text)`, `var(--accent)`, `var(--on-accent)` …) defined per theme in `public/js/themes.js` (ported from HamTab); never hardcode colours. Default theme `terminal` = the original green-on-black. Every theme must pass WCAG AA — run `scripts/contrast-audit.cjs` after any colour/theme change (0 failures across all 6 themes as of 2026-10-03)
 - Database migrations: idempotent `ALTER TABLE` wrapped in try/catch
 
 ## Security Notes
