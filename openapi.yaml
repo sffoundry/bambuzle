@@ -18,7 +18,7 @@ info:
     ## Real-time Data
     For live updates, connect to the WebSocket endpoint at `ws://<host>:<port>/ws`.
     Messages are JSON with `{ type, data }` format. Types include `state`, `event`, and `auth`.
-  version: 0.6.0
+  version: 0.7.0
   contact:
     name: Bambuzle
   license:
@@ -189,6 +189,35 @@ paths:
               schema: { type: string }
         '401':
           description: Admin token required
+
+  /api/printers/{deviceId}/connection:
+    get:
+      tags: [Printers]
+      summary: Connection settings + capabilities (access code is never returned — only hasAccessCode)
+      parameters: [{ $ref: '#/components/parameters/DeviceId' }]
+      responses: { '200': { description: Connection view }, '404': { description: Unknown printer } }
+    put:
+      tags: [Printers]
+      summary: Update connection mode / LAN host / access code (omit accessCode to keep, '' to clear)
+      parameters: [{ $ref: '#/components/parameters/DeviceId' }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                mode: { type: string, enum: [auto, cloud, lan] }
+                lanHost: { type: string, description: IPv4 or hostname }
+                accessCode: { type: string, description: 8-character LAN access code (write-only) }
+      responses: { '200': { description: Updated }, '400': { description: Invalid input }, '404': { description: Unknown printer } }
+  /api/printers/{deviceId}/connection/test:
+    post:
+      tags: [Printers]
+      summary: Test a LAN connection (saved settings unless overridden); reports the failing stage
+      parameters: [{ $ref: '#/components/parameters/DeviceId' }]
+      responses:
+        '200':
+          description: 'Result: { ok, stage: connected|auth|identity|tls|unreachable|error, message, developerMode }'
 
   # ─── Session (dashboard admin token) ───
 

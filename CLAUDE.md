@@ -34,6 +34,10 @@ Browser
 | `src/db/maintenance.js` | Maintenance ledger queries: print hours, task status, service log, repeat HMS, default task templates (BAM-39) |
 | `src/db/backup.js` | Online SQLite backups (verify, sha256, prune, cron) |
 | `scripts/restore.js` | Offline restore CLI (`npm run backup:restore`) |
+| `src/bambu/mqtt-client.js` | Printer transport (kind `cloud` / `lan`): connect options incl. LAN TLS (Bambu CA bundle in `src/bambu/certs/`, identity pinned to serial), pushall, `sendCommandAwaitReply` — contract in `docs/architecture-transports.md` |
+| `src/printers/transport-policy.js` | Which transport per printer + capability matrix (`control`: available / signature_required / unknown / offline) + input validation |
+| `src/db/printer-connections.js` | Connection settings; the ONLY reader of `printers.lan_access_code` (secret, never returned by the API) |
+| `src/server/routes/printer-connections.js` | Connection settings API, LAN connection test, hand-added LAN printers |
 | `src/bambu/message-parser.js` | MQTT message parsing, `extractPrinterState()` |
 | `src/bambu/diagnostics.js` | `state.diagnostics`: nozzles, firmware update, xcam AI-monitor *settings*, SD, IP, camera, AMS humidity, print_error, dev mode (BAM-32) |
 | `src/bambu/mqtt-client.js` | Per-printer MQTT connection manager |
@@ -89,6 +93,8 @@ Every other `/api/*` route and `/ws` is guarded by `src/server/admin-auth.js` (B
 - `GET /api/printers/:id/history` — sample history (query: from, to, limit)
 - `GET /api/printers/:id/events` — events for printer (query: from, to, limit)
 - `GET /api/printers/:id/jobs` — print job history
+- `GET|PUT /api/printers/:id/connection` — connection mode / LAN host / access code (write-only), `POST /api/printers/:id/connection/test` — LAN probe with stage (BAM-35)
+- `POST /api/printers`, `DELETE /api/printers/:id` — hand-added LAN printers only
 - `GET /api/printers/:id/ams-humidity` — humidity history per AMS unit (default 7 days)
 - `POST /api/printers/:id/command` — pause/resume/stop/set_speed; state-gated (`src/server/printer-commands.js`), waits for the printer's reply, audited as `command` events (BAM-28)
 

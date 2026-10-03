@@ -1,4 +1,5 @@
 import { getThemeList, getCurrentThemeId, getThemeSwatchColors, applyTheme } from './themes.js';
+import { openConnectionDialog, openAddLanPrinterDialog } from './connection-ui.js';
 // ─── Config UI — Widget Visibility Toggles ───
 // Persists per-printer and chart visibility to localStorage.
 
@@ -66,8 +67,27 @@ export function openConfigModal(cfg, printers, onChanged) {
       cfg.printers[deviceId] = e.target.checked;
       onChanged(cfg);
     });
-    printersList.appendChild(label);
+    // BAM-35: per-printer connection settings
+    const row = document.createElement('div');
+    row.className = 'config-printer-row';
+    const via = document.createElement('span');
+    via.className = 'config-printer-via';
+    const t = printer.capabilities?.transport;
+    via.textContent = t === 'lan' ? 'LAN' : t === 'cloud' ? 'Cloud' : 'not connected';
+    const connBtn = document.createElement('button');
+    connBtn.type = 'button';
+    connBtn.className = 'btn-secondary config-conn-btn';
+    connBtn.textContent = 'Connection…';
+    connBtn.addEventListener('click', () => openConnectionDialog(deviceId, name));
+    row.append(label, via, connBtn);
+    printersList.appendChild(row);
   }
+  const addLan = document.createElement('button');
+  addLan.type = 'button';
+  addLan.className = 'btn-secondary config-add-lan';
+  addLan.textContent = '+ Add LAN printer';
+  addLan.addEventListener('click', () => openAddLanPrinterDialog());
+  printersList.appendChild(addLan);
 
   if (Object.keys(printers).length === 0) {
     printersList.innerHTML = '<span class="config-empty">No printers available</span>';

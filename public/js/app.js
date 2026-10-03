@@ -249,12 +249,13 @@ function connectWs() {
 function handleWsMessage(msg) {
   switch (msg.type) {
     case 'state': {
-      const { deviceId, state: printerState, connected } = msg.data;
+      const { deviceId, state: printerState, connected, capabilities } = msg.data;
       if (state.printers[deviceId]) {
         state.printers[deviceId].live = printerState;
         state.printers[deviceId].connected = connected;
+        if (capabilities) state.printers[deviceId].capabilities = capabilities;
       } else {
-        state.printers[deviceId] = { db: null, live: printerState, connected };
+        state.printers[deviceId] = { db: null, live: printerState, connected, capabilities: capabilities || null };
       }
       updatePrinterCard(deviceId, state.printers[deviceId], uiConfig, dashFilters);
       updateAmsWidget(deviceId, state.printers, dashFilters);
@@ -490,6 +491,7 @@ async function loadPrinters() {
         db: p,
         live: p.live,
         connected: p.connected,
+        capabilities: p.capabilities || null,
       };
     }
     populateDashPrinterFilter();
@@ -837,6 +839,13 @@ function initResizeHandle() {
 initTheme();
 setupAuthForms();
 startDashboard();
+
+// Printer added/removed/reconnected (BAM-35 connection settings): reload the list, refresh the open config modal
+window.addEventListener('bambuzle:printers-changed', async () => {
+  for (const id of Object.keys(state.printers)) delete state.printers[id];
+  await loadPrinters();
+  if (!document.getElementById('config-modal').classList.contains('hidden')) document.getElementById('config-btn').click();
+});
 
 // Theme switch: cards/AMS re-render from CSS vars; uPlot bakes colours in, so rebuild the charts
 window.addEventListener('bambuzle:themechange', () => {

@@ -17,12 +17,16 @@ function upsertPrinter({ deviceId, name, model, nozzleDiameter }) {
   `).run(deviceId, name, model, nozzleDiameter);
 }
 
+// Public columns only — never SELECT * here: printers.lan_access_code is a secret (BAM-35).
+const PRINTER_PUBLIC_COLUMNS = `device_id, name, model, nozzle_diameter, created_at, updated_at,
+  connection_mode, lan_host, source, (lan_access_code IS NOT NULL AND lan_access_code != '') AS has_access_code`;
+
 function getAllPrinters() {
-  return getDb().prepare('SELECT * FROM printers ORDER BY name').all();
+  return getDb().prepare(`SELECT ${PRINTER_PUBLIC_COLUMNS} FROM printers ORDER BY name`).all();
 }
 
 function getPrinter(deviceId) {
-  return getDb().prepare('SELECT * FROM printers WHERE device_id = ?').get(deviceId);
+  return getDb().prepare(`SELECT ${PRINTER_PUBLIC_COLUMNS} FROM printers WHERE device_id = ?`).get(deviceId);
 }
 
 // ─── Print Jobs ───

@@ -62,8 +62,10 @@ function createApiRouter(printerManager, { getCloudAuthStatus = getAuthStatus } 
 
     const printers = dbPrinters.map((p) => ({
       ...p,
+      has_access_code: Boolean(p.has_access_code),
       live: liveStates[p.device_id] || null,
       connected: printerManager.isConnected(p.device_id),
+      capabilities: printerManager.getCapabilities ? printerManager.getCapabilities(p.device_id) : null,
     }));
 
     res.json(printers);
@@ -176,6 +178,13 @@ function createApiRouter(printerManager, { getCloudAuthStatus = getAuthStatus } 
         return res.status(429).json({ error: 'Another command for this printer is still in progress' });
       }
 
+      // Transport-aware gate (BAM-35): e.g. a cloud printer that requires signed commands
+      const caps = printerManager.getCapabilities ? printerManager.getCapabilities(deviceId) : null;
+      if (caps?.control === 'signature_required') {
+        record('warning', `Rejected command "${commandLabel}": ${caps.controlHint}`);
+        return res.status(409).json({ error: caps.controlHint, signatureRequired: true });
+      }
+
       const plan = planCommand(command, param, printerManager.getLiveStates()[deviceId],
         { state: expectState, taskId: expectTaskId });
       if (plan.error) {
@@ -197,6 +206,7 @@ function createApiRouter(printerManager, { getCloudAuthStatus = getAuthStatus } 
         : !reply.acknowledged ? 'sent, no confirmation from printer'
           : signatureRequired ? 'printer rejected it: it only accepts commands signed by Bambu\'s apps'
             : failed ? `printer rejected it: ${reply.reason || reply.result}` : 'confirmed by printer';
+      if (signatureRequired) printerManager.markSignatureRejected?.(deviceId);
       record(failed || !reply.sent ? 'warning' : 'info', `Command ${plan.label}: ${outcome}`);
       return res.status(reply.sent ? 200 : 502).json({ ok: reply.sent && !failed, ...reply, outcome, signatureRequired });
     } catch (err) {

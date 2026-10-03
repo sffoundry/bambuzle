@@ -13,6 +13,7 @@ const { createHealthRouter, createSystemRouter } = require('./routes/system');
 const { createMetricsRouter } = require('./routes/metrics');
 const { createExportRouter } = require('./routes/export');
 const { createMaintenanceRouter } = require('./routes/maintenance');
+const { createPrinterConnectionsRouter } = require('./routes/printer-connections');
 const { getAuthStatus } = require('../bambu/auth');
 const config = require('../config');
 
@@ -72,6 +73,7 @@ function createApp(printerManager, authCallbacks, adminAuth, deps = {}) {
   // API routes
   app.use('/api/auth', createAuthRouter(authCallbacks));
   app.use('/api', createApiRouter(printerManager, { getCloudAuthStatus }));
+  app.use('/api', createPrinterConnectionsRouter(printerManager, { probe: deps.lanProbe }));
   app.use('/api/alerts', createAlertsRouter());
   app.use('/api/system', createSystemRouter({ backupService, dataDir }));
   app.use('/api/export', createExportRouter({ maxRows: deps.exportMaxRows }));

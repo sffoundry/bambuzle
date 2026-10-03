@@ -1,14 +1,73 @@
 'use strict';
 
 const EventEmitter = require('events');
+const fs = require('fs');
+const path = require('path');
 const mqtt = require('mqtt');
 const pino = require('pino');
 const { MQTT_BROKER, PUSHALL_INTERVAL_MS } = require('../utils/constants');
 const { buildPushall } = require('./commands');
 const { parseMessage, deepMerge, extractPrinterState } = require('./message-parser');
 
+// Bambu's public CA bundle for verifying printers on LAN MQTT (see certs/README.md)
+let lanCaBundle = null;
+function getLanCaBundle() {
+  if (!lanCaBundle) lanCaBundle = fs.readFileSync(path.join(__dirname, 'certs', 'bambu-ca-bundle.pem'), 'utf8');
+  return lanCaBundle;
+}
+
+const LAN_MQTT_PORT = 8883;
+
+/** TLS identity check for LAN printers: certificate CN must be the expected serial. */
+function checkPrinterIdentity(serial, host, cert) {
+  const cn = cert?.subject?.CN;
+  if (cn && String(cn).toUpperCase() === String(serial).toUpperCase()) return undefined;
+  const err = new Error(`Printer at ${host} identifies as ${cn || 'unknown'}, expected ${serial} — check the IP address`);
+  err.code = 'ERR_PRINTER_IDENTITY';
+  return err;
+}
+const LAN_USERNAME = 'bblp';
+
 /**
- * MqttPrinterClient manages a single MQTT connection to one printer.
+ * Connection options for each transport kind (docs/architecture-transports.md).
+ * Exported for tests — the TLS policy is security-relevant.
+ */
+function buildConnectOptions({ kind, deviceId, token, userId, broker, lan, tlsVerify = true, reconnect = true }) {
+  const common = {
+    clientId: `bambuzle_${deviceId}_${Date.now()}`,
+    keepalive: 30,
+    reconnectPeriod: reconnect ? 5000 : 0,
+    connectTimeout: 30000,
+  };
+  if (kind === 'lan') {
+    if (!lan?.host || !lan?.accessCode) throw new Error('LAN transport needs host and accessCode');
+    return {
+      url: `mqtts://${lan.host}:${LAN_MQTT_PORT}`,
+      options: {
+        ...common,
+        username: LAN_USERNAME,
+        password: lan.accessCode,
+        // Verify the chain against Bambu's CAs. Printers are addressed by IP (not in the cert), but each
+        // printer's cert CN is its serial — so pin identity to the serial instead of the hostname. This also
+        // catches DHCP handing the IP to a different Bambu printer. Verified against an H2D and X1C 2026-10-03.
+        // TLS 1.2 max: some P2S firmware never answers a TLS 1.3 ClientHello.
+        rejectUnauthorized: tlsVerify,
+        ca: tlsVerify ? getLanCaBundle() : undefined,
+        checkServerIdentity: tlsVerify ? (host, cert) => checkPrinterIdentity(deviceId, host, cert) : () => undefined,
+        maxVersion: 'TLSv1.2',
+      },
+    };
+  }
+  return {
+    url: broker || MQTT_BROKER,
+    options: { ...common, username: `u_${userId}`, password: token, rejectUnauthorized: true },
+  };
+}
+
+/**
+ * MqttPrinterClient manages a single MQTT connection to one printer — over Bambu Cloud (`kind: 'cloud'`)
+ * or directly to the printer on the LAN (`kind: 'lan'`). It implements the transport contract in
+ * docs/architecture-transports.md.
  *
  * Events:
  *   'state' — emitted on each state update with (deviceId, extractedState, rawMerged)
@@ -18,13 +77,18 @@ const { parseMessage, deepMerge, extractPrinterState } = require('./message-pars
  *   'mqtt_error' — connection error
  */
 class MqttPrinterClient extends EventEmitter {
-  constructor({ deviceId, token, userId, broker, logger }) {
+  constructor({ deviceId, kind = 'cloud', token, userId, broker, lan, tlsVerify = true, reconnect = true, logger, connectFn }) {
     super();
     this.deviceId = deviceId;
+    this.kind = kind;
     this.token = token;
     this.userId = userId;
     this.broker = broker || MQTT_BROKER;
-    this.log = (logger || pino()).child({ component: 'mqtt', deviceId });
+    this.lan = lan || null;
+    this.tlsVerify = tlsVerify;
+    this.reconnect = reconnect;
+    this.connectFn = connectFn || mqtt.connect; // injectable for tests
+    this.log = (logger || pino()).child({ component: 'mqtt', deviceId, transport: kind });
     this.client = null;
     this.mergedState = {};
     this.lastPushall = 0;
@@ -43,17 +107,11 @@ class MqttPrinterClient extends EventEmitter {
   connect() {
     if (this._destroyed) return;
 
-    this.log.info({ broker: this.broker }, 'Connecting to MQTT broker');
+    const { url, options } = buildConnectOptions(this);
+    this.log.info({ url }, 'Connecting to MQTT broker');
+    if (this.kind === 'lan' && !this.tlsVerify) this.log.warn('LAN TLS verification is OFF (BAMBUZLE_LAN_TLS_VERIFY=off)');
 
-    this.client = mqtt.connect(this.broker, {
-      username: `u_${this.userId}`,
-      password: this.token,
-      clientId: `bambuzle_${this.deviceId}_${Date.now()}`,
-      rejectUnauthorized: true,
-      keepalive: 30,
-      reconnectPeriod: 5000,
-      connectTimeout: 30000,
-    });
+    this.client = this.connectFn(url, options);
 
     this.client.on('connect', () => {
       this.log.info('Connected to MQTT broker');
@@ -214,4 +272,4 @@ class MqttPrinterClient extends EventEmitter {
   }
 }
 
-module.exports = { MqttPrinterClient };
+module.exports = { MqttPrinterClient, buildConnectOptions, checkPrinterIdentity, LAN_MQTT_PORT };

@@ -109,6 +109,9 @@ const AUDIT = () => {
     }
     await page.click('#config-btn'); await page.waitForTimeout(500);
     for (const f of await page.evaluate(AUDIT)) findings.push({ view: 'config', ...f });
+    await page.click('.config-conn-btn').catch(() => {}); await page.waitForTimeout(600);
+    for (const f of await page.evaluate(AUDIT)) findings.push({ view: 'connection-dialog', ...f });
+    await page.keyboard.press('Escape'); await page.waitForTimeout(200);
     await page.keyboard.press('Escape'); await page.click('#config-close').catch(() => {});
     await page.click('.nav-btn[data-view="dashboard"]');
     // de-duplicate by view+where+colours

@@ -11,6 +11,8 @@ const { GCODE_STATE } = require('./utils/constants');
 const { getActiveTrayMaterial } = require('./utils/material');
 const { jobEndState, JOB_END_CANCELLED } = require('./utils/job-state');
 const amsHumidity = require('./db/ams-humidity');
+const printerConnections = require('./db/printer-connections');
+const { chooseTransport, computeCapabilities } = require('./printers/transport-policy');
 const { getDb, closeDb } = require('./db/database');
 const { createBackupService } = require('./db/backup');
 const queries = require('./db/queries');
@@ -24,13 +26,15 @@ const log = pino({ level: config.log.level });
 
 // ─── State ───
 
-const mqttClients = {};   // deviceId -> MqttPrinterClient
+const mqttClients = {};   // deviceId -> transport (MqttPrinterClient, kind 'cloud' | 'lan') — docs/architecture-transports.md
+const signatureRejected = new Set(); // deviceIds whose printer answered "mqtt message verify failed"
 const liveStates = {};    // deviceId -> extracted state
 const lastSampleTs = {};  // deviceId -> timestamp of last sample write
 let currentAuth = null;
 let alertEngine = null;
 let anomalyDetector = null;
 let cronJobs = [];
+let tokenRefreshJob = null;
 let backupService = null;
 
 const lastMessageAt = {}; // deviceId -> ms timestamp of the last MQTT report (BAM-37 metrics)
@@ -40,6 +44,17 @@ const printerManager = {
   getLastMessageAt: (deviceId) => lastMessageAt[deviceId] || null,
   isConnected: (deviceId) => mqttClients[deviceId]?.connected ?? false,
   getClient: (deviceId) => mqttClients[deviceId] || null,
+  getTransportKind: (deviceId) => mqttClients[deviceId]?.kind || null,
+  getCapabilities: (deviceId) => computeCapabilities({
+    conn: printerConnections.getConnection(deviceId),
+    transport: mqttClients[deviceId]?.kind || null,
+    connected: mqttClients[deviceId]?.connected ?? false,
+    developerMode: liveStates[deviceId]?.diagnostics?.developerMode,
+    signatureRejected: signatureRejected.has(deviceId),
+  }),
+  markSignatureRejected: (deviceId) => signatureRejected.add(deviceId),
+  /** Re-evaluate one printer's transport after its connection settings changed. */
+  reconnect: (deviceId) => syncConnection(deviceId),
 };
 
 // ─── Main ───
@@ -56,8 +71,8 @@ async function main() {
   getDb();
   log.info('Database initialized');
 
-  // Scheduled online backups (BAM-34). Independent of Bambu auth — startCronJobs() only runs
-  // after login, but a never-authenticated install still has alert rules worth keeping.
+  // Scheduled online backups (BAM-34). Independent of Bambu auth — a never-authenticated (or LAN-only)
+  // install still has data worth keeping.
   backupService = createBackupService({ getDb, backup: config.backup, log });
   backupService.start();
 
@@ -82,6 +97,12 @@ async function main() {
     log.info({ port: config.server.port, host: config.server.host }, 'HTTP server listening');
   });
 
+  // Housekeeping runs with or without a cloud login (LAN-only installs need it too)
+  cronJobs = startCronJobs();
+
+  // LAN printers connect now — they don't need a BambuLab Cloud login (BAM-35)
+  syncAllConnections();
+
   // Attempt auth from .env credentials (non-fatal on failure)
   try {
     const result = await getAuth(config);
@@ -105,6 +126,7 @@ async function main() {
     log.info({ signal }, 'Shutting down');
 
     for (const job of cronJobs) job.stop();
+    if (tokenRefreshJob) tokenRefreshJob.stop();
     await backupService.stop(); // waits for an in-flight backup before the DB closes
 
     for (const client of Object.values(mqttClients)) {
@@ -150,28 +172,25 @@ async function onAuthenticated(auth) {
     log.info({ deviceId: d.deviceId, name: d.name, model: d.model }, 'Registered printer');
   }
 
-  // Disconnect any existing MQTT clients (in case of re-auth)
-  for (const client of Object.values(mqttClients)) {
-    client.destroy();
+  // Re-auth: cloud transports must reconnect with the new credentials; LAN ones are unaffected
+  for (const [id, client] of Object.entries(mqttClients)) {
+    if (client.kind === 'cloud') {
+      client.destroy();
+      delete mqttClients[id];
+    }
   }
-  for (const key of Object.keys(mqttClients)) delete mqttClients[key];
-
-  // Connect MQTT for each printer
-  for (const device of devices) {
-    connectPrinter(device, auth);
-  }
+  syncAllConnections();
 
   // Broadcast fresh printer list to any connected dashboard clients
   broadcast('auth', { status: 'authenticated' });
 
-  // Start periodic jobs (stop old ones first in case of re-auth)
-  for (const job of cronJobs) job.stop();
-  cronJobs = startCronJobs(auth);
+  if (tokenRefreshJob) tokenRefreshJob.stop();
+  tokenRefreshJob = startTokenRefresh();
 }
 
 // ─── Cron Jobs ───
 
-function startCronJobs(auth) {
+function startCronJobs() {
   const pushallJob = new Cron('*/5 * * * *', () => {
     for (const client of Object.values(mqttClients)) {
       client.sendPushall();
@@ -197,39 +216,77 @@ function startCronJobs(auth) {
     }, 'Cleanup complete');
   });
 
-  const tokenRefreshJob = new Cron('0 */12 * * *', async () => {
+  return [pushallJob, cleanupJob];
+}
+
+/** BambuLab Cloud token refresh — only once logged in. */
+function startTokenRefresh() {
+  return new Cron('0 */12 * * *', async () => {
     try {
       currentAuth = await refreshAuth(config);
       log.info('Token refreshed');
       for (const client of Object.values(mqttClients)) {
-        client.updateCredentials(currentAuth.token, currentAuth.userId);
+        if (client.kind === 'cloud') client.updateCredentials(currentAuth.token, currentAuth.userId);
       }
     } catch (err) {
       log.error({ err }, 'Token refresh failed');
     }
   });
+}
 
-  return [pushallJob, cleanupJob, tokenRefreshJob];
+// ─── Transport selection (BAM-35) ───
+
+/** Connect / switch / disconnect one printer according to its connection settings and cloud login. */
+function syncConnection(deviceId) {
+  const conn = printerConnections.getConnection(deviceId);
+  const kind = chooseTransport(conn, Boolean(currentAuth));
+  const signature = kind === 'lan' ? `lan:${conn.lanHost}:${conn.accessCode}` : kind === 'cloud' ? 'cloud' : null;
+  const existing = mqttClients[deviceId];
+  if (existing && existing.signature === signature) return;
+  if (existing) {
+    existing.destroy();
+    delete mqttClients[deviceId];
+    broadcast('state', { deviceId, state: liveStates[deviceId] || {}, connected: false });
+  }
+  signatureRejected.delete(deviceId);
+  if (!kind) return;
+  connectPrinter(deviceId, kind, conn, signature);
+}
+
+function syncAllConnections() {
+  for (const conn of printerConnections.getAllConnections()) syncConnection(conn.deviceId);
+  // Forget transports for printers that no longer exist (deleted manual printers)
+  for (const id of Object.keys(mqttClients)) {
+    if (!printerConnections.getConnection(id)) {
+      mqttClients[id].destroy();
+      delete mqttClients[id];
+    }
+  }
 }
 
 // ─── Printer Connection ───
 
-function connectPrinter(device, auth) {
+function connectPrinter(deviceId, kind, conn, signature) {
   const client = new MqttPrinterClient({
-    deviceId: device.deviceId,
-    token: auth.token,
-    userId: auth.userId,
+    deviceId,
+    kind,
+    token: currentAuth?.token,
+    userId: currentAuth?.userId,
+    lan: kind === 'lan' ? { host: conn.lanHost, accessCode: conn.accessCode } : null,
+    tlsVerify: config.lan.tlsVerify,
     logger: log,
   });
+  client.signature = signature;
+  log.info({ deviceId, transport: kind }, 'Connecting printer');
 
-  mqttClients[device.deviceId] = client;
+  mqttClients[deviceId] = client;
 
   client.on('state', (deviceId, state) => {
     const prevState = liveStates[deviceId];
     liveStates[deviceId] = state;
     lastMessageAt[deviceId] = Date.now();
 
-    broadcast('state', { deviceId, state, connected: true });
+    broadcast('state', { deviceId, state, connected: true, capabilities: printerManager.getCapabilities(deviceId) });
     handleJobTransition(deviceId, state, prevState);
 
     const activeJob = queries.getActiveJob(deviceId);
@@ -249,11 +306,11 @@ function connectPrinter(device, auth) {
   });
 
   client.on('connected', (deviceId) => {
-    broadcast('state', { deviceId, state: liveStates[deviceId] || {}, connected: true });
+    broadcast('state', { deviceId, state: liveStates[deviceId] || {}, connected: true, capabilities: printerManager.getCapabilities(deviceId) });
   });
 
   client.on('disconnected', (deviceId) => {
-    broadcast('state', { deviceId, state: liveStates[deviceId] || {}, connected: false });
+    broadcast('state', { deviceId, state: liveStates[deviceId] || {}, connected: false, capabilities: printerManager.getCapabilities(deviceId) });
   });
 
   client.on('mqtt_error', (deviceId, err) => {

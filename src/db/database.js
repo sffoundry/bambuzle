@@ -158,6 +158,13 @@ function runMigrations(database) {
   try { database.exec('ALTER TABLE print_jobs ADD COLUMN material_color TEXT'); } catch { /* already exists */ }
   try { database.exec('ALTER TABLE print_jobs ADD COLUMN duration_sec INTEGER'); } catch { /* already exists */ }
 
+  // Printer connection settings (BAM-35, docs/architecture-transports.md). lan_access_code is a secret:
+  // only src/db/printer-connections.js reads it; public printer queries list columns explicitly.
+  try { database.exec("ALTER TABLE printers ADD COLUMN connection_mode TEXT NOT NULL DEFAULT 'auto'"); } catch { /* already exists */ }
+  try { database.exec('ALTER TABLE printers ADD COLUMN lan_host TEXT'); } catch { /* already exists */ }
+  try { database.exec('ALTER TABLE printers ADD COLUMN lan_access_code TEXT'); } catch { /* already exists */ }
+  try { database.exec("ALTER TABLE printers ADD COLUMN source TEXT NOT NULL DEFAULT 'cloud'"); } catch { /* already exists */ }
+
   database.exec(`
     CREATE TABLE IF NOT EXISTS auth_tokens (
       id INTEGER PRIMARY KEY CHECK (id = 1),

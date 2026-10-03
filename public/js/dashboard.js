@@ -112,6 +112,7 @@ function renderSemiGauge(value, max, label, sublabel, color) {
 
 function updateCardContent(card, deviceId, printer) {
   const live = printer.live || {};
+  if (printer.capabilities) printerCaps[deviceId] = printer.capabilities;
   const db = printer.db || {};
   const connected = printer.connected;
   const gcodeState = connected ? (live.gcodeState || 'UNKNOWN') : 'OFFLINE';
@@ -189,7 +190,7 @@ function updateCardContent(card, deviceId, printer) {
       <div class="stat"><span class="stat-label">Aux Fan</span><span class="stat-value">${auxFan}</span></div>
       <div class="stat"><span class="stat-label">Cham Fan</span><span class="stat-value">${chamberFan}</span></div>
     </div>
-    ${renderDiagnostics(live.diagnostics)}
+    ${renderDiagnostics(live.diagnostics, printer.capabilities || printerCaps[deviceId])}
     ${gaugeHtml}
   `;
   const html = renderControls(deviceId, live, connected, gcodeState);
@@ -207,6 +208,7 @@ function updateCardContent(card, deviceId, printer) {
 
 const CMD_STATUS_MS = 20000;
 const signatureRejected = {}; // deviceId -> true once the printer rejected a command as unsigned
+const printerCaps = {}; // deviceId -> capabilities (kept from the printer object on each render)
 const cmdStatus = {}; // deviceId -> { text, tone, at, busy }
 let controlsWired = false;
 
@@ -219,11 +221,14 @@ function renderControls(deviceId, live, connected, gcodeState) {
   const showStatus = st && (locked || Date.now() - st.at < CMD_STATUS_MS);
   if (!connected || (!active && !showStatus)) return '';
 
-  // Bambu authorization firmware rejects unsigned commands ("mqtt message verify failed"); print.fun tells
-  // us up front (Dev mode off). Don't offer buttons that can't work — explain instead.
-  if (live.diagnostics?.developerMode === false || signatureRejected[deviceId]) {
-    return `<div class="ctl-unavailable" title="Bambu's authorization firmware only accepts commands signed by Bambu Studio / Handy / Bambu Connect. Bambuzle can control printers once it can connect over LAN with Developer Mode enabled (roadmap BAM-35).">Controls unavailable — this printer only accepts commands signed by Bambu's apps</div>`;
+  // Only offer buttons that can work (server-computed capabilities, docs/architecture-transports.md):
+  // 'available' (LAN + Developer Mode) or 'unknown' (old firmware: try). Otherwise explain why not.
+  const caps = printerCaps[deviceId];
+  if (caps?.control === 'signature_required' || signatureRejected[deviceId]) {
+    const hint = caps?.controlHint || 'This printer only accepts commands signed by Bambu\'s apps.';
+    return `<div class="ctl-unavailable" title="${escapeHtml(hint)}">Controls unavailable — ${escapeHtml(hint)}</div>`;
   }
+  if (caps && !['available', 'unknown'].includes(caps.control)) return '';
 
   const id = escapeHtml(deviceId);
   const dis = locked ? ' disabled' : '';
@@ -327,9 +332,13 @@ function chip(label, value, { tone = '', title = '' } = {}) {
   return `<span class="${cls}"${t}><span class="diag-label">${escapeHtml(label)}</span> ${escapeHtml(String(value))}</span>`;
 }
 
-function renderDiagnostics(d) {
-  if (!d) return '';
+function renderDiagnostics(d, caps) {
+  if (!d && !caps) return '';
+  d = d || {};
   const chips = [];
+  if (caps?.transport) {
+    chips.push(chip('Via', caps.transport === 'lan' ? 'LAN' : 'Cloud', { title: caps.transport === 'lan' ? 'Connected directly to the printer on the local network' : 'Connected through BambuLab Cloud' }));
+  }
 
   if (d.printError?.active) {
     chips.push(chip('ERR', d.printError.hex, { tone: 'diag-error', title: 'Printer reported print_error — see the printer screen or Bambu wiki' }));

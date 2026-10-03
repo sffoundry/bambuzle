@@ -65,6 +65,11 @@ const config = {
     keep: Number.isFinite(backupKeep) && backupKeep >= 1 ? backupKeep : 7,
   },
 
+  // LAN printer connections (BAM-35). Verify printer TLS against Bambu's CA bundle; 'off' is an escape hatch.
+  lan: {
+    tlsVerify: (process.env.BAMBUZLE_LAN_TLS_VERIFY || fileConfig.lan?.tlsVerify || 'on').toString().toLowerCase() !== 'off',
+  },
+
   // HTTP server
   server: {
     port: parseInt(process.env.PORT, 10) || fileConfig.server?.port || 3000,

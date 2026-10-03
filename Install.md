@@ -285,6 +285,17 @@ docker buildx build --platform linux/amd64,linux/arm64 -t <registry>/bambuzle:la
 
 A multi-platform build must be pushed to a registry (or exported with `--output`); use `--platform linux/arm64 --load` to load a single-arch image locally. Emulated arm64 builds compile `better-sqlite3` slowly if no prebuilt binary matches — expect several minutes. 32-bit Pi OS (armv7) is not a tested target.
 
+## Connecting printers: Cloud or LAN
+
+Each printer connects one of two ways (see `docs/architecture-transports.md`):
+
+- **BambuLab Cloud** (default): log in with your Bambu account in the dashboard. Monitoring works for every printer on the account.
+- **LAN**: Bambuzle talks to the printer directly. In **⚙ Configuration → Printers → Connection…**, enter the printer's IP address and its **LAN access code** (shown on the printer screen under network / LAN settings), then use **Test LAN connection**. It reports exactly what's wrong: unreachable, access code rejected, or a different printer at that address. Bambuzle verifies the printer's certificate against Bambu's CA and checks that its serial number matches.
+
+**Printer controls (pause / resume / stop / speed)** on current Bambu firmware only work over **LAN with Developer Mode turned on** in the printer's settings. Bambu's authorization firmware rejects commands from third-party tools otherwise, and Developer Mode disconnects the printer from Bambu Cloud. When controls can't work, Bambuzle hides the buttons and says why.
+
+LAN-only printers that aren't on a Bambu account can be added with **+ Add LAN printer**. LAN printers connect at startup without any Bambu login.
+
 ## Backup & restore
 
 Bambuzle backs up its SQLite database automatically using SQLite's online-backup API (safe while the server is running — never copy `bambuzle.db` by hand while it runs).
