@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Bambuzle — Printer Dashboard</title>
   <link rel="stylesheet" href="/css/style.css">
   <script src="/js/theme-boot.js"></script>
@@ -121,6 +121,7 @@
             <div id="ams-content"></div>
           </div>
           <h3 class="dash-events-title">Events</h3>
+          <div class="table-scroll">
           <table class="data-table dash-events-table" id="dash-events-table">
             <thead>
               <tr>
@@ -133,6 +134,7 @@
             </thead>
             <tbody id="dash-events-body"></tbody>
           </table>
+          </div>
         </div>
       </div>
     </section>
@@ -157,6 +159,7 @@
           <option value="error">error</option>
         </select>
       </div>
+      <div class="table-scroll">
       <table id="events-table" class="data-table">
         <thead>
           <tr>
@@ -169,6 +172,7 @@
         </thead>
         <tbody id="events-body"></tbody>
       </table>
+      </div>
     </section>
 
     <!-- Alerts view -->

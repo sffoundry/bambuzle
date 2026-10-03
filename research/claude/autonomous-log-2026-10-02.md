@@ -49,3 +49,4 @@
 - BAM-40 backend (Claude): rule-based triage verdict (intervene/inspect/clean) + reasons + clustered timeline; GET /api/printers/:id/triage and /jobs/:jobId/triage. UI pending BAM-12 merge. 138/138.
 - BAM-36 (Claude): hourly rollups + tiered retention, atomic count-checked compaction, rollup-aware history. Found + fixed: /history LIMIT oldest-first truncated the newest ~10 h of a busy 24 h chart. 144/144.
 - BAM-42 (Claude): read-only HA discovery bridge (publish-only, LWT, throttled retained state, creds never logged). 148/148.
+- BAM-12 merged (agent, 580284b): responsive layout, verified 360–1440 in all themes; fixed 3 desktop bugs (config toggles, login forms all visible, OFFLINE contrast). CSS append conflict resolved. 148/148.
