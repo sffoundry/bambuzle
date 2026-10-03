@@ -160,6 +160,23 @@ function runMigrations(database) {
 
   // Printer connection settings (BAM-35, docs/architecture-transports.md). lan_access_code is a secret:
   // only src/db/printer-connections.js reads it; public printer queries list columns explicitly.
+  // Per-job telemetry snapshot taken at job end (review v0.8 #3): raw samples are rolled up after
+  // retention.rawDays and hourly rollups carry no job_id, so the export needs these to outlive them.
+  try { database.exec('ALTER TABLE print_jobs ADD COLUMN sample_count INTEGER'); } catch { /* already exists */ }
+  try { database.exec('ALTER TABLE print_jobs ADD COLUMN nozzle_temp_avg REAL'); } catch { /* already exists */ }
+  try { database.exec('ALTER TABLE print_jobs ADD COLUMN nozzle_temp_max REAL'); } catch { /* already exists */ }
+  try { database.exec('ALTER TABLE print_jobs ADD COLUMN bed_temp_avg REAL'); } catch { /* already exists */ }
+  try { database.exec('ALTER TABLE print_jobs ADD COLUMN bed_temp_max REAL'); } catch { /* already exists */ }
+  // One-time backfill for jobs that ended before the snapshot existed (while their raw samples remain)
+  database.exec(`
+    UPDATE print_jobs SET
+      sample_count = (SELECT COUNT(*) FROM samples s WHERE s.job_id = print_jobs.id),
+      nozzle_temp_avg = (SELECT ROUND(AVG(nozzle_temp), 1) FROM samples s WHERE s.job_id = print_jobs.id),
+      nozzle_temp_max = (SELECT MAX(nozzle_temp) FROM samples s WHERE s.job_id = print_jobs.id),
+      bed_temp_avg = (SELECT ROUND(AVG(bed_temp), 1) FROM samples s WHERE s.job_id = print_jobs.id),
+      bed_temp_max = (SELECT MAX(bed_temp) FROM samples s WHERE s.job_id = print_jobs.id)
+    WHERE ended_at IS NOT NULL AND sample_count IS NULL
+  `);
   try { database.exec("ALTER TABLE printers ADD COLUMN connection_mode TEXT NOT NULL DEFAULT 'auto'"); } catch { /* already exists */ }
   try { database.exec('ALTER TABLE printers ADD COLUMN lan_host TEXT'); } catch { /* already exists */ }
   try { database.exec('ALTER TABLE printers ADD COLUMN lan_access_code TEXT'); } catch { /* already exists */ }

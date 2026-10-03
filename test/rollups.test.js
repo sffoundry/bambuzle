@@ -82,3 +82,28 @@ test('old rollups are pruned', () => {
   getDb().prepare("INSERT INTO samples_hourly (device_id, hour, n, nozzle_temp) VALUES ('ROLL0001', '2020-01-01 00:00:00', 1, 1)").run();
   assert.ok(rollups.deleteOldRollups(365, NOW) >= 1);
 });
+
+// ─── v0.8 review fixes ───
+
+test('batched compaction processes day-sized transactions and yields between them — review #6', async () => {
+  queries.upsertPrinter({ deviceId: 'ROLL0004', name: 'R4', model: 'X1C' });
+  seed('ROLL0004', NOW - 40 * 86400e3, 3 * 24 * 12, 300); // 3 days at 5-min spacing, far past rawDays
+  const r = await rollups.compactSamplesBatched(14, { now: NOW, batchHours: 24 });
+  assert.ok(r.batches >= 3, `batches=${r.batches}`);
+  assert.equal(r.deletedRaw, 3 * 24 * 12);
+  assert.equal(getDb().prepare("SELECT SUM(n) AS n FROM samples_hourly WHERE device_id = 'ROLL0004'").get().n, 3 * 24 * 12);
+});
+
+test('getHistory: a year of rollups can no longer squeeze recent raw data to one point — review #7', () => {
+  queries.upsertPrinter({ deviceId: 'ROLL0005', name: 'R5', model: 'X1C' });
+  const ins = getDb().prepare('INSERT INTO samples_hourly (device_id, hour, n, nozzle_temp) VALUES (?, ?, ?, ?)');
+  getDb().transaction(() => {
+    for (let h = 0; h < 8400; h++) ins.run('ROLL0005', sqlTs(NOW - 15 * 86400e3 - h * 3600e3).slice(0, 13) + ':00:00', 10, 200);
+  })();
+  seed('ROLL0005', NOW - 2 * 3600e3, 1000, 5);
+  const h = rollups.getHistory('ROLL0005', { from: sqlTs(NOW - 400 * 86400e3), to: sqlTs(NOW), limit: 5000 }, { rawDays: 14, now: NOW });
+  const rollupRows = h.filter((r) => r.rollup).length;
+  assert.ok(rollupRows <= 2500, `rollup rows ${rollupRows}`);
+  assert.ok(h.filter((r) => !r.rollup).length >= 1000, 'recent raw kept at full resolution');
+  assert.ok(h.length <= 5000);
+});

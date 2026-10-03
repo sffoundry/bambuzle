@@ -51,3 +51,4 @@
 - BAM-42 (Claude): read-only HA discovery bridge (publish-only, LWT, throttled retained state, creds never logged). 148/148.
 - BAM-12 merged (agent, 580284b): responsive layout, verified 360–1440 in all themes; fixed 3 desktop bugs (config toggles, login forms all visible, OFFLINE contrast). CSS append conflict resolved. 148/148.
 - BAM-40 UI + BAM-45 (Claude): triage list/dialog in Stats, fleet Cards/Table toggle. Browser checks (extended BAM-12 harness, seeded throwaway server): 252/252 overflow incl. new views, contrast 0 all themes ×2 widths. Found + fixed: fleet thead never rendered (append() chained), triage badge wrapping at 375 px.
+- v0.8.0 review (agent): 4M/5L, all fixed + regression tests (157/157). Incident: reviewer pkill'd live :3000 server; restarted in ~1 min; rule added to memory + review record.

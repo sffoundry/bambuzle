@@ -118,3 +118,53 @@ test('files API: needs LAN settings, validates input, private under public-read,
     await pub.close();
   }
 });
+
+// ─── v0.8 review fixes ───
+
+test('a stalled download is aborted and releases the printer for the next request — review #1', async () => {
+  const ftp = await startFtpsServer({ password: CODE, tree });
+  const conn = { lanHost: '127.0.0.1', accessCode: CODE };
+  const opts = { ca: ftp.ca, port: ftp.port };
+  try {
+    const stuck = new Writable({ highWaterMark: 1, write() { /* never calls back: a paused browser download */ } });
+    await assert.rejects(
+      files.downloadFile(SERIAL, conn, 'timelapse', '/timelapse/video_2026-10-01_12-00-00.mp4', stuck, { ...opts, stallMs: 300 }),
+      (e) => /stalled|closed|aborted/i.test(e.message),
+    );
+    const list = await files.listFiles(SERIAL, conn, 'timelapse', opts);
+    assert.equal(list.length, 1, 'lock released — later requests work');
+  } finally {
+    await ftp.close();
+  }
+});
+
+test('waiting behind a busy transfer gives up with 503 instead of hanging', async () => {
+  let release;
+  const blocker = new Promise((r) => { release = r; });
+  const slow = () => ({ access: async () => {}, list: async () => { await blocker; return []; }, close() {} });
+  const first = files.listFiles('BUSY000001', { lanHost: 'h', accessCode: 'x' }, 'timelapse', { clientFactory: slow });
+  await assert.rejects(
+    files.downloadFile('BUSY000001', { lanHost: 'h', accessCode: 'x' }, 'timelapse', '/timelapse/a.mp4', sink(), { clientFactory: slow, lockWaitMs: 100 }),
+    (e) => e.status === 503,
+  );
+  release();
+  await first;
+});
+
+test('a download that fails before any data returns a JSON error, not an "a.mp4" attachment — review #8', async () => {
+  queries.upsertPrinter({ deviceId: 'FILES0002', name: 'F2', model: 'X1C' });
+  conns.setConnection('FILES0002', { lanHost: '10.0.0.31', accessCode: 'Ab12Cd34' });
+  const fileOps = {
+    listFiles: async () => [],
+    downloadFile: async (id, conn, kind, p, res, { onSize }) => { onSize(100); throw Object.assign(new Error('Printer refused the file operation (550)'), { status: 404 }); },
+  };
+  const srv = await startServer({ deps: { fileOps } });
+  try {
+    const r = await fetch(`${srv.baseUrl}/api/printers/FILES0002/files/download?kind=timelapse&path=/timelapse/a.mp4`, { headers: authHeaders });
+    assert.equal(r.status, 404);
+    assert.match(r.headers.get('content-type'), /application\/json/);
+    assert.equal(r.headers.get('content-disposition'), null);
+  } finally {
+    await srv.close();
+  }
+});

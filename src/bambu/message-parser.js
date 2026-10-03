@@ -132,7 +132,8 @@ function extractPrinterState(merged) {
     wifiSignal: p.wifi_signal != null ? parseInt(p.wifi_signal, 10) : null,
 
     // HMS errors
-    hmsErrors: p.hms || [],
+    // null = this printer hasn't reported its HMS list yet (≠ "no errors"); see handleHmsErrors
+    hmsErrors: Array.isArray(p.hms) ? p.hms : null,
 
     // AMS
     ams: p.ams || null,

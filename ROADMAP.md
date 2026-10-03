@@ -3,7 +3,7 @@
 > **Mission:** Self-hosted monitoring dashboard for BambuLab 3D printers. Connects through BambuLab Cloud or directly over the LAN (MQTT), stores telemetry in SQLite, and serves a real-time web dashboard. Runs headless on Linux (x86_64 + ARM64); no Windows dependency.
 > **Adoption surface for `aiw feature adopt BAM-<N>`.**
 
-**Last updated:** 2026-10-03 (v0.7.0: transport layer — cloud + LAN; added Next up plan and BAM-48..51)
+**Last updated:** 2026-10-03 (v0.8.0: mobile layout, audit trail, SD-card files, triage, fleet table, rollups, HA bridge, model-specific HMS, active print hours)
 
 ---
 

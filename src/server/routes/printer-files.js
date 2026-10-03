@@ -63,6 +63,8 @@ function createPrinterFilesRouter({ fileOps = files } = {}) {
     } catch (err) {
       audit(req, { action: 'printer.files.download', target: req.params.id, result: 'error', detail: { kind, file: name, stage: err.stage || 'error' } });
       if (res.headersSent) return res.destroy(err); // mid-stream failure: abort so the browser sees an error
+      // Failed before any bytes: drop the file headers onSize set, or the JSON error is saved as "a.mp4" (#8)
+      for (const h of ['Content-Disposition', 'Content-Length', 'Content-Type']) res.removeHeader(h);
       res.status(err.status || 502).json({ error: err.message, stage: err.stage || 'error' });
     }
   });

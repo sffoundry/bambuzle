@@ -60,3 +60,14 @@ test('logs never include broker credentials', () => {
   assert.equal(safeHost('mqtt://user:secret@broker.local:1883'), 'broker.local:1883');
   assert.equal(safeHost('not a url'), '(invalid url)');
 });
+
+test('a non-numeric throttle falls back to 10 s instead of disabling throttling — review #9', () => {
+  const b = fakeBroker();
+  const bridge = createHaBridge({ config: { url: 'mqtt://h', throttleSec: 'abc' }, listPrinters: () => printers, log: pino({ level: 'silent' }), connectFn: b.connectFn }).start();
+  b.client.connected = true;
+  b.client.emit('connect');
+  bridge.onState('01S00TEST000001', { progress: 1 });
+  bridge.onState('01S00TEST000001', { progress: 2 });
+  assert.equal(b.pubs.filter((p) => p.t.endsWith('/state')).length, 1, 'second update throttled');
+  bridge.stop();
+});

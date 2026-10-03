@@ -46,9 +46,9 @@ function hourCutoff(days, now = Date.now()) {
  * Roll raw samples older than `rawDays` into hourly averages, then delete them (same transaction).
  * @returns {{ rolledHours: number, deletedRaw: number }}
  */
-function compactSamples(rawDays, now = Date.now()) {
+function compactSamples(rawDays, now = Date.now(), cutoffOverride = null) {
   const d = db();
-  const cutoff = hourCutoff(rawDays, now);
+  const cutoff = cutoffOverride || hourCutoff(rawDays, now);
   const avgCols = NUMERIC.map((c) => `AVG(${c})`).join(', ');
   return d.transaction(() => {
     const pending = d.prepare('SELECT COUNT(*) AS n FROM samples WHERE ts < ?').get(cutoff).n;
@@ -81,6 +81,30 @@ function compactSamples(rawDays, now = Date.now()) {
     }
     return { rolledHours: rows.length, deletedRaw: deleted };
   })();
+}
+
+/**
+ * Compaction in day-sized transactions, yielding to the event loop between them (review v0.8 #6): the first
+ * run after upgrading can face ~76 days of raw samples — one transaction blocked the loop ~10 s on a laptop,
+ * long enough on a Pi to trip MQTT keepalives.
+ */
+async function compactSamplesBatched(rawDays, { now = Date.now(), batchHours = 24 } = {}) {
+  const d = db();
+  const finalCutoff = hourCutoff(rawDays, now);
+  const total = { rolledHours: 0, deletedRaw: 0, batches: 0 };
+  for (;;) {
+    const oldest = d.prepare('SELECT MIN(ts) AS t FROM samples WHERE ts < ?').get(finalCutoff).t;
+    if (!oldest) break;
+    const start = new Date(oldest.replace(' ', 'T') + 'Z');
+    start.setUTCMinutes(0, 0, 0);
+    const batchEnd = new Date(start.getTime() + batchHours * 3600e3).toISOString().slice(0, 19).replace('T', ' ');
+    const r = compactSamples(rawDays, now, batchEnd < finalCutoff ? batchEnd : finalCutoff);
+    total.rolledHours += r.rolledHours;
+    total.deletedRaw += r.deletedRaw;
+    total.batches++;
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  return total;
 }
 
 function deleteOldRollups(rollupDays, now = Date.now()) {
@@ -119,9 +143,31 @@ function getHistory(deviceId, { from, to, limit = 5000 } = {}, { rawDays = 14, n
   const params = [deviceId, rawCutoff];
   if (from) { sql += " AND datetime(hour, '+1 hour') > datetime(?)"; params.push(from); } // hour overlaps window
   if (to) { sql += ' AND hour <= datetime(?)'; params.push(to); }
-  const older = d.prepare(`${sql} ORDER BY hour ASC`).all(...params);
+  let older = d.prepare(`${sql.replace('SELECT hour AS ts,', 'SELECT hour AS ts, n,')} ORDER BY hour ASC`).all(...params);
+  // Rollups get at most half the budget (review v0.8 #7): a year of hourly rows must never squeeze the
+  // recent raw window down to a single averaged point. Excess hours are merged (weighted by sample count).
+  const olderBudget = Math.max(1, Math.floor(limit / 2));
+  if (older.length > olderBudget) older = mergeRollupRows(older, Math.ceil(older.length / olderBudget));
   const recent = rawSeries(deviceId, from, to, Math.max(1, limit - older.length));
   return older.concat(recent);
 }
 
-module.exports = { compactSamples, deleteOldRollups, getHistory, rawSeries, hourCutoff, NUMERIC };
+/** Merge every `k` consecutive rollup rows into one, averaging numeric columns weighted by n. */
+function mergeRollupRows(rows, k) {
+  const out = [];
+  for (let i = 0; i < rows.length; i += k) {
+    const chunk = rows.slice(i, i + k);
+    const merged = { ts: chunk[0].ts, rollup: 1, n: 0 };
+    for (const c of NUMERIC) {
+      let sum = 0;
+      let w = 0;
+      for (const r of chunk) if (r[c] != null) { sum += r[c] * (r.n || 1); w += r.n || 1; }
+      merged[c] = w ? sum / w : null;
+    }
+    for (const r of chunk) merged.n += r.n || 1;
+    out.push(merged);
+  }
+  return out;
+}
+
+module.exports = { compactSamples, compactSamplesBatched, deleteOldRollups, getHistory, rawSeries, hourCutoff, NUMERIC };

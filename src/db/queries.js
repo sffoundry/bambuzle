@@ -50,6 +50,20 @@ function endJob(jobId, endState, progressPct) {
       duration_sec = MAX(0, CAST(ROUND((julianday('now') - julianday(started_at)) * 86400) AS INTEGER))
     WHERE id = ?
   `).run(endState, progressPct, jobId);
+  snapshotJobTelemetry(jobId);
+}
+
+/** Store per-job telemetry aggregates on the job so they survive sample rollup (export, review v0.8 #3). */
+function snapshotJobTelemetry(jobId) {
+  getDb().prepare(`
+    UPDATE print_jobs SET
+      sample_count = (SELECT COUNT(*) FROM samples WHERE job_id = @id),
+      nozzle_temp_avg = (SELECT ROUND(AVG(nozzle_temp), 1) FROM samples WHERE job_id = @id),
+      nozzle_temp_max = (SELECT MAX(nozzle_temp) FROM samples WHERE job_id = @id),
+      bed_temp_avg = (SELECT ROUND(AVG(bed_temp), 1) FROM samples WHERE job_id = @id),
+      bed_temp_max = (SELECT MAX(bed_temp) FROM samples WHERE job_id = @id)
+    WHERE id = @id
+  `).run({ id: jobId });
 }
 
 function setJobMaterial(jobId, material, materialColor) {
@@ -483,6 +497,7 @@ module.exports = {
   startJob,
   endJob,
   getActiveJob,
+  snapshotJobTelemetry,
   setJobMaterial,
   getJobs,
   getJobStats,

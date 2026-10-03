@@ -14,7 +14,7 @@
 
 ## Retention caveat
 
-Some columns come from per-job counters on `print_jobs` and are kept forever. Others are computed from the telemetry tables (`samples`, `events`, `layer_transitions`), which the retention job deletes after `retention.days` (default 90). For jobs older than that, the telemetry-derived columns read `0` or empty. The **Source** column below marks them as *telemetry*.
+Some columns come from per-job values on `print_jobs` and are kept forever. That now includes `sample_count` and the nozzle and bed temperature avg/max, which are snapshotted when the job ends (v0.8.0); older jobs were backfilled on upgrade. `events` and `layer_transitions` are deleted after `retention.days` (default 90). Raw `samples` are rolled into hourly averages after `retention.rawDays` (default 14). Columns still computed from those tables (`hms_error_count`, `print_error_count`, `layer_count`) read `0` or empty for jobs older than that. The **Source** column below marks them as *telemetry*.
 
 ## Columns
 

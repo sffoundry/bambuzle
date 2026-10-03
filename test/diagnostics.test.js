@@ -82,3 +82,8 @@ test('extractPrinterState carries diagnostics and tolerates an empty payload', (
   assert.deepEqual(empty.nozzles, []);
   assert.equal(empty.firmware, null);
 });
+
+test('hmsErrors is null (not []) until the printer has reported its HMS list — review #2', () => {
+  assert.equal(extractPrinterState({ print: { gcode_state: 'RUNNING' } }).hmsErrors, null);
+  assert.deepEqual(extractPrinterState({ print: { hms: [] } }).hmsErrors, []);
+});

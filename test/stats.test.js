@@ -212,3 +212,33 @@ test('BAM-51: print hours exclude recorded pause time; a pause longer than the j
   const { overall } = q.getJobStats({ deviceId: 'PAUSE0001' });
   assert.equal(overall.totalPrintHours, 1);
 });
+
+test('job telemetry is snapshotted at job end and survives sample rollup — review #3', () => {
+  const q = require('../src/db/queries');
+  const { getDb } = require('../src/db/database');
+  const { getJobExportRows } = require('../src/db/export');
+  q.upsertPrinter({ deviceId: 'SNAP00001', name: 'S', model: 'X1C' });
+  const id = q.startJob({ deviceId: 'SNAP00001', taskId: 't', subtaskName: 's', gcodeFile: 'g' });
+  for (const t of [200, 210, 220]) getDb().prepare('INSERT INTO samples (device_id, job_id, nozzle_temp, bed_temp) VALUES (?, ?, ?, ?)').run('SNAP00001', id, t, 60);
+  q.endJob(id, 'FINISH', 100);
+  getDb().prepare('DELETE FROM samples WHERE job_id = ?').run(id); // as if rolled up
+  const row = getJobExportRows({ deviceId: 'SNAP00001' }).rows.find((r) => r.job_id === id);
+  assert.deepEqual([row.sample_count, row.nozzle_temp_avg, row.nozzle_temp_max, row.bed_temp_max], [3, 210, 220, 60]);
+});
+
+test('pause source: printer-initiated only for print_error or fatal/serious HMS — review #5', () => {
+  const { AnomalyDetector } = require('../src/anomaly/detector');
+  const q = require('../src/db/queries');
+  const { getDb } = require('../src/db/database');
+  const det = new AnomalyDetector(require('pino')({ level: 'silent' }), { anomaly: {} });
+  q.upsertPrinter({ deviceId: 'PSRC00001', name: 'P', model: 'X1C' });
+  const id = q.startJob({ deviceId: 'PSRC00001', taskId: 't', subtaskName: 's', gcodeFile: 'g' });
+  const src = () => getDb().prepare('SELECT pause_source FROM job_pauses WHERE job_id = ? ORDER BY id DESC LIMIT 1').get(id).pause_source;
+  const info = { attr: 0x0c000300, code: 0x00040001 }; // level 4 = info
+  const serious = { attr: 0x07002000, code: 0x00020001 }; // level 2 = serious
+  det.handlePause('PSRC00001', { hmsErrors: [info] }); assert.equal(src(), 'user', 'info HMS during a colour change');
+  det.handleResume('PSRC00001');
+  det.handlePause('PSRC00001', { hmsErrors: [serious] }); assert.equal(src(), 'error');
+  det.handleResume('PSRC00001');
+  det.handlePause('PSRC00001', { hmsErrors: [], diagnostics: { printError: { active: true } } }); assert.equal(src(), 'error', 'print_error without HMS');
+});

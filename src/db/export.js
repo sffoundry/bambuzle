@@ -123,11 +123,12 @@ function getJobExportRows({ deviceId, from, to, maxRows = EXPORT_MAX_ROWS } = {}
       COALESCE(ev.hms_errors, 0) AS hms_error_count,
       j.hms_codes AS hms_codes_json,
       COALESCE(ev.print_errors, 0) AS print_error_count,
-      COALESCE(s.sample_count, 0) AS sample_count,
-      ROUND(s.nozzle_avg, 1) AS nozzle_temp_avg,
-      s.nozzle_max AS nozzle_temp_max,
-      ROUND(s.bed_avg, 1) AS bed_temp_avg,
-      s.bed_max AS bed_temp_max
+      -- Prefer the snapshot stored at job end (survives sample rollup); live samples for running jobs
+      COALESCE(j.sample_count, s.sample_count, 0) AS sample_count,
+      COALESCE(j.nozzle_temp_avg, ROUND(s.nozzle_avg, 1)) AS nozzle_temp_avg,
+      COALESCE(j.nozzle_temp_max, s.nozzle_max) AS nozzle_temp_max,
+      COALESCE(j.bed_temp_avg, ROUND(s.bed_avg, 1)) AS bed_temp_avg,
+      COALESCE(j.bed_temp_max, s.bed_max) AS bed_temp_max
     FROM sel j
     LEFT JOIN printers p ON p.device_id = j.device_id
     LEFT JOIN s ON s.job_id = j.id

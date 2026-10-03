@@ -1,6 +1,7 @@
 'use strict';
 
 const queries = require('../db/queries');
+const { parseHmsErrors } = require('../utils/hms-codes');
 const { GCODE_STATE } = require('../utils/constants');
 
 class AnomalyDetector {
@@ -159,11 +160,13 @@ class AnomalyDetector {
     const activeJob = queries.getActiveJob(deviceId);
     if (!activeJob) return;
 
-    // Determine pause source: HMS errors active = 'error', otherwise 'user'
-    const hmsCodes = state.hmsErrors?.length > 0
-      ? state.hmsErrors.map((e) => e.key || e.code || String(e))
-      : null;
-    const pauseSource = hmsCodes ? 'error' : 'user';
+    // Pause source (review v0.8 #5): the printer paused itself if it reports a print_error, or a fatal/
+    // serious HMS code (level = top 16 bits of the HMS code). Info/common codes that happen to be active
+    // during a planned user pause (e.g. a colour change) no longer make it look printer-initiated.
+    const parsedHms = Array.isArray(state.hmsErrors) && state.hmsErrors.length ? parseHmsErrors(state.hmsErrors) : [];
+    const hmsCodes = parsedHms.length ? parsedHms.map((e) => e.key) : null;
+    const seriousHms = parsedHms.some((e) => e.severity === 'fatal' || e.severity === 'serious');
+    const pauseSource = state.diagnostics?.printError?.active || seriousHms ? 'error' : 'user';
 
     queries.insertJobPause({
       deviceId,

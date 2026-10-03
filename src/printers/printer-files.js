@@ -19,6 +19,8 @@ const MEDIA = {
   prints: { dirs: ['/cache', '/'], exts: ['.3mf', '.gcode'] },
 };
 const TIMEOUT_MS = 15000;
+const STALL_MS = 60000; // abort a download that moves no bytes for this long (stalled/paused client)
+const LOCK_WAIT_MS = 30000; // don't queue forever behind another transfer for the same printer
 
 /** Only names from the allowed directories, no traversal, sane characters. Exported for tests. */
 function safeRemotePath(kind, remotePath) {
@@ -46,12 +48,17 @@ function setStatus(serial, status) {
   state.set(serial, s);
 }
 
-/** Serialise FTPS work per printer. */
-async function withSession(serial, fn) {
+/** Serialise FTPS work per printer; give up with 503 after LOCK_WAIT_MS instead of queueing forever. */
+async function withSession(serial, fn, { lockWaitMs = LOCK_WAIT_MS } = {}) {
   const s = state.get(serial) || {};
   state.set(serial, s);
+  const deadline = Date.now() + lockWaitMs;
   while (s.busy) {
-    try { await s.busy; } catch { /* previous failure is its own caller's problem */ }
+    const left = deadline - Date.now();
+    if (left <= 0) throw Object.assign(new Error('Another file transfer for this printer is still running — try again shortly'), { status: 503, stage: 'busy' });
+    let timer;
+    await Promise.race([s.busy.catch(() => {}), new Promise((r) => { timer = setTimeout(r, left); })]);
+    clearTimeout(timer);
   }
   let release;
   s.busy = new Promise((r) => { release = r; });
@@ -141,7 +148,7 @@ async function listFiles(serial, conn, kind, opts = {}) {
 /**
  * Stream one file to `writable` (e.g. the HTTP response). `onSize` is called with the size first.
  */
-async function downloadFile(serial, conn, kind, remotePath, writable, { onSize, ...opts } = {}) {
+async function downloadFile(serial, conn, kind, remotePath, writable, { onSize, stallMs = STALL_MS, lockWaitMs, ...opts } = {}) {
   const path = safeRemotePath(kind, remotePath);
   if (!path) throw Object.assign(new Error('Invalid file path'), { status: 400 });
   return withSession(serial, async () => {
@@ -153,7 +160,22 @@ async function downloadFile(serial, conn, kind, remotePath, writable, { onSize, 
         try { size = await client.size(path); } catch { /* size is optional */ }
         onSize(size);
       }
-      await client.downloadTo(writable, path);
+      // Watchdog: a reader that stops consuming (paused browser download) would otherwise hold the printer's
+      // FTPS session and this printer's lock forever (review v0.8 #1). Closing the client rejects downloadTo.
+      let lastProgress = Date.now();
+      let stalled = false;
+      client.trackProgress?.(() => { lastProgress = Date.now(); });
+      const watchdog = setInterval(() => {
+        if (Date.now() - lastProgress > stallMs) { stalled = true; client.close(); }
+      }, Math.min(5000, Math.max(50, stallMs / 4)));
+      try {
+        await client.downloadTo(writable, path);
+      } catch (err) {
+        if (stalled) throw Object.assign(new Error(`Download stalled (no data for ${Math.round(stallMs / 1000)} s) — aborted`), { code: 'ESTALLED' });
+        throw err;
+      } finally {
+        clearInterval(watchdog);
+      }
       setStatus(serial, { ok: true, stage: 'ok' });
     } catch (err) {
       const c = classifyFtpError(err);
@@ -162,7 +184,7 @@ async function downloadFile(serial, conn, kind, remotePath, writable, { onSize, 
     } finally {
       client?.close();
     }
-  });
+  }, { lockWaitMs });
 }
 
 module.exports = { listFiles, downloadFile, getFilesStatus, safeRemotePath, classifyFtpError, MEDIA, FTPS_PORT };

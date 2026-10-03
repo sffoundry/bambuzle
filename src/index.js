@@ -230,15 +230,15 @@ function startCronJobs() {
     }
   });
 
-  const cleanupJob = new Cron('0 3 * * *', () => {
+  const cleanupJob = new Cron('0 3 * * *', async () => {
     const days = config.retention.days;
     log.info({ days }, 'Running data retention cleanup');
     // Raw samples → hourly rollups (same transaction), then prune old rollups (BAM-36)
     let compaction = { rolledHours: 0, deletedRaw: 0 };
     try {
-      compaction = rollups.compactSamples(config.retention.rawDays);
+      compaction = await rollups.compactSamplesBatched(config.retention.rawDays);
     } catch (err) {
-      log.error({ err: err.message }, 'Sample rollup failed — raw samples kept');
+      log.error({ err: err.message }, 'Sample rollup failed — remaining raw samples kept');
     }
     const rollupsDeleted = rollups.deleteOldRollups(config.retention.rollupDays);
     const samplesDeleted = { changes: compaction.deletedRaw };
@@ -444,6 +444,9 @@ function handleJobTransition(deviceId, state, prevState) {
   if ((prev === GCODE_STATE.RUNNING || prev === GCODE_STATE.PAUSE) &&
       (curr === GCODE_STATE.FINISH || curr === GCODE_STATE.FAILED || curr === GCODE_STATE.IDLE)) {
     if (activeJob) {
+      // Ending straight from PAUSE (e.g. cancelled after an overnight pause): close the open pause first so
+      // its duration counts as pause time, not print hours (review v0.8 #4)
+      if (prev === GCODE_STATE.PAUSE) anomalyDetector.handleResume(deviceId);
       const endState = jobEndState(curr, state);
       queries.endJob(activeJob.id, endState, state.progress);
       log.info({ deviceId, jobId: activeJob.id, endState }, 'Print job ended');

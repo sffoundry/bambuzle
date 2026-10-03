@@ -94,7 +94,8 @@ function discoveryMessages(prefix, printer) {
  */
 function createHaBridge({ config, listPrinters, log, connectFn = mqtt.connect }) {
   const prefix = config.prefix || 'bambuzle';
-  const throttleMs = Math.max(1, config.throttleSec ?? 10) * 1000;
+  const t = Number(config.throttleSec);
+  const throttleMs = (Number.isFinite(t) && t >= 1 ? t : 10) * 1000; // NaN/garbage → default, never "no throttle"
   const announced = new Set();
   const lastSent = {};
   const pending = {};
