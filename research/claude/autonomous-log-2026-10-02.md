@@ -56,3 +56,4 @@
 - BAM-16 UI (Claude): username sign-in, header user chip + sign-out, role-gated UI (CSS html[data-role]), Users dialog (themed password reset, no native prompt), My account. Browser-verified role matrix (viewer/operator/admin/token) + contrast 0 (fixed disabled-row opacity; audit now skips covered text). v0.9.0.
 - BAM-16 review (agent): 2H/3M/7L, all fixed (48e221a), 167/167; live :3000 restarted on 0.9.0 (3/3 connected); tagged v0.9.0.
 - Batch 4 (Claude, Steve: 'go for it'): BAM-35 camera capability (dc071c9, checked on H2D/X1C); BAM-18 power tracking (read-only plugs, job energy/cost, circuit alerts) browser-verified with a fake Shelly; stale Stats 'incl. pauses' label fixed; roadmap Next up refreshed; v0.10.0 pending review.
+- v0.10.0 review (agent): 0H, 5 confirmed (1M/4L) fixed (dd81ab0), 186/186; CI green incl. arm64 smoke; live :3000 on 0.10.0 (3/3); tagged v0.10.0.
