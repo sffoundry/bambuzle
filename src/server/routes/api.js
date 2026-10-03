@@ -180,7 +180,7 @@ function createApiRouter(printerManager, { getCloudAuthStatus = getAuthStatus } 
         { state: expectState, taskId: expectTaskId });
       if (plan.error) {
         record('warning', `Rejected command "${commandLabel}": ${plan.error}`);
-        return res.status(plan.status).json({ error: plan.error });
+        return res.status(plan.status).json({ error: plan.error, signatureRequired: Boolean(plan.signatureRequired) });
       }
 
       commandsInFlight.add(deviceId);
@@ -191,11 +191,14 @@ function createApiRouter(printerManager, { getCloudAuthStatus = getAuthStatus } 
         commandsInFlight.delete(deviceId);
       }
       const failed = reply.acknowledged && reply.result && String(reply.result).toLowerCase() !== 'success';
+      // "mqtt message verify failed" = Bambu authorization firmware refusing an unsigned command
+      const signatureRequired = failed && /verify failed/i.test(String(reply.reason || ''));
       const outcome = !reply.sent ? 'not sent (printer offline)'
         : !reply.acknowledged ? 'sent, no confirmation from printer'
-          : failed ? `printer rejected it: ${reply.reason || reply.result}` : 'confirmed by printer';
+          : signatureRequired ? 'printer rejected it: it only accepts commands signed by Bambu\'s apps'
+            : failed ? `printer rejected it: ${reply.reason || reply.result}` : 'confirmed by printer';
       record(failed || !reply.sent ? 'warning' : 'info', `Command ${plan.label}: ${outcome}`);
-      return res.status(reply.sent ? 200 : 502).json({ ok: reply.sent && !failed, ...reply, outcome });
+      return res.status(reply.sent ? 200 : 502).json({ ok: reply.sent && !failed, ...reply, outcome, signatureRequired });
     } catch (err) {
       // Express 4 doesn't catch async handler errors; never let one take the process down (review 2, #1)
       record('error', `Command "${commandLabel}" failed: ${err.message}`);

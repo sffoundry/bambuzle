@@ -37,6 +37,11 @@ function planCommand(command, param, liveState, expected = {}) {
     }
   }
 
+  // Authorization firmware (print.fun signature bit set) rejects unsigned commands — don't send them
+  if (liveState?.diagnostics?.developerMode === false) {
+    return { status: 409, signatureRequired: true, error: 'This printer only accepts commands signed by Bambu\'s apps (authorization firmware) — control needs a LAN Developer Mode connection' };
+  }
+
   const state = liveState?.gcodeState || GCODE_STATE.UNKNOWN;
   if (!spec.allowed.includes(state)) {
     return { status: 409, error: `Cannot ${command.replace('_', ' ')} while printer is ${state}` };

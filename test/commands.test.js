@@ -138,3 +138,37 @@ test('crafted commands over HTTP get 400 and the server keeps running; concurren
     await new Promise((r) => server.close(r));
   }
 });
+
+// ─── Authorization firmware (2026-10-03, seen live on H2D/X1C) ───
+
+test('printers that require signed commands are refused before sending', () => {
+  const r = planCommand('set_speed', 1, { gcodeState: 'RUNNING', diagnostics: { developerMode: false } });
+  assert.equal(r.status, 409);
+  assert.equal(r.signatureRequired, true);
+  assert.ok(planCommand('set_speed', 1, { gcodeState: 'RUNNING', diagnostics: { developerMode: true } }).cmd);
+  assert.ok(planCommand('set_speed', 1, { gcodeState: 'RUNNING', diagnostics: { developerMode: null } }).cmd, 'unknown → try');
+});
+
+test('"mqtt message verify failed" is reported as a signature requirement', async () => {
+  const { createApp } = require('../src/server/app');
+  const { createAdminAuth } = require('../src/server/admin-auth');
+  const http = require('http');
+  const { dataDir, TEST_TOKEN } = require('./helpers');
+  queries.upsertPrinter({ deviceId: 'dev1', name: 'Alpha', model: 'X1C' });
+  const client = fakeClient((cmd) => ({ print: { command: cmd.print.command, sequence_id: cmd.print.sequence_id, result: 'failed', reason: 'mqtt message verify failed' } }));
+  const log = pino({ level: 'silent' });
+  const adminAuth = createAdminAuth({ auth: { mode: 'on', adminToken: TEST_TOKEN }, dataDir, log });
+  const pm = fakePrinterManager({ liveStates: { dev1: { gcodeState: 'RUNNING' } }, clients: { dev1: client } });
+  const app = createApp(pm, { onAuthenticated() {} }, adminAuth, { getCloudAuthStatus: () => 'authenticated', dataDir });
+  const server = http.createServer(app);
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  try {
+    const res = await fetch(`http://127.0.0.1:${server.address().port}/api/printers/dev1/command`, { method: 'POST', headers: json, body: JSON.stringify({ command: 'set_speed', param: 1 }) });
+    const body = await res.json();
+    assert.equal(body.ok, false);
+    assert.equal(body.signatureRequired, true);
+    assert.match(body.outcome, /only accepts commands signed by Bambu's apps/);
+  } finally {
+    await new Promise((r) => server.close(r));
+  }
+});

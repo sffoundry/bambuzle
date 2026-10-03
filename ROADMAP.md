@@ -65,7 +65,7 @@ Shipped Feb 2026 but never recorded on the roadmap. Effort sizes are retrospecti
 | BAM-25 |Anomaly capture: layer transitions, temp anomalies, job pauses|✅|L|`abaa82d` — `src/anomaly/detector.js`; capture + REST API, no triage view yet|
 | BAM-26 |Swagger UI API docs at `/api/docs`|✅|S|`fee6e55` — `openapi.yaml`|
 | BAM-27 |Multi-chart MQTT visualization (6 chart types) with 60s auto-refresh|✅|L|`f896538`, `aa1b0fd`|
-| BAM-28 |Printer control API (pause / resume / stop / speed)|✅|M|v0.6.0. Card buttons (Pause/Resume, Stop with confirm, speed select); state-gated; waits for the printer's reply by sequence_id and shows confirmed / rejected / unconfirmed; every attempt audited as a `command` event. **Not yet tried on real hardware** — 2025 authorization firmware may reject unsigned cloud commands (shown as "rejected")|
+| BAM-28 |Printer control API (pause / resume / stop / speed)|🟡|M|v0.6.0 UI + API, state-gated, audited, in-app confirm dialog. **Blocked on current firmware:** tested 2026-10-03 on Steve's H2D — printer answered `mqtt message verify failed`; Bambu's authorization firmware only accepts commands signed by Bambu's apps, and Developer Mode is LAN-only (cloud MQTT can't reach it). Controls are hidden on printers whose `print.fun` reports signing required (H2D, X1C here). Becomes usable with BAM-35 + a LAN Developer Mode adapter. Not using the leaked Bambu Connect certificate|
 | BAM-29 |Rate limiting on auth login/verify endpoints|✅|S|`89148c5`|
 
 ---
@@ -105,7 +105,7 @@ From the CODEX-SF371 × AGY-SF002 blind xval, merged and verified in `research/c
 | BAM-32 |Surface unused MQTT fields: xcam AI flags, nozzle type/diameter, upgrade state, network|✅|HIGH|M|—|v0.5.0. `src/bambu/diagnostics.js` → `state.diagnostics` + card chips; `print_error` events (user-cancel excluded). Note: `xcam` is AI-monitor *settings*, not detections (agy's spec was wrong). `home_flag` wired-network bit left out — unverified (set on Wi-Fi-only A1). `print.fun` dev-mode bit parsed → seeds BAM-35|
 | BAM-33 |Docker/Compose packaging (amd64 + arm64)|✅|HIGH|S|—|v0.5.0. `Dockerfile` (bookworm-slim, non-root, /data volume, healthcheck), `compose.example.yaml`, Install.md § Docker. amd64 verified healthy (238 MB); **arm64 unverified** (no buildx/QEMU on build host)|
 | BAM-34 |Health/readiness endpoints + SQLite backup & restore|✅|HIGH|M|—|v0.5.0. `/healthz`, `/readyz` (public, no device detail), `/api/system`; daily online backup → integrity_check → sha256, keep 7 (0600, contains Bambu token); `npm run backup:restore`; Docker HEALTHCHECK → /healthz|
-| BAM-35 |Per-printer connection capability matrix (cloud / LAN / Dev Mode / camera)|❌|MEDIUM|M|—|Gate for BAM-9, BAM-44 and any LAN adapter|
+| BAM-35 |Per-printer connection capability matrix (cloud / LAN / Dev Mode / camera)|❌|HIGH|M|—|Gate for BAM-9, BAM-44 and any LAN adapter. **Now the gate for printer control (BAM-28)** — needs a LAN MQTT adapter (`<ip>:8883`, user `bblp`, access code) for printers in Developer Mode|
 | BAM-36 |Telemetry rollups and tiered retention|❌|MEDIUM|L|BAM-34|Raw samples today: 5s active / 30s idle, 90-day delete|
 | BAM-37 |Prometheus `/metrics` (incl. MQTT connection count, last-message age)|✅|MEDIUM|S|BAM-34|v0.5.0. No client lib; admin-token guarded; bounded labels (device_id + name). Install.md § Monitoring has scrape config + suggested alerts|
 | BAM-38 |Spoolman integration|❌|MEDIUM|M|—|Proposed to supersede bespoke BAM-11 inventory|

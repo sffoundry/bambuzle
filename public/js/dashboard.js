@@ -1,3 +1,5 @@
+import { confirmDialog } from './confirm-dialog.js';
+
 export function renderPrinterCards(printers, config, dashFilters) {
   const container = document.getElementById('printer-cards');
   latestPrinters = printers;
@@ -204,6 +206,7 @@ function updateCardContent(card, deviceId, printer) {
 // last command result is kept per printer (shown for CMD_STATUS_MS) instead of living in the DOM.
 
 const CMD_STATUS_MS = 20000;
+const signatureRejected = {}; // deviceId -> true once the printer rejected a command as unsigned
 const cmdStatus = {}; // deviceId -> { text, tone, at, busy }
 let controlsWired = false;
 
@@ -215,6 +218,12 @@ function renderControls(deviceId, live, connected, gcodeState) {
   const locked = st?.busy || Boolean(st?.awaitingState);
   const showStatus = st && (locked || Date.now() - st.at < CMD_STATUS_MS);
   if (!connected || (!active && !showStatus)) return '';
+
+  // Bambu authorization firmware rejects unsigned commands ("mqtt message verify failed"); print.fun tells
+  // us up front (Dev mode off). Don't offer buttons that can't work — explain instead.
+  if (live.diagnostics?.developerMode === false || signatureRejected[deviceId]) {
+    return `<div class="ctl-unavailable" title="Bambu's authorization firmware only accepts commands signed by Bambu Studio / Handy / Bambu Connect. Bambuzle can control printers once it can connect over LAN with Developer Mode enabled (roadmap BAM-35).">Controls unavailable — this printer only accepts commands signed by Bambu's apps</div>`;
+  }
 
   const id = escapeHtml(deviceId);
   const dis = locked ? ' disabled' : '';
@@ -253,6 +262,7 @@ async function sendPrinterCommand(deviceId, command, param, rerender, live) {
     const text = res.ok ? `${command.replace('_', ' ')}: ${data.outcome || 'sent'}` : (data.error || `Failed (${res.status})`);
     const tone = !res.ok || data.ok === false ? 'error' : data.acknowledged ? 'ok' : 'warn';
     const awaitingState = res.ok && data.ok !== false && command !== 'set_speed' ? live?.gcodeState : null;
+    if (data.signatureRequired) signatureRejected[deviceId] = true;
     cmdStatus[deviceId] = { text, tone, at: Date.now(), busy: false, awaitingState };
   } catch {
     cmdStatus[deviceId] = { text: 'Network error — command may not have been sent', tone: 'error', at: Date.now(), busy: false };
@@ -268,31 +278,45 @@ function wireControls(container, getPrinter) {
     const printer = getPrinter(deviceId);
     if (card && printer) updateCardContent(card, deviceId, printer);
   };
-  container.addEventListener('click', (e) => {
+  container.addEventListener('click', async (e) => {
     const b = e.target.closest('[data-ctl]');
     if (!b || b.disabled) return;
     e.stopPropagation();
     const deviceId = b.dataset.device;
     const printer = getPrinter(deviceId);
     const name = printer?.db?.name || deviceId;
+    const live = printer?.live; // snapshot what the user saw when they clicked
     if (b.dataset.ctl === 'stop') {
-      const file = printer?.live?.subtaskName || printer?.live?.gcodeFile || 'the current print';
-      if (!window.confirm(`Stop "${file}" on ${name}?\n\nThis cancels the print and cannot be undone.`)) return;
+      const file = live?.subtaskName || live?.gcodeFile || 'the current print';
+      const yes = await confirmDialog({
+        title: `Stop print on ${name}?`,
+        message: `"${file}" will be cancelled. This cannot be undone.`,
+        confirmLabel: 'Stop print',
+        cancelLabel: 'Keep printing',
+        danger: true,
+      });
+      if (!yes) return;
     }
-    sendPrinterCommand(deviceId, b.dataset.ctl, null, rerenderFor(deviceId), printer?.live);
+    sendPrinterCommand(deviceId, b.dataset.ctl, null, rerenderFor(deviceId), live);
   });
-  container.addEventListener('change', (e) => {
+  container.addEventListener('change', async (e) => {
     const sel = e.target.closest('.ctl-speed');
     if (!sel) return;
     const deviceId = sel.dataset.device;
     const printer = getPrinter(deviceId);
+    const live = printer?.live;
     const label = sel.options[sel.selectedIndex]?.text || sel.value;
     // Explicit confirm: some browsers fire change on a single arrow key (review 2, #6)
-    if (!window.confirm(`Set print speed to ${label} on ${printer?.db?.name || deviceId}?`)) {
-      sel.value = String(printer?.live?.speedLevel ?? sel.value);
+    const yes = await confirmDialog({
+      title: 'Change print speed?',
+      message: `Set ${printer?.db?.name || deviceId} to ${label}.`,
+      confirmLabel: `Set ${label}`,
+    });
+    if (!yes) {
+      sel.value = String(live?.speedLevel ?? sel.value);
       return;
     }
-    sendPrinterCommand(deviceId, 'set_speed', Number(sel.value), rerenderFor(deviceId), printer?.live);
+    sendPrinterCommand(deviceId, 'set_speed', Number(sel.value), rerenderFor(deviceId), live);
   });
 }
 

@@ -1108,3 +1108,13 @@ a:hover { color: var(--text); }
 .theme-lcars .chart-header .chart-toggle-btn { border-color: var(--on-accent); background: transparent; }
 .theme-lcars .chart-header .chart-toggle-btn.active { background: var(--on-accent); color: var(--accent); }
 .theme-lcars .ams-trend-up, .theme-lcars .ams-trend-down, .theme-lcars .ams-spark { color: var(--on-accent); }
+
+/* In-app confirm dialog (replaces window.confirm) */
+.confirm-dialog { z-index: 2000; }
+.confirm-dialog-content { max-width: 420px; }
+.confirm-dialog-message { margin: 8px 0 16px; color: var(--text); white-space: pre-line; }
+.confirm-dialog .form-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.confirm-danger { background: var(--red); color: var(--on-accent); }
+
+/* Printer controls unavailable (authorization firmware) */
+.ctl-unavailable { margin-top: 8px; font-size: 10px; color: var(--text-dim); border-top: 1px dashed var(--border); padding-top: 6px; cursor: help; }
