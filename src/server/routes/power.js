@@ -87,7 +87,7 @@ function createPowerRouter({ powerMonitor, read = readPlug }) {
       return res.status(400).json({ error: errors.join('; ') });
     }
     const circuits = b.circuits?.map((c) => ({ name: c.name.trim(), limitW: Math.round(c.limitW) }));
-    const s = power.setSettings({ pricePerKwh: b.pricePerKwh, currency: b.currency?.trim(), circuits });
+    const s = power.setSettings({ pricePerKwh: b.pricePerKwh, currency: b.currency === null ? '' : b.currency?.trim(), circuits });
     audit(req, { action: 'power.settings.update', result: 'ok', detail: { pricePerKwh: s.pricePerKwh, currency: s.currency, circuits: s.circuits } });
     res.json(s);
   });
@@ -105,6 +105,9 @@ function createPowerRouter({ powerMonitor, read = readPlug }) {
     const saved = power.getPlug(id);
     const plug = plugFromBody(b, saved);
     const errors = validatePlug(plug);
+    for (const k of ['kind', 'url', 'entity', 'jsonPath', 'circuit']) {
+      if (b[k] !== undefined && b[k] !== null && typeof b[k] !== 'string') errors.push(`${k} must be a string`);
+    }
     if (plug.circuit && !CIRCUIT_RE.test(plug.circuit)) errors.push('circuit: 1–40 letters, digits, space . _ - ( )');
     if (typeof plug.enabled !== 'boolean') errors.push('enabled must be true or false');
     if (b.secret !== undefined && b.secret !== null && !(typeof b.secret === 'string' && b.secret.length <= 500)) errors.push('secret must be a string');
@@ -140,6 +143,9 @@ function createPowerRouter({ powerMonitor, read = readPlug }) {
     const plug = b ? plugFromBody(b, saved) : saved;
     if (!plug) return res.status(400).json({ error: 'No plug configured — fill in the plug details to test' });
     const errors = validatePlug(plug);
+    for (const k of ['kind', 'url', 'entity', 'jsonPath']) {
+      if (b?.[k] !== undefined && b[k] !== null && typeof b[k] !== 'string') errors.push(`${k} must be a string`);
+    }
     if (errors.length) return res.status(400).json({ error: errors.join('; ') });
     const sameUrl = saved && saved.url === plug.url;
     plug.secret = b?.secret || (sameUrl ? saved.secret : null);

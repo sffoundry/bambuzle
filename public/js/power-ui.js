@@ -127,7 +127,7 @@ export async function openPlugDialog(deviceId, printerName) {
     box.append(
       el('p', { class: 'conn-intro', text: 'Read-only: Bambuzle only reads the plug\'s power meter. It never switches the plug.' }),
       field('Plug type', kind),
-      field('Plug address', url, 'Its local http:// address. A password can go in the URL (http://user:pass@…); it is never shown again.'),
+      field('Plug address', url, 'Its local http:// address. Plug login (Shelly Gen1, Tasmota): http://user:pass@… — never shown again. Shelly Gen2+ device passwords are not supported yet.'),
       fChannel, fEntity, fPath, fSecret,
       field('Circuit', circuit, circuits.length ? 'For circuit-limit alerts.' : 'Add circuits under Configuration → Power settings to get circuit-limit alerts.'),
       el('label', { class: 'conn-inline' }, enabled, el('span', { text: 'Read this plug' })),

@@ -332,8 +332,8 @@ If a printer is powered through a smart plug with a power meter, Bambuzle can re
 
 | Plug | Type to choose | Address example |
 |---|---|---|
-| Shelly Plus Plug S, Plus 1PM, Pro, Gen3/Gen4 | Shelly Plus / Pro / Gen3+ | `http://10.0.0.20` |
-| Shelly Plug / Plug S (Gen1), Shelly 1PM | Shelly Gen1 | `http://10.0.0.20` |
+| Shelly Plus Plug S, Plus 1PM, Pro, Gen3/Gen4 | Shelly Plus / Pro / Gen3+ | `http://10.0.0.20` (device password must be off — Gen2+ uses Digest auth, not supported yet) |
+| Shelly Plug / Plug S (Gen1), Shelly 1PM | Shelly Gen1 | `http://10.0.0.20` (with a login: `http://admin:PASSWORD@10.0.0.20`) |
 | Any plug running Tasmota with an energy sensor (e.g. Sonoff S31, Athom) | Tasmota | `http://10.0.0.20` (web password: `http://admin:PASSWORD@10.0.0.20`) |
 | Anything already in Home Assistant (Kasa, Tapo, Zigbee plugs…) | Home Assistant sensor | `http://homeassistant.local:8123` + entity `sensor.…_power` + a long-lived access token |
 | Other plugs with a local JSON API | Other — JSON over HTTP | the full URL + a dotted path to the watts value |

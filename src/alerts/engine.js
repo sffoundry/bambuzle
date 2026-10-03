@@ -168,7 +168,7 @@ class AlertEngine {
     if (!p?.ok) return null;
     const msgs = [];
     const gate = (key, value, limit) => {
-      if (limit == null || !Number.isFinite(limit)) return false;
+      if (limit == null || !Number.isFinite(limit)) { delete this.powerArmed[key]; return false; } // limit removed → re-arm
       const armed = this.powerArmed[key] !== false;
       if (value > limit && armed) { this.powerArmed[key] = false; return true; }
       if (!armed && value < limit * 0.9) this.powerArmed[key] = true;

@@ -1,7 +1,8 @@
 'use strict';
 
 // BAM-18: smart-plug config, per-minute power samples, settings (price, circuits), job energy.
-// The plug secret (HA token / Tasmota password / bearer) is write-only: API views carry hasSecret only.
+// The plug secret (HA token / bearer) and any user:pass in the URL are write-only: API views carry
+// hasSecret and a credential-free URL only.
 // Self-creating tables (same pattern as audit / ams-humidity).
 
 const { getDb } = require('./database');
@@ -96,6 +97,11 @@ function setSettings({ pricePerKwh, currency, circuits }) {
   return getSettings();
 }
 
+/** One stored minute bucket (to resume it after a restart instead of overwriting it). */
+function getMinute(deviceId, minute) {
+  return db().prepare('SELECT avg_w, max_w, wh FROM power_samples WHERE device_id = ? AND minute = ?').get(deviceId, minute) || null;
+}
+
 /** Write (or overwrite) one minute bucket. */
 function upsertMinute(deviceId, minute, { avgW, maxW, wh }) {
   db().prepare(`INSERT INTO power_samples (device_id, minute, avg_w, max_w, wh) VALUES (?, ?, ?, ?, ?)
@@ -109,11 +115,26 @@ function getHistory(deviceId, hours = 24) {
     WHERE device_id = ? AND minute >= datetime('now', ?) ORDER BY minute`).all(deviceId, `-${h} hours`);
 }
 
-/** Energy between two UTC 'YYYY-MM-DD HH:MM:SS' times (minute buckets overlapping the window). */
+/**
+ * Energy between two UTC 'YYYY-MM-DD HH:MM:SS' times. The partly covered first and last minutes count
+ * in proportion to how much of them the window covers, so back-to-back jobs don't both get the shared
+ * minute, and idle draw before the start isn't billed to the job (review, batch 4 #3).
+ */
 function energyBetween(deviceId, startedAt, endedAt) {
-  const r = db().prepare(`SELECT SUM(wh) AS wh, COUNT(*) AS n FROM power_samples
-    WHERE device_id = ? AND minute >= strftime('%Y-%m-%d %H:%M:00', ?) AND minute <= ?`).get(deviceId, startedAt, endedAt);
-  return r.n ? r.wh : null;
+  const toMs = (t) => Date.parse(`${String(t).replace(' ', 'T')}Z`);
+  const start = toMs(startedAt);
+  const end = toMs(endedAt);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return null;
+  const rows = db().prepare(`SELECT minute, wh FROM power_samples
+    WHERE device_id = ? AND minute >= strftime('%Y-%m-%d %H:%M:00', ?) AND minute <= ?`).all(deviceId, startedAt, endedAt);
+  if (!rows.length) return null;
+  let wh = 0;
+  for (const r of rows) {
+    const m0 = toMs(r.minute);
+    const covered = Math.max(0, Math.min(end, m0 + 60000) - Math.max(start, m0));
+    wh += r.wh * (covered / 60000);
+  }
+  return wh;
 }
 
 /** Store energy + cost on a finished job. Returns { energyWh, energyCost } or null without data. */
@@ -142,5 +163,5 @@ function deleteOldSamples(days) {
 
 module.exports = {
   getPlug, listPlugs, setPlug, deletePlug, publicPlug, getSettings, setSettings,
-  upsertMinute, getHistory, energyBetween, recordJobEnergy, energyTotals, deleteOldSamples,
+  upsertMinute, getMinute, getHistory, energyBetween, recordJobEnergy, energyTotals, deleteOldSamples,
 };

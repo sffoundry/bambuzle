@@ -5,11 +5,14 @@
 //
 // Supported (local APIs, no cloud):
 //   shelly-gen2    Shelly Plus / Pro / Gen3 / Gen4 plugs:  GET <url>/rpc/Switch.GetStatus?id=<channel>
+//                  (Gen2+ password protection uses HTTP Digest auth, which is not supported: leave it off)
 //   shelly-gen1    Shelly Plug / Plug S / 1PM (Gen1):      GET <url>/status   (meters[<channel>])
 //   tasmota        Tasmota with an energy sensor:          GET <url>/cm?cmnd=Status%2010
 //   homeassistant  any HA power sensor (W or kW):          GET <url>/api/states/<entity>  (Bearer token)
 //   http-json      anything returning JSON:                GET <url>, value at <jsonPath>, in watts
 //
+// Passwords: http://user:pass@host in the URL → HTTP Basic (Shelly Gen1, generic) or user/password
+// query parameters (Tasmota). A saved secret is sent as a Bearer token (Home Assistant, generic JSON).
 // Safety: http(s) only, no redirects followed, 3 s timeout, 64 KB response cap. Errors never echo the
 // URL or response body (URLs can embed a password; bodies can hold anything).
 
@@ -40,13 +43,24 @@ function validatePlug(p) {
 
 function requestFor(p) {
   const u = baseUrl(p.url);
+  // fetch() refuses URLs with user:pass@ — move the credentials out of the URL (review, batch 4 #1):
+  // Tasmota takes them as user/password query parameters, everything else as HTTP Basic auth.
+  const user = decodeURIComponent(u.username);
+  const pass = decodeURIComponent(u.password);
+  const hasCreds = Boolean(user || pass);
+  u.username = '';
+  u.password = '';
   const root = u.href.replace(/\/+$/, '');
   const ch = p.channel ?? 0;
   const headers = { Accept: 'application/json' };
+  if (hasCreds && p.kind !== 'tasmota') headers.Authorization = `Basic ${Buffer.from(`${user}:${pass}`).toString('base64')}`;
   switch (p.kind) {
     case 'shelly-gen2': return { url: `${root}/rpc/Switch.GetStatus?id=${ch}`, headers };
     case 'shelly-gen1': return { url: `${root}/status`, headers };
-    case 'tasmota': return { url: `${root}/cm?cmnd=Status%2010`, headers };
+    case 'tasmota': {
+      const auth = hasCreds ? `&user=${encodeURIComponent(user || 'admin')}&password=${encodeURIComponent(pass)}` : '';
+      return { url: `${root}/cm?cmnd=Status%2010${auth}`, headers };
+    }
     case 'homeassistant': return { url: `${root}/api/states/${encodeURIComponent(p.entity)}`, headers: { ...headers, ...(p.secret ? { Authorization: `Bearer ${p.secret}` } : {}) } };
     case 'http-json': return { url: u.href, headers: { ...headers, ...(p.secret ? { Authorization: `Bearer ${p.secret}` } : {}) } };
     default: throw new PlugError('Unknown plug kind');
@@ -112,10 +126,17 @@ async function readPlug(p, { fetchFn = fetch, timeoutMs = TIMEOUT_MS } = {}) {
     } catch (err) {
       throw new PlugError(err.name === 'AbortError' ? `No answer within ${timeoutMs / 1000}s` : `Can't reach the plug (${err.cause?.code || err.code || 'network error'})`);
     }
-    if (res.status >= 300 && res.status < 400) throw new PlugError('Plug answered with a redirect — use its direct address');
-    if (res.status === 401 || res.status === 403) throw new PlugError('Plug refused the request — check the token / password');
-    if (!res.ok) throw new PlugError(`Plug answered HTTP ${res.status}`);
-    const text = await readCapped(res);
+    const fail = (msg) => { res.body?.cancel?.().catch(() => {}); return new PlugError(msg); }; // free the connection
+    if (res.status >= 300 && res.status < 400) throw fail('Plug answered with a redirect — use its direct address');
+    if (res.status === 401 || res.status === 403) throw fail('Plug refused the request — check the password / token');
+    if (!res.ok) throw fail(`Plug answered HTTP ${res.status}`);
+    let text;
+    try {
+      text = await readCapped(res);
+    } catch (err) {
+      if (err instanceof PlugError) throw err;
+      throw new PlugError(err.name === 'AbortError' ? `Plug stopped answering within ${timeoutMs / 1000}s` : 'Plug response could not be read');
+    }
     let body;
     try { body = JSON.parse(text); } catch { throw new PlugError('Plug did not answer with JSON — check the plug type'); }
     return parseReading(p, body);

@@ -119,10 +119,11 @@ test('job energy and cost come from the minute samples inside the job window', (
   }
   power.upsertMinute('PWR000003', '2026-10-03 09:01:00', { avgW: 5, maxW: 5, wh: 0.1 }); // after: excluded
   const r = power.recordJobEnergy(jobId);
-  assert.equal(r.energyWh, 122); // 61 minute buckets 08:00 .. 09:00
+  // 59 full minutes (08:01..08:59) + 30/60 of 08:00 + 10/60 of 09:00, at 2 Wh each
+  assert.ok(Math.abs(r.energyWh - (118 + 1 + 2 / 6)) < 1e-9, String(r.energyWh));
   const job = getDb().prepare('SELECT energy_wh, energy_cost FROM print_jobs WHERE id = ?').get(jobId);
-  assert.equal(job.energy_wh, 122);
-  assert.equal(job.energy_cost, 0.0366);
+  assert.equal(job.energy_wh, 119.3);
+  assert.equal(job.energy_cost, 0.0358);
   assert.equal(power.energyTotals(null).jobs >= 1, true);
 });
 
@@ -220,4 +221,99 @@ test('monitor: a poll requested while one is running is not dropped (plug saved 
   await second;
   assert.equal(calls, 2, 'the queued poll ran once the first finished');
   power.deletePlug('PWR000005');
+});
+
+// ─── Review fixes (batch 4) ───
+
+test('review #1: credentials in the plug URL → Basic auth (Shelly Gen1) / query params (Tasmota), never in the fetched URL', async () => {
+  const seen = [];
+  const server = http.createServer((req, res) => {
+    seen.push({ url: req.url, auth: req.headers.authorization || null });
+    if (req.url.startsWith('/status')) {
+      if (req.headers.authorization !== `Basic ${Buffer.from('admin:p@ss w0rd').toString('base64')}`) { res.writeHead(401); return res.end(); }
+      return res.end(JSON.stringify({ meters: [{ power: 12, total: 60 }] }));
+    }
+    if (req.url.startsWith('/cm')) {
+      const q = new URL(req.url, 'http://x').searchParams;
+      if (q.get('user') !== 'admin' || q.get('password') !== 'p@ss w0rd') { res.writeHead(401); return res.end(); }
+      return res.end(JSON.stringify({ StatusSNS: { ENERGY: { Power: 34 } } }));
+    }
+    res.writeHead(404); res.end();
+  });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const port = server.address().port;
+  const creds = encodeURIComponent('p@ss w0rd');
+  try {
+    assert.equal((await readPlug({ kind: 'shelly-gen1', url: `http://admin:${creds}@127.0.0.1:${port}` })).watts, 12);
+    assert.equal((await readPlug({ kind: 'tasmota', url: `http://admin:${creds}@127.0.0.1:${port}` })).watts, 34);
+    assert.equal(seen.at(-1).auth, null, 'Tasmota gets query params, not a header');
+    await assert.rejects(readPlug({ kind: 'shelly-gen1', url: `http://admin:wrong@127.0.0.1:${port}` }), /refused/);
+  } finally {
+    server.close();
+  }
+});
+
+test('review #5: a body that stalls past the timeout is a PlugError', async () => {
+  const sockets = [];
+  const server = http.createServer((req, res) => { res.writeHead(200); res.write('{"apower":'); sockets.push(res); });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  try {
+    await assert.rejects(readPlug({ kind: 'shelly-gen2', url: `http://127.0.0.1:${server.address().port}` }, { timeoutMs: 300 }),
+      (e) => e instanceof PlugError && /stopped answering/.test(e.message));
+  } finally {
+    for (const s of sockets) s.destroy();
+    server.close();
+  }
+});
+
+test('review #2: after a restart the current minute is resumed, not overwritten', async () => {
+  queries.upsertPrinter({ deviceId: 'PWR000006', name: 'P6', model: 'A1' });
+  power.setPlug('PWR000006', { kind: 'shelly-gen2', url: 'http://10.0.0.27' });
+  const only = (p) => p.deviceId === 'PWR000006';
+  let t = Date.parse('2026-10-03T12:00:00Z');
+  const before = createPowerMonitor({ log, now: () => t, read: async (p) => ({ watts: only(p) ? 600 : 1 }) });
+  for (let i = 0; i < 4; i++) { await before.pollOnce(); t += 15000; } // 45 s at 600 W = 7.5 Wh
+  const row1 = power.getMinute('PWR000006', '2026-10-03 12:00:00');
+  assert.ok(Math.abs(row1.wh - 7.5) < 1e-6);
+  t = Date.parse('2026-10-03T12:00:50Z');
+  const after = createPowerMonitor({ log, now: () => t, read: async (p) => ({ watts: only(p) ? 600 : 1 }) }); // "restart"
+  await after.pollOnce();
+  t += 5000;
+  await after.pollOnce(); // +5 s at 600 W
+  const row2 = power.getMinute('PWR000006', '2026-10-03 12:00:00');
+  assert.ok(Math.abs(row2.wh - (7.5 + 600 * 5 / 3600)) < 1e-3, String(row2.wh));
+  assert.equal(row2.max_w, 600);
+  power.deletePlug('PWR000006');
+});
+
+test('review #3: back-to-back jobs split the shared minute instead of both counting it', () => {
+  queries.upsertPrinter({ deviceId: 'PWR000007', name: 'P7', model: 'A1' });
+  for (const [m, wh] of [['11:00', 10], ['11:01', 10], ['11:02', 10]]) power.upsertMinute('PWR000007', `2026-10-03 ${m}:00`, { avgW: 600, maxW: 600, wh });
+  const a = power.energyBetween('PWR000007', '2026-10-03 11:00:05', '2026-10-03 11:01:10');
+  const b = power.energyBetween('PWR000007', '2026-10-03 11:01:20', '2026-10-03 11:02:30');
+  assert.ok(Math.abs(a - (10 * 55 / 60 + 10 * 10 / 60)) < 1e-9);
+  assert.ok(Math.abs(b - (10 * 40 / 60 + 10 * 30 / 60)) < 1e-9);
+  assert.ok(a + b <= 30, 'never more than what was measured');
+  assert.equal(power.energyBetween('PWR000007', '2026-10-03 11:05:00', '2026-10-03 11:04:00'), null);
+});
+
+test('review #4 + extras: non-string plug fields rejected; currency null clears; removing a circuit limit re-arms its alert', async () => {
+  queries.upsertPrinter({ deviceId: 'PWR000008', name: 'P8', model: 'A1' });
+  const srv = await startServer({ deps: { powerMonitor: { snapshot: () => null, circuitStatus: () => [], pollOnce: async () => {} }, plugReader: async () => ({ watts: 1 }) } });
+  const call = (method, url, body) => fetch(srv.baseUrl + url, { method, headers: { ...json, ...authHeaders }, body: JSON.stringify(body) });
+  try {
+    assert.equal((await call('PUT', '/api/printers/PWR000008/power-plug', { kind: 'shelly-gen2', url: ['http://10.0.0.28'] })).status, 400);
+    assert.equal((await call('PUT', '/api/printers/PWR000008/power-plug', { kind: ['shelly-gen2'], url: 'http://10.0.0.28' })).status, 400);
+    assert.equal((await call('POST', '/api/printers/PWR000008/power-plug/test', { kind: 'shelly-gen2', url: ['http://10.0.0.28'] })).status, 400);
+    await call('PUT', '/api/power/settings', { currency: 'EUR' });
+    assert.equal((await (await call('PUT', '/api/power/settings', { currency: null })).json()).currency, '');
+  } finally {
+    await srv.close();
+  }
+  const engine = new AlertEngine(log, { notifiers: {} });
+  const st = (cw, limit) => ({ power: { ok: true, watts: 10, circuit: 'X', circuitWatts: cw, circuitLimitW: limit } });
+  const check = (s) => engine._checkCondition({ id: 88, condition_type: 'power_limit', condition_config: {} }, 'D', s, {});
+  assert.ok(check(st(2000, 1500)));
+  assert.equal(check(st(2000, null)), null); // limit removed
+  assert.ok(check(st(2000, 1500)), 'limit re-added while still over → alerts again');
 });

@@ -31,7 +31,13 @@ function createPowerMonitor({ log, read = readPlug, now = Date.now, onReading = 
     let b = buckets.get(deviceId);
     const minute = minuteKey(t);
     if (b && b.minute !== minute) { flush(deviceId, b); b = { ...b, minute, sumW: 0, n: 0, maxW: 0, wh: 0 }; }
-    if (!b) b = { minute, sumW: 0, n: 0, maxW: 0, wh: 0, lastAt: null, lastW: null };
+    if (!b) {
+      // First reading since start-up: resume this minute's stored row rather than overwrite it (review #2)
+      const row = power.getMinute(deviceId, minute);
+      b = row
+        ? { minute, sumW: row.avg_w, n: 1, maxW: row.max_w, wh: row.wh, lastAt: null, lastW: null }
+        : { minute, sumW: 0, n: 0, maxW: 0, wh: 0, lastAt: null, lastW: null };
+    }
     if (b.lastAt != null && t - b.lastAt <= MAX_GAP_MS) b.wh += ((b.lastW + watts) / 2) * ((t - b.lastAt) / 3600e3); // trapezoid
     b.sumW += watts;
     b.n += 1;
