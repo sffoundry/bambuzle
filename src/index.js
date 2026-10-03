@@ -12,6 +12,7 @@ const { getActiveTrayMaterial } = require('./utils/material');
 const { jobEndState, JOB_END_CANCELLED } = require('./utils/job-state');
 const amsHumidity = require('./db/ams-humidity');
 const { reconcileHms } = require('./db/hms-active');
+const rollups = require('./db/rollups');
 const auditLog = require('./db/audit');
 const printerConnections = require('./db/printer-connections');
 const { chooseTransport, computeCapabilities } = require('./printers/transport-policy');
@@ -224,7 +225,15 @@ function startCronJobs() {
   const cleanupJob = new Cron('0 3 * * *', () => {
     const days = config.retention.days;
     log.info({ days }, 'Running data retention cleanup');
-    const samplesDeleted = queries.deleteOldSamples(days);
+    // Raw samples → hourly rollups (same transaction), then prune old rollups (BAM-36)
+    let compaction = { rolledHours: 0, deletedRaw: 0 };
+    try {
+      compaction = rollups.compactSamples(config.retention.rawDays);
+    } catch (err) {
+      log.error({ err: err.message }, 'Sample rollup failed — raw samples kept');
+    }
+    const rollupsDeleted = rollups.deleteOldRollups(config.retention.rollupDays);
+    const samplesDeleted = { changes: compaction.deletedRaw };
     const eventsDeleted = queries.deleteOldEvents(days);
     const layersDeleted = queries.deleteOldLayerTransitions(days);
     const anomaliesDeleted = queries.deleteOldTempAnomalies(days);
@@ -233,6 +242,8 @@ function startCronJobs() {
     const auditDeleted = auditLog.deleteOldAudit(config.audit.retentionDays); // own retention (BAM-41)
     log.info({
       samplesDeleted: samplesDeleted.changes,
+      rolledHours: compaction.rolledHours,
+      rollupsDeleted,
       eventsDeleted: eventsDeleted.changes,
       layersDeleted: layersDeleted.changes,
       anomaliesDeleted: anomaliesDeleted.changes,

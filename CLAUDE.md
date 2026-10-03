@@ -53,6 +53,7 @@ Browser
 | `src/server/routes/system.js` | `/healthz`, `/readyz`, `/api/system` |
 | `src/server/websocket.js` | WebSocket broadcast to dashboard |
 | `src/server/routes/metrics.js` | `GET /metrics` Prometheus exposition, admin-token guarded (BAM-37) |
+| `src/db/rollups.js` | Hourly telemetry rollups + tiered retention; `getHistory` (rollups + raw, bucketed to the limit) backs `/history` (BAM-36) |
 | `src/db/ams-humidity.js` | AMS humidity history (self-creating table), recorded from `state.diagnostics.amsHumidity` (BAM-43) |
 | `src/alerts/engine.js` | Alert condition evaluation (incl. `print_error`, BAM-15) |
 | `src/alerts/notifiers/` | console, webhook, `push.js` (ntfy JSON-publish, Pushover, Telegram) |

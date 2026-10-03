@@ -46,6 +46,9 @@ const config = {
   // Data retention (days)
   retention: {
     days: fileConfig.retention?.days ?? 90,
+    // BAM-36: raw samples are rolled into hourly averages after rawDays; hourly rows kept rollupDays
+    rawDays: Math.max(1, parseInt(process.env.BAMBUZLE_RAW_RETENTION_DAYS ?? fileConfig.retention?.rawDays ?? 14, 10) || 14),
+    rollupDays: Math.max(1, parseInt(process.env.BAMBUZLE_ROLLUP_RETENTION_DAYS ?? fileConfig.retention?.rollupDays ?? 365, 10) || 365),
   },
 
   // Operator audit trail (BAM-41) — kept much longer than telemetry; 0 = keep forever

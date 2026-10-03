@@ -142,7 +142,9 @@ Optional tuning via `config.json` in the project root:
     "idleIntervalSec": 30
   },
   "retention": {
-    "days": 90
+    "days": 90,
+    "rawDays": 14,
+    "rollupDays": 365
   }
 }
 ```
@@ -156,6 +158,8 @@ The dashboard and API are protected by a single shared **admin token**. Without 
 - **Scripts / API clients:** send `Authorization: Bearer <token>`.
 - **Wall displays:** `BAMBUZLE_PUBLIC_READ=true` lets anyone view (read-only API and live updates) without the token. Changes still require it.
 - **Opt out:** `BAMBUZLE_AUTH=off` restores the old fully open behavior. Only do this on a network you fully trust.
+
+Raw telemetry is kept `rawDays` (default 14) and then rolled into hourly averages kept `rollupDays` (default 365); `days` still governs events and anomaly records. Env overrides: `BAMBUZLE_RAW_RETENTION_DAYS`, `BAMBUZLE_ROLLUP_RETENTION_DAYS`.
 
 ## Run
 

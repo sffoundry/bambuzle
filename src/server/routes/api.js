@@ -5,6 +5,8 @@ const queries = require('../../db/queries');
 const { planCommand } = require('../printer-commands');
 const { getAmsHumidityHistory } = require('../../db/ams-humidity');
 const { triageForJob, triageRecentJobs } = require('../../db/triage');
+const { getHistory } = require('../../db/rollups');
+const config = require('../../config');
 const { getAuthStatus } = require('../../bambu/auth');
 const { audit } = require('../audit');
 
@@ -76,11 +78,13 @@ function createApiRouter(printerManager, { getCloudAuthStatus = getAuthStatus } 
   // GET /api/printers/:id/history — time-series samples
   router.get('/printers/:id/history', (req, res) => {
     const { from, to, limit } = req.query;
-    const samples = queries.getSamples(req.params.id, {
+    // Raw samples + hourly rollups for older ranges; windows larger than `limit` are time-bucketed
+    // instead of truncated (BAM-36 — the old LIMIT dropped the most recent hours of a busy day)
+    const samples = getHistory(req.params.id, {
       from: from || undefined,
       to: to || undefined,
       limit: clampLimit(limit, 5000, MAX_LIMIT.samples),
-    });
+    }, { rawDays: config.retention.rawDays });
     res.json(samples);
   });
 

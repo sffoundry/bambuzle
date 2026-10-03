@@ -4,7 +4,9 @@
     "idleIntervalSec": 30
   },
   "retention": {
-    "days": 90
+    "days": 90,
+    "rawDays": 14,
+    "rollupDays": 365
   },
   "audit": {
     "retentionDays": 365
