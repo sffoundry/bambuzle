@@ -1075,7 +1075,7 @@ main { padding: 12px; }
 .theme-radioface .semi-gauge-value { color: var(--accent); text-shadow: 0 0 6px rgba(0, 229, 255, 0.45); }
 
 /* Accessible: larger text, stronger borders, obvious focus */
-.high-contrast { font-size: 15px; }
+.high-contrast body { font-size: 15px; }
 .high-contrast .printer-card,
 .high-contrast .chart-panel,
 .high-contrast .ams-unit,

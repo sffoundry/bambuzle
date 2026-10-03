@@ -22,9 +22,12 @@ let nextSeq = Math.floor(Math.random() * 1e6);
 /**
  * @returns {{ status: number, error: string } | { cmd: object, label: string }}
  */
-function planCommand(command, param, liveState) {
+function planCommand(command, param, liveState, expected = {}) {
+  // Own-property lookup on a string only: "toString"/"__proto__" or ["pause"] must not resolve (review 2, #1)
+  if (typeof command !== 'string' || !Object.hasOwn(COMMANDS, command)) {
+    return { status: 400, error: 'Unknown command' };
+  }
   const spec = COMMANDS[command];
-  if (!spec) return { status: 400, error: `Unknown command: ${command}` };
 
   let level;
   if (command === 'set_speed') {
@@ -37,6 +40,13 @@ function planCommand(command, param, liveState) {
   const state = liveState?.gcodeState || GCODE_STATE.UNKNOWN;
   if (!spec.allowed.includes(state)) {
     return { status: 409, error: `Cannot ${command.replace('_', ' ')} while printer is ${state}` };
+  }
+  // Stale-UI guard (review 2, #2): the client says what it was looking at; refuse if the printer moved on
+  if (expected.state != null && expected.state !== state) {
+    return { status: 409, error: `Printer state changed to ${state} — check the card and try again` };
+  }
+  if (expected.taskId != null && String(expected.taskId) !== String(liveState?.taskId ?? '')) {
+    return { status: 409, error: 'A different print is now running — check the card and try again' };
   }
 
   nextSeq = (nextSeq + 1) % 1e9;

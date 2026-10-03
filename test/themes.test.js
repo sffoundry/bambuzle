@@ -13,8 +13,7 @@ function stubBrowser() {
   const store = {};
   globalThis.localStorage = { getItem: (k) => store[k] ?? null, setItem: (k, v) => { store[k] = String(v); } };
   globalThis.document = {
-    documentElement: { style: { setProperty: (k, v) => { props[k] = v; } }, dataset: {} },
-    body: { classList: { add: (c) => classes.add(c), remove: (c) => classes.delete(c) } },
+    documentElement: { style: { setProperty: (k, v) => { props[k] = v; } }, dataset: {}, classList: { add: (c) => classes.add(c), remove: (c) => classes.delete(c) } },
   };
   globalThis.window = { dispatchEvent: (e) => events.push(e) };
   globalThis.CustomEvent = class { constructor(type, init) { this.type = type; this.detail = init?.detail; } };
@@ -45,6 +44,7 @@ test('every theme defines the same variables as :root, and applyTheme swaps clas
   assert.ok(!env.classes.has('theme-lcars'), 'previous class removed');
   assert.ok(env.classes.has('high-contrast'));
   assert.equal(env.store.bambuzle_theme, 'accessibility');
+  assert.equal(JSON.parse(env.store.bambuzle_theme_cache).cls, 'high-contrast', 'boot cache written');
   assert.equal(env.events.at(-1).type, 'bambuzle:themechange');
   assert.equal(env.props['--accent'], '#00ccff');
 

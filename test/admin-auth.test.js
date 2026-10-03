@@ -187,3 +187,14 @@ test('database file is owner-only — finding 9', () => {
   require('../src/db/database').getDb();
   assert.equal(fs.statSync(path.join(dataDir, 'bambuzle.db')).mode & 0o077, 0);
 });
+
+test('cross-origin writes are refused even with auth off — review 2 #8', async () => {
+  const srv = await startServer({ auth: { mode: 'off' } });
+  try {
+    const r = await fetch(`${srv.baseUrl}/api/auth/logout`, { method: 'POST', headers: { origin: 'http://evil.example' } });
+    assert.equal(r.status, 403);
+    assert.equal((await fetch(`${srv.baseUrl}/api/printers`, { headers: { origin: 'http://evil.example' } })).status, 200, 'reads unaffected');
+  } finally {
+    await srv.close();
+  }
+});

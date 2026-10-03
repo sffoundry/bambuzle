@@ -52,6 +52,7 @@ function toSqlDatetime(d) {
  * @param {object} printerManager — object with getLiveStates(), getClient(deviceId) methods
  */
 function createApiRouter(printerManager, { getCloudAuthStatus = getAuthStatus } = {}) {
+  const commandsInFlight = new Set(); // deviceIds with a command awaiting the printer's reply
   const router = express.Router();
 
   // GET /api/printers — all printers with live state
@@ -153,35 +154,53 @@ function createApiRouter(printerManager, { getCloudAuthStatus = getAuthStatus } 
   // Admin-token guarded (BAM-30); state-gated; every attempt is recorded as a 'command' event.
   router.post('/printers/:id/command', async (req, res) => {
     const deviceId = req.params.id;
-    const { command, param } = req.body || {};
+    const { command, param, expectState, expectTaskId } = req.body || {};
+    const commandLabel = typeof command === 'string' ? command.slice(0, 32) : '(invalid)';
 
     const record = (severity, message) => {
       try {
-        queries.insertEvent({ deviceId, eventType: 'command', severity, code: String(command || ''), message });
+        queries.insertEvent({ deviceId, eventType: 'command', severity, code: commandLabel, message });
       } catch { /* unknown printer id — FK; nothing to audit against */ }
     };
 
-    if (getCloudAuthStatus() !== 'authenticated') {
-      return res.status(503).json({ error: 'Server is not logged into BambuLab Cloud' });
-    }
-    const client = printerManager.getClient(deviceId);
-    if (!client || !printerManager.isConnected(deviceId)) {
-      return res.status(404).json({ error: 'Printer not found or not connected' });
-    }
+    try {
+      if (getCloudAuthStatus() !== 'authenticated') {
+        return res.status(503).json({ error: 'Server is not logged into BambuLab Cloud' });
+      }
+      const client = printerManager.getClient(deviceId);
+      if (!client || !printerManager.isConnected(deviceId)) {
+        return res.status(404).json({ error: 'Printer not found or not connected' });
+      }
+      // One command in flight per printer (double clicks, two tabs) — review 2, #7
+      if (commandsInFlight.has(deviceId)) {
+        return res.status(429).json({ error: 'Another command for this printer is still in progress' });
+      }
 
-    const plan = planCommand(command, param, printerManager.getLiveStates()[deviceId]);
-    if (plan.error) {
-      record('warning', `Rejected command "${command}": ${plan.error}`);
-      return res.status(plan.status).json({ error: plan.error });
-    }
+      const plan = planCommand(command, param, printerManager.getLiveStates()[deviceId],
+        { state: expectState, taskId: expectTaskId });
+      if (plan.error) {
+        record('warning', `Rejected command "${commandLabel}": ${plan.error}`);
+        return res.status(plan.status).json({ error: plan.error });
+      }
 
-    const reply = await client.sendCommandAwaitReply(plan.cmd);
-    const failed = reply.acknowledged && reply.result && String(reply.result).toLowerCase() !== 'success';
-    const outcome = !reply.sent ? 'not sent (printer offline)'
-      : !reply.acknowledged ? 'sent, no confirmation from printer'
-        : failed ? `printer rejected it: ${reply.reason || reply.result}` : 'confirmed by printer';
-    record(failed || !reply.sent ? 'warning' : 'info', `Command ${plan.label}: ${outcome}`);
-    res.status(reply.sent ? 200 : 502).json({ ok: reply.sent && !failed, ...reply, outcome });
+      commandsInFlight.add(deviceId);
+      let reply;
+      try {
+        reply = await client.sendCommandAwaitReply(plan.cmd);
+      } finally {
+        commandsInFlight.delete(deviceId);
+      }
+      const failed = reply.acknowledged && reply.result && String(reply.result).toLowerCase() !== 'success';
+      const outcome = !reply.sent ? 'not sent (printer offline)'
+        : !reply.acknowledged ? 'sent, no confirmation from printer'
+          : failed ? `printer rejected it: ${reply.reason || reply.result}` : 'confirmed by printer';
+      record(failed || !reply.sent ? 'warning' : 'info', `Command ${plan.label}: ${outcome}`);
+      return res.status(reply.sent ? 200 : 502).json({ ok: reply.sent && !failed, ...reply, outcome });
+    } catch (err) {
+      // Express 4 doesn't catch async handler errors; never let one take the process down (review 2, #1)
+      record('error', `Command "${commandLabel}" failed: ${err.message}`);
+      if (!res.headersSent) res.status(500).json({ error: 'Command failed' });
+    }
   });
 
   // GET /api/printers/:id/debug/mqtt — raw MQTT merged state for diagnostics

@@ -18,6 +18,10 @@ class AlertEngine {
     };
     // Track previous state per printer for transition detection
     this.prevStates = {};
+    // Per rule+printer: the state that rule last actually evaluated. Rules in cooldown don't advance it,
+    // so an edge that happens during cooldown still fires afterwards (review 2, #4).
+    this.rulePrev = {}; // `${ruleId}/${deviceId}` -> state
+    this.humidityArmed = {}; // `${ruleId}/${deviceId}/${amsId}` -> false once alerted, re-armed below threshold - hysteresis
     // Track progress timestamps for stall detection
     this.progressTimestamps = {}; // { deviceId: { progress, ts } }
   }
@@ -37,7 +41,10 @@ class AlertEngine {
       try {
         if (this._isInCooldown(rule)) continue;
 
-        const triggered = this._checkCondition(rule, deviceId, state, prev);
+        const key = `${rule.id}/${deviceId}`;
+        const rulePrev = this.rulePrev[key] || prev;
+        this.rulePrev[key] = { ...state };
+        const triggered = this._checkCondition(rule, deviceId, state, rulePrev);
         if (triggered) {
           this._fireAlert(rule, deviceId, printerName, triggered);
         }
@@ -81,7 +88,7 @@ class AlertEngine {
       case 'print_error':
         return this._checkPrintError(state, prev);
       case 'ams_humidity':
-        return this._checkAmsHumidity(state, prev, config);
+        return this._checkAmsHumidity(state, config, `${rule.id}/${deviceId}`);
       default:
         return null;
     }
@@ -117,15 +124,28 @@ class AlertEngine {
   }
 
   /**
-   * BAM-43: fires when an AMS unit crosses into "too humid" — % RH ≥ thresholdPct where the unit reports
-   * a percentage, else the 1–5 level ≤ maxLevel (5 = driest). Edge-triggered per unit.
+   * BAM-43: fires when an AMS unit becomes "too humid" — % RH ≥ thresholdPct where the unit reports a
+   * percentage, else the 1–5 level ≤ maxLevel (5 = driest). Each unit fires once, then re-arms only after
+   * dropping HYSTERESIS_PCT below the threshold (or above maxLevel), so a sensor wobbling at the limit
+   * doesn't re-alert every cooldown (review 2, #4).
    */
-  _checkAmsHumidity(state, prev, config = {}) {
+  _checkAmsHumidity(state, config = {}, armKey) {
+    const HYSTERESIS_PCT = 3;
     const thresholdPct = Number.isFinite(config.thresholdPct) ? config.thresholdPct : 40;
     const maxLevel = Number.isFinite(config.maxLevel) ? config.maxLevel : 2;
-    const tooHumid = (u) => (u?.percent != null ? u.percent >= thresholdPct : u?.index != null && u.index <= maxLevel);
-    const before = new Map((prev.diagnostics?.amsHumidity || []).map((u) => [u.id, u]));
-    const crossed = (state.diagnostics?.amsHumidity || []).filter((u) => tooHumid(u) && !tooHumid(before.get(u.id)));
+    const crossed = [];
+    for (const u of state.diagnostics?.amsHumidity || []) {
+      const k = `${armKey}/${u.id}`;
+      const armed = this.humidityArmed[k] !== false;
+      const humid = u.percent != null ? u.percent >= thresholdPct : u.index != null && u.index <= maxLevel;
+      const recovered = u.percent != null ? u.percent < thresholdPct - HYSTERESIS_PCT : u.index != null && u.index > maxLevel;
+      if (humid && armed) {
+        this.humidityArmed[k] = false;
+        crossed.push(u);
+      } else if (!armed && recovered) {
+        this.humidityArmed[k] = true;
+      }
+    }
     if (crossed.length === 0) return null;
     const parts = crossed.map((u) => `AMS ${(parseInt(u.id, 10) || 0) + 1} at ${u.percent != null ? `${u.percent}% RH` : `level ${u.index}/5`}`);
     return {

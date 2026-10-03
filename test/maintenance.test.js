@@ -86,7 +86,8 @@ test('task status from real data: hours and days', () => {
     return maintenance.getTask(id);
   };
   // 2 print hours since 7 days ago.
-  assert.equal(mk('h-due', { intervalHours: 2 }, '-168 hours').status, 'due');
+  // Off the exact boundary: a clock tick between seeding and setLastDone can clip a few ms of hours
+  assert.equal(mk('h-due', { intervalHours: 1.9 }, '-168 hours').status, 'due');
   assert.equal(mk('h-soon', { intervalHours: 2.2 }, '-168 hours').status, 'due_soon');
   assert.equal(mk('h-ok', { intervalHours: 10 }, '-168 hours').status, 'ok');
   assert.equal(mk('d-due', { intervalDays: 7 }, '-8 days').status, 'due');

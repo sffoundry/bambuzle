@@ -64,9 +64,10 @@ function getAmsHumidityHistory(deviceId, { from, to } = {}) {
   const params = [deviceId];
   if (from) { sql += ' AND ts >= datetime(?)'; params.push(from); }
   if (to) { sql += ' AND ts <= datetime(?)'; params.push(to); }
-  sql += ' ORDER BY ts ASC LIMIT 20000';
+  // Newest rows win the cap (review 2, #3), then oldest-first for charting
+  sql += ' ORDER BY ts DESC LIMIT 20000';
   const units = {};
-  for (const r of db().prepare(sql).all(...params)) {
+  for (const r of db().prepare(sql).all(...params).reverse()) {
     (units[r.ams_id] ||= []).push({ ts: r.ts, pct: r.humidity_pct, level: r.humidity_level, temp: r.temp });
   }
   return units;

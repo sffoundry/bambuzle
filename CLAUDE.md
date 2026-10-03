@@ -89,11 +89,13 @@ Every other `/api/*` route and `/ws` is guarded by `src/server/admin-auth.js` (B
 - `GET /api/printers/:id/history` — sample history (query: from, to, limit)
 - `GET /api/printers/:id/events` — events for printer (query: from, to, limit)
 - `GET /api/printers/:id/jobs` — print job history
+- `GET /api/printers/:id/ams-humidity` — humidity history per AMS unit (default 7 days)
+- `POST /api/printers/:id/command` — pause/resume/stop/set_speed; state-gated (`src/server/printer-commands.js`), waits for the printer's reply, audited as `command` events (BAM-28)
 
 ### Stats
 - `GET /api/stats` — print job statistics: totals, success rate, by printer / material / day (query: printer, from, to; default last 30 days; bad dates → 400)
-- `GET /api/printers/:id/ams-humidity` — humidity history per AMS unit (default 7 days)
-- `POST /api/printers/:id/command` — pause/resume/stop/set_speed; state-gated (`src/server/printer-commands.js`), waits for the printer's reply, audited as `command` events (BAM-28)
+
+### Export (BAM-46)
 - `GET /api/export/jobs` — job history download, one row per job (query: format=csv|json, printer, from, to; default all time; cap 50k rows → `X-Bambuzle-Truncated`; CSV formula-injection guarded). Columns: `docs/export-data-dictionary.md` (BAM-46)
 
 ### Maintenance (BAM-39)

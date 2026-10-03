@@ -159,7 +159,19 @@ function updateCardContent(card, deviceId, printer) {
     </div>
   ` : (file ? `<div class="card-file">${escapeHtml(file)}</div>` : '');
 
-  card.innerHTML = `
+  // Two persistent children: the body is rewritten on every update; the controls container is only
+  // touched when its markup changes, so an open speed dropdown or focused button survives (review 2, #6).
+  let body = card.querySelector(':scope > .card-body');
+  let wrap = card.querySelector(':scope > .card-controls-wrap');
+  if (!body || !wrap) {
+    card.replaceChildren();
+    body = document.createElement('div');
+    body.className = 'card-body';
+    wrap = document.createElement('div');
+    wrap.className = 'card-controls-wrap';
+    card.append(body, wrap);
+  }
+  body.innerHTML = `
     <div class="card-header">
       <span class="printer-name">${escapeHtml(db.name || deviceId)}</span>
       <span class="printer-model">${escapeHtml(db.model || '')}</span>
@@ -177,9 +189,15 @@ function updateCardContent(card, deviceId, printer) {
     </div>
     ${renderDiagnostics(live.diagnostics)}
     ${gaugeHtml}
-    ${renderControls(deviceId, live, connected, gcodeState)}
   `;
+  const html = renderControls(deviceId, live, connected, gcodeState);
+  if (wrap.dataset.html !== html) {
+    wrap.innerHTML = html;
+    wrap.dataset.html = html;
+  }
 }
+
+
 
 // ─── BAM-28: printer controls ───
 // Cards are re-rendered on every MQTT update, so clicks are handled by one delegated listener and the
@@ -192,11 +210,14 @@ let controlsWired = false;
 function renderControls(deviceId, live, connected, gcodeState) {
   const active = ['RUNNING', 'PREPARE', 'PAUSE'].includes(gcodeState);
   const st = cmdStatus[deviceId];
-  const showStatus = st && (st.busy || Date.now() - st.at < CMD_STATUS_MS);
+  // Stay locked after a send until the printer reports a different state (or 10 s pass) — review 2, #7
+  if (st?.awaitingState && (gcodeState !== st.awaitingState || Date.now() - st.at > 10000)) st.awaitingState = null;
+  const locked = st?.busy || Boolean(st?.awaitingState);
+  const showStatus = st && (locked || Date.now() - st.at < CMD_STATUS_MS);
   if (!connected || (!active && !showStatus)) return '';
 
   const id = escapeHtml(deviceId);
-  const dis = st?.busy ? ' disabled' : '';
+  const dis = locked ? ' disabled' : '';
   const btn = (action, label, cls = 'btn-secondary') =>
     `<button type="button" class="${cls} ctl-btn" data-ctl="${action}" data-device="${id}"${dis}>${label}</button>`;
 
@@ -216,19 +237,23 @@ function renderControls(deviceId, live, connected, gcodeState) {
   return `<div class="card-controls">${buttons}</div>${status}`;
 }
 
-async function sendPrinterCommand(deviceId, command, param, rerender) {
+async function sendPrinterCommand(deviceId, command, param, rerender, live) {
   cmdStatus[deviceId] = { text: `Sending ${command.replace('_', ' ')}…`, tone: '', at: Date.now(), busy: true };
   rerender();
+  // Tell the server what this card showed, so a stale click is refused (review 2, #2)
+  const body = { command, expectState: live?.gcodeState ?? null, expectTaskId: live?.taskId ?? null };
+  if (param != null) body.param = param;
   try {
     const res = await fetch(`/api/printers/${encodeURIComponent(deviceId)}/command`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(param != null ? { command, param } : { command }),
+      body: JSON.stringify(body),
     });
     const data = await res.json().catch(() => ({}));
     const text = res.ok ? `${command.replace('_', ' ')}: ${data.outcome || 'sent'}` : (data.error || `Failed (${res.status})`);
     const tone = !res.ok || data.ok === false ? 'error' : data.acknowledged ? 'ok' : 'warn';
-    cmdStatus[deviceId] = { text, tone, at: Date.now(), busy: false };
+    const awaitingState = res.ok && data.ok !== false && command !== 'set_speed' ? live?.gcodeState : null;
+    cmdStatus[deviceId] = { text, tone, at: Date.now(), busy: false, awaitingState };
   } catch {
     cmdStatus[deviceId] = { text: 'Network error — command may not have been sent', tone: 'error', at: Date.now(), busy: false };
   }
@@ -254,12 +279,20 @@ function wireControls(container, getPrinter) {
       const file = printer?.live?.subtaskName || printer?.live?.gcodeFile || 'the current print';
       if (!window.confirm(`Stop "${file}" on ${name}?\n\nThis cancels the print and cannot be undone.`)) return;
     }
-    sendPrinterCommand(deviceId, b.dataset.ctl, null, rerenderFor(deviceId));
+    sendPrinterCommand(deviceId, b.dataset.ctl, null, rerenderFor(deviceId), printer?.live);
   });
   container.addEventListener('change', (e) => {
     const sel = e.target.closest('.ctl-speed');
     if (!sel) return;
-    sendPrinterCommand(sel.dataset.device, 'set_speed', Number(sel.value), rerenderFor(sel.dataset.device));
+    const deviceId = sel.dataset.device;
+    const printer = getPrinter(deviceId);
+    const label = sel.options[sel.selectedIndex]?.text || sel.value;
+    // Explicit confirm: some browsers fire change on a single arrow key (review 2, #6)
+    if (!window.confirm(`Set print speed to ${label} on ${printer?.db?.name || deviceId}?`)) {
+      sel.value = String(printer?.live?.speedLevel ?? sel.value);
+      return;
+    }
+    sendPrinterCommand(deviceId, 'set_speed', Number(sel.value), rerenderFor(deviceId), printer?.live);
   });
 }
 

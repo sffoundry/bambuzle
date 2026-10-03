@@ -112,7 +112,7 @@ function createAdminAuth({ auth, dataDir, log }) {
    * Bearer-token clients and requests without Origin (curl, scripts) are unaffected.
    */
   function crossOriginWrite(req) {
-    if (isReadOnly(req) || /^Bearer\s/i.test(req.headers.authorization || '')) return false;
+    if (isReadOnly(req) || (enabled && /^Bearer\s/i.test(req.headers.authorization || ''))) return false;
     const origin = req.headers.origin;
     if (!origin) return false;
     try {
@@ -124,10 +124,9 @@ function createAdminAuth({ auth, dataDir, log }) {
 
   /** Express middleware guarding /api. */
   function requireAdmin(req, res, next) {
-    if (isAuthorized(req)) {
-      if (enabled && crossOriginWrite(req)) return res.status(403).json({ error: 'cross_origin_write_rejected' });
-      return next();
-    }
+    // Same-host cross-origin writes are refused even with auth off (review 2, #8)
+    if (crossOriginWrite(req)) return res.status(403).json({ error: 'cross_origin_write_rejected' });
+    if (isAuthorized(req)) return next();
     if (publicRead && isReadOnly(req) && !isPrivateRead(req)) return next();
     res.status(401).json({ error: 'admin_auth_required' });
   }

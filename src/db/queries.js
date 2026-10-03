@@ -513,5 +513,4 @@ module.exports = {
   deleteOldTempAnomalies,
   deleteOldJobPauses,
   // Shared with src/db/maintenance.js (BAM-39)
-  JOB_DURATION_SQL,
 };

@@ -94,3 +94,47 @@ test('confirmed, rejected and unconfirmed replies are reported and audited', asy
   assert.ok(audit.some((m) => /stop: printer rejected/.test(m)));
   assert.ok(audit.some((m) => /Rejected command "stop"/.test(m)));
 });
+
+// ─── Review 2 fixes ───
+
+test('inherited names and non-string commands are rejected without throwing — review 2 #1', () => {
+  for (const bad of ['toString', 'constructor', '__proto__', 'hasOwnProperty', ['pause'], ['stop'], { a: 1 }, 42, null]) {
+    const r = planCommand(bad, null, { gcodeState: 'RUNNING' });
+    assert.equal(r.status, 400, JSON.stringify(bad));
+  }
+});
+
+test('stale UI: expected state / task must match the printer — review 2 #2', () => {
+  const live = { gcodeState: 'PAUSE', taskId: 'B' };
+  assert.equal(planCommand('resume', null, live, { state: 'RUNNING' }).status, 409, 'clicked Pause, printer had paused itself');
+  assert.equal(planCommand('stop', null, live, { state: 'PAUSE', taskId: 'A' }).status, 409, 'dialog was for job A');
+  assert.ok(planCommand('stop', null, live, { state: 'PAUSE', taskId: 'B' }).cmd);
+  assert.ok(planCommand('resume', null, live).cmd, 'API clients may omit expectations');
+});
+
+test('crafted commands over HTTP get 400 and the server keeps running; concurrent commands get 429', async () => {
+  const { createApp } = require('../src/server/app');
+  const { createAdminAuth } = require('../src/server/admin-auth');
+  const http = require('http');
+  const { dataDir, TEST_TOKEN } = require('./helpers');
+  queries.upsertPrinter({ deviceId: 'dev1', name: 'Alpha', model: 'X1C' });
+  const slow = fakeClient(() => null); // never replies → 4 s timeout keeps the first command in flight
+  const log = pino({ level: 'silent' });
+  const adminAuth = createAdminAuth({ auth: { mode: 'on', adminToken: TEST_TOKEN }, dataDir, log });
+  const pm = fakePrinterManager({ liveStates: { dev1: { gcodeState: 'RUNNING' } }, clients: { dev1: slow } });
+  const app = createApp(pm, { onAuthenticated() {} }, adminAuth, { getCloudAuthStatus: () => 'authenticated', dataDir });
+  const server = http.createServer(app);
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const url = `http://127.0.0.1:${server.address().port}/api/printers/dev1/command`;
+  const post = (body) => fetch(url, { method: 'POST', headers: json, body: JSON.stringify(body) });
+  try {
+    for (const command of ['toString', '__proto__', ['pause']]) assert.equal((await post({ command })).status, 400);
+    const first = post({ command: 'pause' });
+    await new Promise((r) => setTimeout(r, 50));
+    assert.equal((await post({ command: 'pause' })).status, 429);
+    assert.equal((await first).status, 200);
+    assert.equal((await post({ command: 'pause' })).status, 200, 'lock released after reply/timeout');
+  } finally {
+    await new Promise((r) => server.close(r));
+  }
+});

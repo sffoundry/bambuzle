@@ -117,16 +117,18 @@ export function themeVar(name, fallback = '') {
 export function applyTheme(themeId) {
   const theme = THEMES[themeId];
   if (!theme) return;
+  // Theme class goes on <html> (not <body>) so public/js/theme-boot.js can set it in <head> before paint
   const root = document.documentElement;
   for (const [prop, value] of Object.entries(theme.vars)) root.style.setProperty(prop, value);
   for (const t of Object.values(THEMES)) {
-    if (t.bodyClass) document.body.classList.remove(t.bodyClass);
+    if (t.bodyClass) root.classList.remove(t.bodyClass);
   }
-  if (theme.bodyClass) document.body.classList.add(theme.bodyClass);
+  if (theme.bodyClass) root.classList.add(theme.bodyClass);
   root.dataset.theme = themeId;
   activeThemeId = themeId;
   try {
     localStorage.setItem(STORAGE_KEY, themeId);
+    localStorage.setItem('bambuzle_theme_cache', JSON.stringify({ cls: theme.bodyClass, vars: theme.vars }));
   } catch { /* private mode — theme still applies for this page */ }
   window.dispatchEvent(new CustomEvent('bambuzle:themechange', { detail: { themeId } }));
 }

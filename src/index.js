@@ -44,6 +44,11 @@ const printerManager = {
 
 // ─── Main ───
 
+// Last-resort guard: log async errors instead of letting Node 20 exit on an unhandled rejection
+process.on('unhandledRejection', (err) => {
+  log.error({ err }, 'Unhandled promise rejection');
+});
+
 async function main() {
   log.info('Bambuzle starting');
 

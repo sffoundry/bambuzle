@@ -28,6 +28,31 @@ function fmtTs(ts) {
   return Number.isNaN(d.getTime()) ? String(ts) : d.toLocaleString();
 }
 
+/** SQLite UTC timestamp → local calendar date (for "last done", which the user picks as a date). */
+function fmtDate(ts) {
+  if (!ts) return '—';
+  const d = new Date(`${String(ts).replace(' ', 'T')}Z`);
+  return Number.isNaN(d.getTime()) ? String(ts) : d.toLocaleDateString();
+}
+
+/** SQLite UTC timestamp → 'YYYY-MM-DD' in local time (for <input type=date>). */
+function toLocalDateInput(ts) {
+  if (!ts) return '';
+  const d = new Date(`${String(ts).replace(' ', 'T')}Z`);
+  if (Number.isNaN(d.getTime())) return '';
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+/**
+ * <input type=date> value → ISO instant at LOCAL midnight. Sending the bare date made the server read it
+ * as UTC midnight: a day early west of UTC, "in the future" east of it (review 2, #5).
+ */
+function localDateToIso(value) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || '');
+  return m ? new Date(+m[1], +m[2] - 1, +m[3]).toISOString() : value;
+}
+
 function fmtNum(n, digits = 1) {
   return n == null ? '—' : Number(n).toFixed(digits);
 }
@@ -193,7 +218,7 @@ function renderTasks(d) {
     if (t.baselineSource !== 'last_done') since.title = t.baselineSource === 'first_job' ? 'Never done: counted from the first recorded job' : 'Never done: counted from when the task was added';
     const statusCell = el('td');
     statusCell.append(statusBadge(t.status));
-    tr.append(nameCell, el('td', null, fmtInterval(t)), since, statusCell, el('td', null, fmtTs(t.lastDoneAt)), actions);
+    tr.append(nameCell, el('td', null, fmtInterval(t)), since, statusCell, el('td', null, fmtDate(t.lastDoneAt)), actions);
     return tr;
   }));
 }
@@ -286,7 +311,7 @@ function startEdit(task) {
   f.name.value = task.name;
   f.intervalHours.value = task.intervalHours ?? '';
   f.intervalDays.value = task.intervalDays ?? '';
-  ui.editingLastDone = task.lastDoneAt ? String(task.lastDoneAt).slice(0, 10) : '';
+  ui.editingLastDone = toLocalDateInput(task.lastDoneAt);
   f.lastDoneAt.value = ui.editingLastDone;
   f.notes.value = task.notes || '';
   f.title.textContent = `Edit task: ${task.name}`;
@@ -308,9 +333,9 @@ async function submitForm(e) {
   };
   const lastDone = f.lastDoneAt.value;
   if (ui.editingId == null) {
-    if (lastDone) body.lastDoneAt = lastDone;
+    if (lastDone) body.lastDoneAt = localDateToIso(lastDone);
   } else if (lastDone !== ui.editingLastDone) {
-    body.lastDoneAt = lastDone || null;
+    body.lastDoneAt = lastDone ? localDateToIso(lastDone) : null;
   }
   try {
     if (ui.editingId == null) {
