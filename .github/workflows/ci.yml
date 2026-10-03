@@ -1,0 +1,68 @@
+name: CI
+
+# Tests on every push/PR, plus a multi-arch Docker build (amd64 + arm64 under QEMU) with a
+# container smoke test per platform (BAM-49). Nothing is pushed to a registry.
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [linux/amd64, linux/arm64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - name: Build ${{ matrix.platform }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          load: true
+          push: false
+          tags: bambuzle:ci
+          cache-from: type=gha,scope=${{ matrix.platform }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.platform }}
+      - name: Smoke test (native SQLite module loads, server answers /healthz)
+        run: |
+          set -euo pipefail
+          docker run -d --name bz --platform ${{ matrix.platform }} -p 3000:3000 \
+            -e BAMBUZLE_ADMIN_TOKEN=ci-smoke-test-token-0123456789 bambuzle:ci
+          for i in $(seq 1 90); do
+            if curl -fsS http://127.0.0.1:3000/healthz; then echo; break; fi
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:3000/healthz
+          docker exec bz node -e "require('better-sqlite3'); console.log(process.arch, 'better-sqlite3 OK')"
+          test "$(docker inspect -f '{{.Config.User}}' bz)" = "node"
+      - name: Container logs
+        if: always()
+        run: docker logs bz 2>&1 | tail -50 || true
