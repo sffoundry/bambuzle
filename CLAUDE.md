@@ -50,7 +50,9 @@ Browser
 | `public/js/app.js` | Frontend entry — auth, WS, views, events |
 | `public/js/dashboard.js` | Printer card rendering |
 | `public/js/charts.js` | uPlot chart rendering |
-| `public/js/stats.js` | Stats view — job statistics (`/api/stats`) |
+| `public/js/stats.js` | Stats view — job statistics (`/api/stats`), Export CSV / JSON links |
+| `src/server/routes/export.js` | `GET /api/export/jobs` CSV/JSON job export (BAM-46) |
+| `src/db/export.js` | Export SQL + versioned column set; columns documented in `docs/export-data-dictionary.md` |
 | `src/utils/material.js` | Active AMS tray → filament type/colour (job material capture) |
 
 ## API Endpoints
@@ -84,6 +86,7 @@ Every other `/api/*` route and `/ws` is guarded by `src/server/admin-auth.js` (B
 
 ### Stats
 - `GET /api/stats` — print job statistics: totals, success rate, by printer / material / day (query: printer, from, to; default last 30 days; bad dates → 400)
+- `GET /api/export/jobs` — job history download, one row per job (query: format=csv|json, printer, from, to; default all time; cap 50k rows → `X-Bambuzle-Truncated`; CSV formula-injection guarded). Columns: `docs/export-data-dictionary.md` (BAM-46)
 - `POST /api/printers/:id/command` — send command to printer via MQTT
 
 ### Events

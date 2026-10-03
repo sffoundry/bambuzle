@@ -37,6 +37,7 @@ See [Install.md](Install.md) for detailed platform-specific instructions (Window
 ## Documentation
 
 - [Install.md](Install.md) — installation and configuration
+- [Export data dictionary](docs/export-data-dictionary.md) — columns of the Stats view's CSV/JSON job export
 - [Wiki](https://github.com/sffoundry/bambuzle/wiki) — release notes and project documentation
 
 ## License

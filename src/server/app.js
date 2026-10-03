@@ -11,6 +11,7 @@ const { createAuthRouter } = require('./routes/auth');
 const { createSessionRouter } = require('./routes/session');
 const { createHealthRouter, createSystemRouter } = require('./routes/system');
 const { createMetricsRouter } = require('./routes/metrics');
+const { createExportRouter } = require('./routes/export');
 const { getAuthStatus } = require('../bambu/auth');
 const config = require('../config');
 
@@ -22,6 +23,7 @@ const config = require('../config');
  * @param {object|null} [deps.backupService] — from createBackupService(); null disables backup endpoints
  * @param {function} [deps.getCloudAuthStatus] — returns the Bambu Cloud auth state string
  * @param {string} [deps.dataDir]
+ * @param {number} [deps.exportMaxRows] — row cap for /api/export (BAM-46; tests lower it)
  */
 function createApp(printerManager, authCallbacks, adminAuth, deps = {}) {
   const {
@@ -71,6 +73,7 @@ function createApp(printerManager, authCallbacks, adminAuth, deps = {}) {
   app.use('/api', createApiRouter(printerManager));
   app.use('/api/alerts', createAlertsRouter());
   app.use('/api/system', createSystemRouter({ backupService, dataDir }));
+  app.use('/api/export', createExportRouter({ maxRows: deps.exportMaxRows }));
 
   // SPA fallback
   app.get('*', (req, res) => {
