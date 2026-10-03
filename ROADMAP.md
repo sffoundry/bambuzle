@@ -109,7 +109,7 @@ From the CODEX-SF371 × AGY-SF002 blind xval, merged and verified in `research/c
 | BAM-36 |Telemetry rollups and tiered retention|❌|MEDIUM|L|BAM-34|Raw samples today: 5s active / 30s idle, 90-day delete|
 | BAM-37 |Prometheus `/metrics` (incl. MQTT connection count, last-message age)|✅|MEDIUM|S|BAM-34|v0.5.0. No client lib; admin-token guarded; bounded labels (device_id + name). Install.md § Monitoring has scrape config + suggested alerts|
 | BAM-38 |Spoolman integration|❌|MEDIUM|M|—|Proposed to supersede bespoke BAM-11 inventory|
-| BAM-39 |Maintenance ledger (print hours, service intervals, repeat HMS)|❌|MEDIUM|M|BAM-10||
+| BAM-39 |Maintenance ledger (print hours, service intervals, repeat HMS)|✅|MEDIUM|M|BAM-10|v0.6.0. Maintenance tab: tasks with hour/day intervals, due/due-soon badges, mark-done log, recommended tasks (intervals only where Bambu's wiki states them), repeat HMS / print_error codes (30d)|
 | BAM-40 |Print-failure triage timeline (anomalies + xcam + HMS)|❌|MEDIUM|M|BAM-32|Builds on BAM-25 anomaly capture|
 | BAM-41 |Operator audit trail (auth, config, command attempts)|❌|MEDIUM|M|BAM-30||
 | BAM-42 |Home Assistant MQTT discovery bridge (read-only)|❌|LOW|M|BAM-34|Overlaps sibling `bambu-farm-card`|

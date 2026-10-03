@@ -18,6 +18,7 @@
       <button class="nav-btn" data-view="events">Events</button>
       <button class="nav-btn" data-view="alerts">Alerts</button>
       <button class="nav-btn" data-view="stats">Stats</button>
+      <button class="nav-btn" data-view="maintenance">Maintenance</button>
     </nav>
   </header>
 
@@ -259,6 +260,62 @@
               <tr><th>Material</th><th>Jobs</th><th>OK</th><th>Fail</th><th>Cancel</th><th>Success</th><th>Hours</th><th>Avg</th></tr>
             </thead>
             <tbody id="stats-material-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Maintenance view (BAM-39) -->
+    <section id="view-maintenance" class="view">
+      <div class="stats-header">
+        <h2>Maintenance</h2>
+        <div class="event-filters stats-filters">
+          <select id="maint-filter-printer" aria-label="Printer"></select>
+          <span id="maint-status" class="stats-status"></span>
+        </div>
+      </div>
+      <div id="maint-tiles" class="stats-tiles"></div>
+      <h3 class="dash-section-title">Tasks</h3>
+      <div id="maint-empty" class="maint-empty hidden"></div>
+      <div class="stats-table-wrap">
+        <table class="data-table maint-table">
+          <thead>
+            <tr><th>Task</th><th>Interval</th><th>Since (print h / days)</th><th>Status</th><th>Last done</th><th></th></tr>
+          </thead>
+          <tbody id="maint-tasks-body"></tbody>
+        </table>
+      </div>
+      <form id="maint-form" class="maint-form">
+        <h3 id="maint-form-title" class="dash-section-title">Add task</h3>
+        <div class="maint-form-fields">
+          <label>Name <input type="text" name="name" required maxlength="100"></label>
+          <label>Every (print hours) <input type="number" name="intervalHours" min="0.1" step="any"></label>
+          <label>Every (days) <input type="number" name="intervalDays" min="1" step="1"></label>
+          <label>Last done <input type="date" name="lastDoneAt"></label>
+          <label class="maint-form-notes">Notes <input type="text" name="notes" maxlength="1000"></label>
+        </div>
+        <div class="form-actions">
+          <button type="submit" id="maint-form-submit" class="btn-primary">Add</button>
+          <button type="button" id="maint-form-cancel" class="btn-secondary hidden">Cancel</button>
+        </div>
+      </form>
+      <div class="stats-tables">
+        <div class="stats-table-wrap">
+          <h3 class="dash-section-title">Repeat errors (30d)</h3>
+          <table class="data-table maint-table">
+            <thead>
+              <tr><th>Type</th><th>Code</th><th>Count</th><th>Last seen</th><th>Description</th></tr>
+            </thead>
+            <tbody id="maint-errors-body"></tbody>
+          </table>
+        </div>
+        <div class="stats-table-wrap">
+          <h3 class="dash-section-title">Recent service log</h3>
+          <table class="data-table maint-table">
+            <thead>
+              <tr><th>Done</th><th>Task</th><th>Print h</th><th>Note</th></tr>
+            </thead>
+            <tbody id="maint-log-body"></tbody>
           </table>
         </div>
       </div>

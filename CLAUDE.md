@@ -20,6 +20,7 @@ Browser
         ├─> public/js/dashboard.js — printer cards
         ├─> public/js/charts.js — uPlot temperature/progress charts
         ├─> public/js/stats.js — Stats view (job totals, by printer/material/day)
+        ├─> public/js/maintenance.js — Maintenance view (service tasks, repeat errors)
         └─> public/js/alerts-ui.js — alert rules CRUD
 ```
 
@@ -30,6 +31,7 @@ Browser
 | `src/config.js` | Loads .env + optional config.json |
 | `src/db/database.js` | SQLite schema, migrations (idempotent ALTER TABLE pattern) |
 | `src/db/queries.js` | All SQL queries |
+| `src/db/maintenance.js` | Maintenance ledger queries: print hours, task status, service log, repeat HMS, default task templates (BAM-39) |
 | `src/db/backup.js` | Online SQLite backups (verify, sha256, prune, cron) |
 | `scripts/restore.js` | Offline restore CLI (`npm run backup:restore`) |
 | `src/bambu/message-parser.js` | MQTT message parsing, `extractPrinterState()` |
@@ -40,6 +42,7 @@ Browser
 | `src/server/routes/api.js` | Printer/event REST endpoints |
 | `src/server/routes/auth.js` | Login/verify/logout endpoints |
 | `src/server/routes/alerts.js` | Alert rules CRUD endpoints |
+| `src/server/routes/maintenance.js` | `/api/maintenance` — maintenance tasks CRUD, mark done, templates (BAM-39) |
 | `src/server/routes/system.js` | `/healthz`, `/readyz`, `/api/system` |
 | `src/server/websocket.js` | WebSocket broadcast to dashboard |
 | `src/server/routes/metrics.js` | `GET /metrics` Prometheus exposition, admin-token guarded (BAM-37) |
@@ -54,6 +57,7 @@ Browser
 | `public/js/stats.js` | Stats view — job statistics (`/api/stats`), Export CSV / JSON links |
 | `src/server/routes/export.js` | `GET /api/export/jobs` CSV/JSON job export (BAM-46) |
 | `src/db/export.js` | Export SQL + versioned column set; columns documented in `docs/export-data-dictionary.md` |
+| `public/js/maintenance.js` | Maintenance view — tasks, due badges, service log, repeat errors (`/api/maintenance`) |
 | `src/utils/material.js` | Active AMS tray → filament type/colour (job material capture) |
 
 ## API Endpoints
@@ -91,6 +95,14 @@ Every other `/api/*` route and `/ws` is guarded by `src/server/admin-auth.js` (B
 - `POST /api/printers/:id/command` — pause/resume/stop/set_speed; state-gated (`src/server/printer-commands.js`), waits for the printer's reply, audited as `command` events (BAM-28)
 - `GET /api/export/jobs` — job history download, one row per job (query: format=csv|json, printer, from, to; default all time; cap 50k rows → `X-Bambuzle-Truncated`; CSV formula-injection guarded). Columns: `docs/export-data-dictionary.md` (BAM-46)
 
+### Maintenance (BAM-39)
+- `GET /api/maintenance` — per-printer summary: total print hours, task counts (due / due soon / ok / unscheduled)
+- `GET /api/maintenance/:deviceId` — tasks with status + hours/days since last done, recent service log, repeat HMS / print_error codes (30d), templates
+- `POST /api/maintenance/:deviceId/tasks` — create task (name 1–100, `intervalHours` and/or `intervalDays`, notes, optional `lastDoneAt`)
+- `PUT /api/maintenance/tasks/:id` / `DELETE /api/maintenance/tasks/:id` (log cascades)
+- `POST /api/maintenance/tasks/:id/done` — log + reset (optional `note`)
+- `POST /api/maintenance/:deviceId/templates` — add the recommended task set (idempotent by name)
+
 ### Events
 - `GET /api/events` — recent events across all printers (query: limit)
 
@@ -120,7 +132,9 @@ Every other `/api/*` route and `/ws` is guarded by `src/server/admin-auth.js` (B
 
 ## Database Schema
 
-Tables: `printers`, `print_jobs`, `samples`, `events`, `alert_rules`
+Tables: `printers`, `print_jobs`, `samples`, `events`, `alert_rules`, `maintenance_tasks`, `maintenance_log`
+
+Maintenance (BAM-39): `maintenance_tasks` (interval_hours / interval_days, last_done_at), `maintenance_log` (ON DELETE CASCADE from its task). Print hours reuse the `getJobStats` duration fallback (`JOB_DURATION_SQL`); running jobs excluded. Due at ≥ 100% of either interval, due soon at ≥ 90%.
 
 Job stats columns (BAM-10): `print_jobs.material`, `print_jobs.material_color`, `print_jobs.duration_sec` (nullable; added via migration).
 

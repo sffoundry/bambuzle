@@ -55,6 +55,8 @@ tags:
     description: Send commands to printers via MQTT
   - name: Debug
     description: Diagnostic endpoints
+  - name: Maintenance
+    description: Maintenance ledger — print hours, service-interval tasks, completion log, repeat errors (BAM-39)
 
 paths:
   # ─── Health (public probes) ───
@@ -985,6 +987,176 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  # ─── Maintenance (BAM-39) ───
+  /api/maintenance:
+    get:
+      tags: [Maintenance]
+      summary: Maintenance summary for all printers
+      description: Total print hours (ended jobs) and task counts by status per printer.
+      responses:
+        '200':
+          description: One row per printer
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MaintenanceSummary'
+        '401':
+          $ref: '#/components/responses/MaintUnauthorized'
+
+  /api/maintenance/{deviceId}:
+    get:
+      tags: [Maintenance]
+      summary: Maintenance detail for one printer
+      description: |
+        Tasks with status, total print hours, the last 20 service-log entries, the top HMS / print_error codes of the
+        last 30 days, and the recommended task templates (offered, never auto-created).
+        Print hours are wall-clock job durations (`duration_sec`, else ended_at − started_at); running jobs are excluded.
+        A task is `due` when print hours or days since it was last done reach its interval, `due_soon` at ≥ 90%.
+        Never-done tasks count from the printer's first recorded job, else from the task's creation.
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      responses:
+        '200':
+          description: Printer maintenance detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrinterMaintenance'
+        '401':
+          $ref: '#/components/responses/MaintUnauthorized'
+        '404':
+          $ref: '#/components/responses/MaintNotFound'
+
+  /api/maintenance/{deviceId}/tasks:
+    post:
+      tags: [Maintenance]
+      summary: Create a maintenance task
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MaintenanceTaskInput'
+      responses:
+        '201':
+          description: Created task
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MaintenanceTask'
+        '400':
+          $ref: '#/components/responses/MaintBadRequest'
+        '401':
+          $ref: '#/components/responses/MaintUnauthorized'
+        '404':
+          $ref: '#/components/responses/MaintNotFound'
+
+  /api/maintenance/{deviceId}/templates:
+    post:
+      tags: [Maintenance]
+      summary: Add the recommended task set (idempotent by name, case-insensitive)
+      description: |
+        Intervals are set only where Bambu Lab's wiki publishes one for both the X1 and A1 series
+        (rods/rails 30 d, Z lead screws 90 d, fans 7 d); the rest are null for the user to set.
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      responses:
+        '200':
+          description: Nothing added (all template names already present)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MaintenanceTemplatesResult'
+        '201':
+          description: One or more tasks added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MaintenanceTemplatesResult'
+        '401':
+          $ref: '#/components/responses/MaintUnauthorized'
+        '404':
+          $ref: '#/components/responses/MaintNotFound'
+
+  /api/maintenance/tasks/{taskId}:
+    parameters:
+      - $ref: '#/components/parameters/MaintenanceTaskId'
+    put:
+      tags: [Maintenance]
+      summary: Update a maintenance task
+      description: Partial update. If either interval is sent, at least one interval must remain set.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MaintenanceTaskUpdate'
+      responses:
+        '200':
+          description: Updated task
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MaintenanceTask'
+        '400':
+          $ref: '#/components/responses/MaintBadRequest'
+        '401':
+          $ref: '#/components/responses/MaintUnauthorized'
+        '404':
+          $ref: '#/components/responses/MaintNotFound'
+    delete:
+      tags: [Maintenance]
+      summary: Delete a maintenance task (its service log is deleted with it)
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+        '401':
+          $ref: '#/components/responses/MaintUnauthorized'
+        '404':
+          $ref: '#/components/responses/MaintNotFound'
+
+  /api/maintenance/tasks/{taskId}/done:
+    post:
+      tags: [Maintenance]
+      summary: Mark a task done now
+      description: Writes a service-log row (with the printer's current total print hours) and resets the task's counters.
+      parameters:
+        - $ref: '#/components/parameters/MaintenanceTaskId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note:
+                  type: string
+                  maxLength: 500
+      responses:
+        '200':
+          description: Task after reset
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MaintenanceTask'
+        '400':
+          $ref: '#/components/responses/MaintBadRequest'
+        '401':
+          $ref: '#/components/responses/MaintUnauthorized'
+        '404':
+          $ref: '#/components/responses/MaintNotFound'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1010,6 +1182,32 @@ components:
       schema:
         type: integer
       description: Print job ID
+    MaintenanceTaskId:
+      name: taskId
+      in: path
+      required: true
+      schema:
+        type: integer
+      description: Maintenance task ID
+  responses:
+    MaintBadRequest:
+      description: Validation failed (name 1-100 chars, intervals positive or null, at least one interval)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    MaintUnauthorized:
+      description: Missing or invalid admin token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    MaintNotFound:
+      description: Printer or task not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
 
   schemas:
     Error:
@@ -1560,3 +1758,219 @@ components:
         cooldownSec:
           type: integer
           default: 300
+
+    # ─── Maintenance (BAM-39) ───
+    MaintenanceTaskInput:
+      type: object
+      required: [name]
+      description: At least one of intervalHours / intervalDays is required.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        intervalHours:
+          type: number
+          nullable: true
+          description: Service interval in print hours (> 0)
+        intervalDays:
+          type: integer
+          nullable: true
+          description: Service interval in calendar days (>= 1)
+        notes:
+          type: string
+          maxLength: 1000
+        lastDoneAt:
+          type: string
+          nullable: true
+          description: When it was last done (ISO 8601, not in the future). Sets the baseline without writing a log row.
+    MaintenanceTaskUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        intervalHours:
+          type: number
+          nullable: true
+        intervalDays:
+          type: integer
+          nullable: true
+        notes:
+          type: string
+          maxLength: 1000
+        lastDoneAt:
+          type: string
+          nullable: true
+    MaintenanceTask:
+      type: object
+      properties:
+        id:
+          type: integer
+        deviceId:
+          type: string
+        name:
+          type: string
+        intervalHours:
+          type: number
+          nullable: true
+        intervalDays:
+          type: integer
+          nullable: true
+        lastDoneAt:
+          type: string
+          nullable: true
+          description: SQLite UTC datetime
+        notes:
+          type: string
+        createdAt:
+          type: string
+        baseline:
+          type: string
+          description: Timestamp the counters run from
+        baselineSource:
+          type: string
+          enum: [last_done, first_job, created]
+        hoursSince:
+          type: number
+          description: Print hours since the baseline
+        daysSince:
+          type: number
+        hoursRemaining:
+          type: number
+          nullable: true
+        daysRemaining:
+          type: number
+          nullable: true
+        ratio:
+          type: number
+          nullable: true
+          description: Largest fraction of an interval used (1 = due)
+        status:
+          type: string
+          enum: [ok, due_soon, due, unscheduled]
+    MaintenanceCounts:
+      type: object
+      properties:
+        tasks:
+          type: integer
+        due:
+          type: integer
+        dueSoon:
+          type: integer
+        ok:
+          type: integer
+        unscheduled:
+          type: integer
+    MaintenanceSummary:
+      allOf:
+        - $ref: '#/components/schemas/MaintenanceCounts'
+        - type: object
+          properties:
+            deviceId:
+              type: string
+            name:
+              type: string
+            model:
+              type: string
+            totalPrintHours:
+              type: number
+    RepeatError:
+      type: object
+      properties:
+        code:
+          type: string
+        count:
+          type: integer
+        firstSeen:
+          type: string
+        lastSeen:
+          type: string
+        description:
+          type: string
+          nullable: true
+          description: HMS only (dictionary text)
+        wikiUrl:
+          type: string
+          nullable: true
+          description: HMS only
+        severity:
+          type: string
+          nullable: true
+          description: HMS only
+    PrinterMaintenance:
+      type: object
+      properties:
+        deviceId:
+          type: string
+        name:
+          type: string
+        model:
+          type: string
+        totalPrintHours:
+          type: number
+        firstJobAt:
+          type: string
+          nullable: true
+        counts:
+          $ref: '#/components/schemas/MaintenanceCounts'
+        tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/MaintenanceTask'
+        recentLog:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+              taskId:
+                type: integer
+              taskName:
+                type: string
+              doneAt:
+                type: string
+              printHoursAt:
+                type: number
+                nullable: true
+              note:
+                type: string
+        repeatErrors:
+          type: object
+          properties:
+            windowDays:
+              type: integer
+            hms:
+              type: array
+              items:
+                $ref: '#/components/schemas/RepeatError'
+            printErrors:
+              type: array
+              items:
+                $ref: '#/components/schemas/RepeatError'
+        templates:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              intervalHours:
+                type: number
+                nullable: true
+              intervalDays:
+                type: integer
+                nullable: true
+              notes:
+                type: string
+    MaintenanceTemplatesResult:
+      type: object
+      properties:
+        added:
+          type: integer
+        tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/MaintenanceTask'

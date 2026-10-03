@@ -30,3 +30,4 @@
 - BAM-28 done (Claude): state-gated command route + reply wait by sequence_id + command audit events + card controls (Stop confirm). Stub-rendered; NOT tried on real printers (would interrupt prints). 62/62.
 - BAM-43 done (Claude): humidity history + API + widget sparkline/trend + edge-triggered alert. Tests found pre-existing bug: createAlertRule stored cooldown 0 as 300 (`||` vs `??`) — fixed. 66/66.
 - BAM-46 merged (agent, 0f15ee1): export endpoint + data dictionary + Stats buttons. CLAUDE.md conflict resolved. 74/74.
+- BAM-39 merged (agent, a55df5e): maintenance ledger; default intervals only where Bambu wiki X1/A1 agree (rods 30d, Z screws 90d, fans 7d), rest null. Resolved CLAUDE.md/app.js/style.css conflicts. Live-checked /api/maintenance + export. 85/85.

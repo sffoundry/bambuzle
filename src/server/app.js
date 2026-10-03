@@ -12,6 +12,7 @@ const { createSessionRouter } = require('./routes/session');
 const { createHealthRouter, createSystemRouter } = require('./routes/system');
 const { createMetricsRouter } = require('./routes/metrics');
 const { createExportRouter } = require('./routes/export');
+const { createMaintenanceRouter } = require('./routes/maintenance');
 const { getAuthStatus } = require('../bambu/auth');
 const config = require('../config');
 
@@ -74,6 +75,7 @@ function createApp(printerManager, authCallbacks, adminAuth, deps = {}) {
   app.use('/api/alerts', createAlertsRouter());
   app.use('/api/system', createSystemRouter({ backupService, dataDir }));
   app.use('/api/export', createExportRouter({ maxRows: deps.exportMaxRows }));
+  app.use('/api/maintenance', createMaintenanceRouter());
 
   // SPA fallback
   app.get('*', (req, res) => {
