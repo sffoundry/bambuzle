@@ -475,6 +475,7 @@ module.exports = {
   setJobMaterial,
   getJobs,
   getJobStats,
+  JOB_DURATION_SQL, // shared with src/db/export.js (BAM-46)
   insertSample,
   getSamples,
   insertEvent,

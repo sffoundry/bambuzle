@@ -853,6 +853,8 @@ main { padding: 12px; }
 .stats-range-btn:hover { color: var(--text); background: var(--bg-hover); }
 .stats-range-btn.active { color: #000; background: var(--accent); border-color: var(--accent); }
 .stats-status { color: var(--text-dim); font-size: 11px; }
+.stats-export { display: flex; gap: 4px; margin-left: auto; }
+.stats-export-btn { text-decoration: none; }
 
 .stats-tiles {
   display: grid;

@@ -309,6 +309,8 @@ Bambuzle backs up its SQLite database automatically using SQLite's online-backup
    ```
 3. Start Bambuzle again. Once you're happy, delete the `*.pre-restore-*` files; to undo, stop the server and rename them back.
 
+**Exporting print history:** Stats → *Export CSV* / *Export JSON* (or `GET /api/export/jobs`) downloads one row per job; columns are described in [docs/export-data-dictionary.md](docs/export-data-dictionary.md).
+
 Health probes for monitoring: `GET /healthz` (liveness) and `GET /readyz` (readiness; returns `degraded` until BambuLab login completes and printers connect) need no token and expose no printer details.
 
 ## Monitoring (Prometheus)

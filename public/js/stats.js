@@ -42,6 +42,41 @@ function buildQuery() {
   return params.toString();
 }
 
+/** Query for /api/export/jobs (BAM-46): same printer/range as the view; "All" = no lower bound. */
+function buildExportQuery(format) {
+  const params = new URLSearchParams({ format });
+  const days = RANGE_DAYS[ui.range];
+  if (days != null) params.set('from', new Date(Date.now() - days * 86400e3).toISOString());
+  if (ui.printer) params.set('printer', ui.printer);
+  return params.toString();
+}
+
+/** Add the Export CSV / JSON links once (plain same-origin links: the session cookie is sent). */
+function ensureExportLinks() {
+  if (document.getElementById('stats-export')) return;
+  const host = document.querySelector('#view-stats .stats-filters');
+  if (!host) return;
+  const wrap = el('div', 'stats-export');
+  wrap.id = 'stats-export';
+  for (const [format, label] of [['csv', 'Export CSV'], ['json', 'Export JSON']]) {
+    const a = el('a', 'stats-range-btn stats-export-btn', label);
+    a.dataset.format = format;
+    a.title = `Download the jobs in this range as ${format.toUpperCase()} (UTC timestamps)`;
+    a.setAttribute('download', '');
+    // Refresh the href at click time so a relative range ("last 7 days") ends now, not at last load.
+    a.addEventListener('click', updateExportLinks);
+    wrap.append(a);
+  }
+  host.append(wrap);
+}
+
+/** Point the export links at the current printer/range selection. */
+function updateExportLinks() {
+  document.querySelectorAll('#stats-export .stats-export-btn').forEach((a) => {
+    a.href = `/api/export/jobs?${buildExportQuery(a.dataset.format)}`;
+  });
+}
+
 function populatePrinterSelect(state) {
   const sel = document.getElementById('stats-filter-printer');
   if (!sel) return;
@@ -174,6 +209,7 @@ async function loadStats() {
   const status = document.getElementById('stats-status');
   const seq = ++ui.loadSeq;
   status.textContent = 'Loading…';
+  updateExportLinks();
   try {
     const res = await fetch(`/api/stats?${buildQuery()}`);
     const data = await res.json();
@@ -210,6 +246,7 @@ export function initStatsUI(state) {
       });
     });
   }
+  ensureExportLinks();
   populatePrinterSelect(state);
   loadStats();
 }
