@@ -95,7 +95,9 @@ test('probeLan reports Developer Mode from the first status report, without send
   };
   const r = await probeLan({ serial: 'S1234567', host: '10.0.0.5', accessCode: '12345678', connectFn, logger: require('pino')({ level: 'silent' }) });
   assert.deepEqual([r.ok, r.stage, r.developerMode], [true, 'connected', true]);
-  assert.ok(published.every((m) => m.pushing?.command === 'pushall'), 'only the status request was sent');
+  // Only read-only queries: status (pushall) and model/firmware (get_version) — never print commands
+  assert.ok(published.every((m) => m.pushing?.command === 'pushall' || m.info?.command === 'get_version'), JSON.stringify(published));
+  assert.ok(!published.some((m) => m.print), 'no print.* commands');
 });
 
 test('connection API: secrets never returned, validation, manual printers, test endpoint', async () => {

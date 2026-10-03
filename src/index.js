@@ -11,8 +11,10 @@ const { GCODE_STATE } = require('./utils/constants');
 const { getActiveTrayMaterial } = require('./utils/material');
 const { jobEndState, JOB_END_CANCELLED } = require('./utils/job-state');
 const amsHumidity = require('./db/ams-humidity');
+const { reconcileHms } = require('./db/hms-active');
 const printerConnections = require('./db/printer-connections');
 const { chooseTransport, computeCapabilities } = require('./printers/transport-policy');
+const { modelKeyFromCloudCode } = require('./utils/printer-models');
 const { getDb, closeDb } = require('./db/database');
 const { createBackupService } = require('./db/backup');
 const queries = require('./db/queries');
@@ -52,7 +54,11 @@ const printerManager = {
     developerMode: liveStates[deviceId]?.diagnostics?.developerMode,
     signatureRejected: signatureRejected.has(deviceId),
     lastError: mqttClients[deviceId]?.lastError || null,
+    modelKey: mqttClients[deviceId]?.modelKey || modelKeyFromCloudCode(queries.getPrinter(deviceId)?.model),
+    firmwareVersion: mqttClients[deviceId]?.firmwareVersion || null,
   }),
+  /** HMS dataset model key (X1C, H2D…): printer's get_version reply, else the cloud model code (BAM-50). */
+  getModelKey: (deviceId) => mqttClients[deviceId]?.modelKey || modelKeyFromCloudCode(queries.getPrinter(deviceId)?.model),
   markSignatureRejected: (deviceId) => signatureRejected.add(deviceId),
   /** Re-evaluate one printer's transport after its connection settings changed. */
   reconnect: (deviceId) => syncConnection(deviceId),
@@ -315,9 +321,8 @@ function connectPrinter(deviceId, kind, conn, signature, carriedState = null) {
     anomalyDetector.checkLayerTransition(deviceId, state, activeJob);
     anomalyDetector.checkTemperatureAnomalies(deviceId, state, activeJob);
 
-    if (state.hmsErrors?.length > 0) {
-      handleHmsErrors(deviceId, state.hmsErrors, activeJob);
-    }
+    // Always reconcile — an empty list means errors cleared, so a later recurrence is recorded again
+    if (Array.isArray(state.hmsErrors)) handleHmsErrors(deviceId, state.hmsErrors, activeJob);
     handlePrintError(deviceId, state, prevState, activeJob);
 
     const printer = queries.getPrinter(deviceId);
@@ -330,6 +335,10 @@ function connectPrinter(deviceId, kind, conn, signature, carriedState = null) {
 
   client.on('disconnected', (deviceId) => {
     broadcast('state', { deviceId, state: liveStates[deviceId] || {}, connected: false, capabilities: printerManager.getCapabilities(deviceId) });
+  });
+
+  client.on('version', (deviceId, info) => {
+    log.info({ deviceId, model: info.modelKey, firmware: info.firmwareVersion }, 'Printer version');
   });
 
   client.on('mqtt_error', (deviceId, err) => {
@@ -463,15 +472,15 @@ function maybeSample(deviceId, state, activeJob) {
 
 // ─── HMS Error Handling ───
 
-const recentHmsCodes = {};
 
 function handleHmsErrors(deviceId, hmsRaw, activeJob) {
-  const parsed = parseHmsErrors(hmsRaw);
-  const prev = recentHmsCodes[deviceId] || new Set();
-  const current = new Set(parsed.map((e) => e.key));
+  const parsed = parseHmsErrors(hmsRaw, printerManager.getModelKey(deviceId));
+  // Persisted active set: no duplicate events on restart; cleared codes re-arm (see src/db/hms-active.js)
+  const { added } = reconcileHms(deviceId, parsed.map((e) => e.key));
+  const isNew = new Set(added);
 
   for (const entry of parsed) {
-    if (!prev.has(entry.key)) {
+    if (isNew.has(entry.key)) {
       queries.insertEvent({
         deviceId,
         jobId: activeJob?.id || null,
@@ -494,8 +503,6 @@ function handleHmsErrors(deviceId, hmsRaw, activeJob) {
       log.warn({ deviceId, code: entry.key, hmsSeverity: entry.severity, subsystem: entry.subsystem }, `HMS Error: ${entry.description}`);
     }
   }
-
-  recentHmsCodes[deviceId] = current;
 
   if (parsed.length > 0) {
     anomalyDetector.trackJobHmsErrors(deviceId, parsed, activeJob);

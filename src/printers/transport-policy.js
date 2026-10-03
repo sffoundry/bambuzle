@@ -20,8 +20,10 @@ function chooseTransport(conn, cloudAuthenticated) {
  * Capability summary for the UI/API. `developerMode` comes from the printer's own print.fun bit
  * (src/bambu/diagnostics.js); `signatureRejected` is set once a printer answered "verify failed".
  */
-function computeCapabilities({ conn, transport, connected, developerMode, signatureRejected = false, lastError = null }) {
+function computeCapabilities({ conn, transport, connected, developerMode, signatureRejected = false, lastError = null, modelKey = null, firmwareVersion = null }) {
   const base = {
+    modelKey,
+    firmwareVersion,
     transport: transport || null,
     connected: Boolean(connected),
     connectionMode: conn?.mode || 'auto',

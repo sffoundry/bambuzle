@@ -6,7 +6,8 @@ const path = require('path');
 const mqtt = require('mqtt');
 const pino = require('pino');
 const { MQTT_BROKER, PUSHALL_INTERVAL_MS } = require('../utils/constants');
-const { buildPushall } = require('./commands');
+const { buildPushall, buildGetVersion } = require('./commands');
+const { modelKeyFromModules, firmwareFromModules } = require('../utils/printer-models');
 const { parseMessage, deepMerge, extractPrinterState } = require('./message-parser');
 
 // Bambu's public CA bundle for verifying printers on LAN MQTT (see certs/README.md)
@@ -130,6 +131,8 @@ class MqttPrinterClient extends EventEmitter {
         }
         this.log.info({ topic: this.reportTopic }, 'Subscribed');
         this.sendPushall();
+        // Ask once per connection which model/firmware this is (BAM-50: model-specific HMS text)
+        if (!this.modelKey) this._publish(buildGetVersion());
       });
     });
 
@@ -175,6 +178,16 @@ class MqttPrinterClient extends EventEmitter {
     if (!parsed) return;
 
     this.emit('raw', this.deviceId, parsed);
+
+    // get_version reply: model key + firmware; don't merge it into the status state
+    if (parsed?.info?.command === 'get_version') {
+      const modules = parsed.info.module;
+      const modelKey = modelKeyFromModules(modules);
+      if (modelKey) this.modelKey = modelKey;
+      this.firmwareVersion = firmwareFromModules(modules) || this.firmwareVersion || null;
+      this.emit('version', this.deviceId, { modelKey: this.modelKey || null, firmwareVersion: this.firmwareVersion });
+      return;
+    }
 
     // Deep-merge into accumulated state
     this.mergedState = deepMerge(this.mergedState, parsed);

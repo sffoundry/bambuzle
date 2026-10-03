@@ -37,3 +37,9 @@
 - 2026-10-03 live test: set_speed on H2D → 'mqtt message verify failed' (Bambu authorization firmware). Controls now hidden when print.fun says signing required (server also refuses up front); window.confirm replaced by themed in-app dialog (browser-verified: focus on Cancel, Escape cancels). BAM-28 → 🟡 blocked; BAM-35 → HIGH. 94/94.
 - 2026-10-03 BAM-35 (supervised): transport layer cloud/lan + capability matrix + connection UI + LAN probe. Live-verified on H2D/X1C: TLS chain to BBL CA, serial pinning (wrong-serial rejected), bad-code → auth stage. Bundle concatenation bug caught by live test and regression-tested. SDK access request drafted (Linux/ARM64). Note: H2D raised HMS 'MQTT Command verification failed' after the earlier unsigned speed command. 102/102, contrast audit 0 incl. new dialog. v0.7.0.
 - BAM-35 review (agent, no contact with real printers): 3H/3M/5L + 2 pre-existing, all fixed except #1 (cloud login stays the UI gate per Steve; docs corrected). 107/107; dialog stacking browser-verified on throwaway server with TEST-NET printer; contrast 0. Tagged v0.7.0.
+
+## Batch 3 — granted 2026-10-03 by Steve ("go for it" on the SDK-free list)
+- **Trust:** T1 (bambuzle). **Items:** BAM-44 FTPS file/timelapse harvester, BAM-41 audit trail, BAM-12 mobile layout, BAM-50 model-specific HMS text, BAM-51 print hours excl. pauses.
+- Agents: BAM-12 (auto/bam-12-mobile), BAM-41 (auto/bam-41-audit). Claude: BAM-50, BAM-51, BAM-44.
+- Caveat noted up front: BAM-44 FTPS may itself require Developer Mode on authorization firmware — built capability-gated, verify on hardware.
+- BAM-50 done (Claude): get_version → model key (verified live: X1C fw 01.12.00.00, H2D fw 01.04.00.00; no new auth errors — the H2D 'verification failed' HMS is the stale one from the 14:10 speed test, re-logged on each restart). Found + fixed: HMS events duplicated on every restart; cleared→recurring codes missed. Persisted hms_active set. 112/112.

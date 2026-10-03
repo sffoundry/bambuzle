@@ -16,6 +16,16 @@ function buildPushall() {
 /**
  * Build a pause print command.
  */
+/** Read-only firmware/module query (not authorization-gated; ha-bambulab sends it routinely). */
+function buildGetVersion() {
+  return {
+    info: {
+      sequence_id: '0',
+      command: 'get_version',
+    },
+  };
+}
+
 function buildPause(sequenceId = '0') {
   return {
     print: {
@@ -78,6 +88,7 @@ function buildGcodeLine(gcode) {
 }
 
 module.exports = {
+  buildGetVersion,
   buildPushall,
   buildPause,
   buildResume,
