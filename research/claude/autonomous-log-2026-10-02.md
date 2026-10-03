@@ -43,3 +43,4 @@
 - Agents: BAM-12 (auto/bam-12-mobile), BAM-41 (auto/bam-41-audit). Claude: BAM-50, BAM-51, BAM-44.
 - Caveat noted up front: BAM-44 FTPS may itself require Developer Mode on authorization firmware — built capability-gated, verify on hardware.
 - BAM-50 done (Claude): get_version → model key (verified live: X1C fw 01.12.00.00, H2D fw 01.04.00.00; no new auth errors — the H2D 'verification failed' HMS is the stale one from the 14:10 speed test, re-logged on each restart). Found + fixed: HMS events duplicated on every restart; cleared→recurring codes missed. Persisted hms_active set. 112/112.
+- BAM-51 done (Claude): active print time (wall − pauses) for Stats + Maintenance; export schema 2 adds active_sec. 113/113.

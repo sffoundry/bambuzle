@@ -200,3 +200,15 @@ test('GET /api/stats rejects bad dates with 400', async () => {
     await srv.close();
   }
 });
+
+test('BAM-51: print hours exclude recorded pause time; a pause longer than the job floors at 0', () => {
+  const q = require('../src/db/queries');
+  const { getDb } = require('../src/db/database');
+  q.upsertPrinter({ deviceId: 'PAUSE0001', name: 'Paused', model: 'X1C' });
+  const ins = getDb().prepare(`INSERT INTO print_jobs (device_id, started_at, ended_at, end_state, duration_sec, total_pause_sec)
+    VALUES ('PAUSE0001', datetime('now','-3 hours'), datetime('now','-1 hours'), 'FINISH', 7200, ?)`);
+  ins.run(3600); // 2 h wall, 1 h paused → 1 h active
+  ins.run(99999); // bogus pause longer than the job → 0, never negative
+  const { overall } = q.getJobStats({ deviceId: 'PAUSE0001' });
+  assert.equal(overall.totalPrintHours, 1);
+});

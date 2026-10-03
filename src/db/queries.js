@@ -77,8 +77,15 @@ function getJobs(deviceId, limit = 50) {
 
 // Duration of an ended job in seconds; falls back to ended_at − started_at for rows
 // written before duration_sec existed. NULL for running jobs.
+// Wall-clock job duration (pauses included). Export's duration_sec keeps this meaning.
 const JOB_DURATION_SQL = `CASE WHEN j.ended_at IS NOT NULL THEN
   COALESCE(j.duration_sec, MAX(0, (julianday(j.ended_at) - julianday(j.started_at)) * 86400))
+END`;
+
+// Active printing time: wall-clock minus recorded pause time (BAM-51). Used for print hours in Stats and
+// Maintenance — a print paused overnight for filament shouldn't count as hours of machine wear.
+const JOB_ACTIVE_SQL = `CASE WHEN j.ended_at IS NOT NULL THEN
+  MAX(0, ${JOB_DURATION_SQL} - COALESCE(j.total_pause_sec, 0))
 END`;
 
 const JOB_COUNTERS_SQL = `
@@ -87,8 +94,8 @@ const JOB_COUNTERS_SQL = `
   COALESCE(SUM(CASE WHEN j.end_state = 'FAILED' THEN 1 ELSE 0 END), 0) AS failed,
   COALESCE(SUM(CASE WHEN j.end_state IN ('IDLE', 'CANCELLED') THEN 1 ELSE 0 END), 0) AS cancelled,
   COALESCE(SUM(CASE WHEN j.ended_at IS NULL THEN 1 ELSE 0 END), 0) AS running,
-  COALESCE(SUM(${JOB_DURATION_SQL}), 0) AS total_sec,
-  AVG(${JOB_DURATION_SQL}) AS avg_sec`;
+  COALESCE(SUM(${JOB_ACTIVE_SQL}), 0) AS total_sec,
+  AVG(${JOB_ACTIVE_SQL}) AS avg_sec`;
 
 function round(n, digits) {
   const f = 10 ** digits;
@@ -480,6 +487,7 @@ module.exports = {
   getJobs,
   getJobStats,
   JOB_DURATION_SQL, // shared with src/db/export.js (BAM-46)
+  JOB_ACTIVE_SQL, // print hours excluding pauses (BAM-51) — stats, maintenance, export active_sec
   insertSample,
   getSamples,
   insertEvent,

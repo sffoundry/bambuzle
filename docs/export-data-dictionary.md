@@ -1,6 +1,6 @@
 # Job export — data dictionary
 
-`GET /api/export/jobs?format=csv|json&printer=&from=&to=` (Stats view → **Export CSV** / **Export JSON**) returns one row per print job. This page describes every column of **export schema version 1**.
+`GET /api/export/jobs?format=csv|json&printer=&from=&to=` (Stats view → **Export CSV** / **Export JSON**) returns one row per print job. This page describes every column of **export schema version 2** (v2 added `active_sec`, v0.8.0).
 
 ## The file
 
@@ -32,6 +32,7 @@ Some columns come from per-job counters on `print_jobs` and are kept forever. Ot
 | `end_state` | string | — | job | Raw end state: `FINISH`, `FAILED`, `CANCELLED` (user cancel), `IDLE` (cancellations recorded by older versions), or empty while running. |
 | `outcome` | string | — | derived | Normalized result: `finished` (FINISH), `failed` (FAILED), `cancelled` (CANCELLED or IDLE), `running` (no `ended_at`), or `unknown` (ended with any other state). Matches the Stats view's buckets. |
 | `duration_sec` | integer | seconds | job | **Wall-clock** time from start to end, **pauses included**. Rows from before this field existed fall back to `ended_at − started_at`, the same fallback the Stats view uses. Rounded to whole seconds. Empty while running. |
+| `active_sec` | integer | seconds | job | Printing time **excluding pauses**: `duration_sec − pause_total_sec`, floored at 0. This is what Stats "print hours" and Maintenance hours use (since v0.8.0, schema 2). Empty while running. |
 | `progress_pct` | number | % (0–100) | job | Progress when the job ended. Empty while running or if the printer did not report it. |
 | `material` | string | — | job | Filament type, e.g. `PLA` or `PETG`, of the **active AMS tray** when the job started. If no tray was active then, it is the active tray at the first `RUNNING` state. This is one material per job: multi-material prints record only that tray. Empty for external spools, unknown trays and jobs from before this field existed. |
 | `material_color` | string | RRGGBBAA hex | job | Colour of that tray as reported by the AMS, e.g. `FF0000FF`. |
@@ -52,6 +53,6 @@ Some columns come from per-job counters on `print_jobs` and are kept forever. Ot
 ## Notes for analysis
 
 - **Success rate** as the Stats view computes it: `finished / (finished + failed + cancelled)`. Running jobs are excluded.
-- **Print time without pauses:** `duration_sec − pause_total_sec`. This is approximate (see `pause_total_sec`).
+- **Print time without pauses:** use `active_sec` (schema 2+). It's approximate where pause tracking missed a pause (see `pause_total_sec`).
 - **Job boundaries** come from Bambuzle's own MQTT observations. If Bambuzle was offline when a job started or ended, the job may be missing, or its times may be off by the length of the outage.
 - **Formula guard in a script:** a CSV text cell that begins with `'` followed by `=`, `+`, `-`, `@`, a tab or a CR was prefixed by the export.

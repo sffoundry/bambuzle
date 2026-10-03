@@ -4,7 +4,7 @@
 // and repeat HMS / print_error codes. Schema lives in database.js (maintenance_tasks, maintenance_log).
 
 const { getDb } = require('./database');
-const { JOB_DURATION_SQL } = require('./queries');
+const { JOB_ACTIVE_SQL, JOB_DURATION_SQL } = require('./queries');
 const { lookupHmsCode } = require('../utils/hms-codes');
 
 /** Fraction of an interval at which a task becomes "due soon". */
@@ -52,7 +52,7 @@ function round(n, digits) {
 /** Total print hours (ended jobs) and first-job timestamp for a printer. */
 function getPrinterHours(deviceId) {
   const row = getDb().prepare(`
-    SELECT COALESCE(SUM(${JOB_DURATION_SQL}), 0) AS total_sec, MIN(j.started_at) AS first_job_at
+    SELECT COALESCE(SUM(${JOB_ACTIVE_SQL}), 0) AS total_sec, MIN(j.started_at) AS first_job_at
     FROM print_jobs j WHERE j.device_id = ?
   `).get(deviceId);
   return { totalSec: row.total_sec || 0, firstJobAt: row.first_job_at || null };
@@ -65,8 +65,8 @@ function getPrinterHours(deviceId) {
 function getPrintSecondsSince(deviceId, baseline) {
   const row = getDb().prepare(`
     SELECT COALESCE(SUM(CASE
-      WHEN j.started_at >= datetime(@b) THEN ${JOB_DURATION_SQL}
-      ELSE MIN(${JOB_DURATION_SQL}, MAX(0, (julianday(j.ended_at) - julianday(@b)) * 86400))
+      WHEN j.started_at >= datetime(@b) THEN ${JOB_ACTIVE_SQL}
+      ELSE MIN(${JOB_ACTIVE_SQL}, MAX(0, (julianday(j.ended_at) - julianday(@b)) * 86400))
     END), 0) AS sec
     FROM print_jobs j
     WHERE j.device_id = @d AND j.ended_at IS NOT NULL AND j.ended_at > datetime(@b)

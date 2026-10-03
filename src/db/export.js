@@ -5,9 +5,9 @@
 // rename, removal or meaning change; appending a column is also a version bump.
 
 const { getDb } = require('./database');
-const { JOB_DURATION_SQL } = require('./queries');
+const { JOB_DURATION_SQL, JOB_ACTIVE_SQL } = require('./queries');
 
-const EXPORT_SCHEMA_VERSION = 1;
+const EXPORT_SCHEMA_VERSION = 2; // v2: + active_sec (BAM-51)
 const EXPORT_MAX_ROWS = 50000;
 
 /** Ordered column set. `type` is the JSON/CSV value type: string | integer | number. */
@@ -24,6 +24,7 @@ const EXPORT_COLUMNS = [
   { name: 'end_state', type: 'string' },
   { name: 'outcome', type: 'string' },
   { name: 'duration_sec', type: 'integer', unit: 's' },
+  { name: 'active_sec', type: 'integer', unit: 's' },
   { name: 'progress_pct', type: 'number', unit: '%' },
   { name: 'material', type: 'string' },
   { name: 'material_color', type: 'string', unit: 'RRGGBBAA hex' },
@@ -110,6 +111,7 @@ function getJobExportRows({ deviceId, from, to, maxRows = EXPORT_MAX_ROWS } = {}
         ELSE 'unknown'
       END AS outcome,
       CAST(ROUND(${JOB_DURATION_SQL}) AS INTEGER) AS duration_sec,
+      CAST(ROUND(${JOB_ACTIVE_SQL}) AS INTEGER) AS active_sec,
       j.progress_pct,
       j.material,
       j.material_color,

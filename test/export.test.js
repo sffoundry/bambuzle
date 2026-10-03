@@ -170,7 +170,7 @@ test('CSV: BOM, header, row values, quoting and formula-injection guard', async 
     assert.match(res.headers.get('content-type'), /^text\/csv; charset=utf-8/);
     assert.match(res.headers.get('content-disposition'), /^attachment; filename="bambuzle-jobs-all-\d{4}-\d{2}-\d{2}\.csv"$/);
     assert.equal(res.headers.get('x-bambuzle-truncated'), null);
-    assert.equal(res.headers.get('x-bambuzle-export-schema'), '1');
+    assert.equal(res.headers.get('x-bambuzle-export-schema'), '2');
     const buf = Buffer.from(await res.arrayBuffer());
     assert.deepEqual([...buf.subarray(0, 3)], [0xEF, 0xBB, 0xBF], 'UTF-8 BOM');
     const text = buf.toString('utf8');
@@ -198,6 +198,7 @@ test('CSV: BOM, header, row values, quoting and formula-injection guard', async 
     assert.equal(f.material_color, 'FF0000FF');
     assert.equal(f.pause_count, '2');
     assert.equal(f.pause_total_sec, '300.5');
+    assert.equal(f.active_sec, '6900', 'BAM-51: 7200 s wall − 300.5 s paused, rounded');
     assert.equal(f.temp_anomaly_count, '3');
     assert.equal(f.total_layers, '250');
     assert.equal(f.layer_count, '248');
@@ -241,7 +242,7 @@ test('JSON: shape, schema_version, typed values', async () => {
     assert.match(res.headers.get('content-type'), /^application\/json/);
     assert.match(res.headers.get('content-disposition'), /filename="bambuzle-jobs-all-\d{4}-\d{2}-\d{2}\.json"/);
     const body = await res.json();
-    assert.equal(body.schema_version, 1);
+    assert.equal(body.schema_version, 2);
     assert.match(body.generated_at, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
     assert.equal(body.truncated, false);
     assert.equal(body.window.from, null);
@@ -252,6 +253,7 @@ test('JSON: shape, schema_version, typed values', async () => {
     assert.equal(body.jobs.length, 7);
     const f = body.jobs.find((j) => j.job_id === ids.finished);
     assert.equal(f.duration_sec, 7200);
+    assert.equal(f.active_sec, 6900);
     assert.equal(f.subtask_name, 'part');
     // JSON is not formula-guarded: values are raw.
     const idle = body.jobs.find((j) => j.job_id === ids.legacyIdle);
