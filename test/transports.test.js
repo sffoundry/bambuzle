@@ -25,15 +25,15 @@ test('CA bundle parses into all 8 Bambu CA certificates (regression: concatenati
 });
 
 test('LAN connect options: verified TLS 1.2 to :8883 as bblp, identity pinned to serial', () => {
-  const { url, options } = buildConnectOptions({ kind: 'lan', deviceId: '0948AB521500157', lan: { host: '192.168.1.93', accessCode: '12345678' } });
-  assert.equal(url, 'mqtts://192.168.1.93:8883');
+  const { url, options } = buildConnectOptions({ kind: 'lan', deviceId: '01S00TEST000001', lan: { host: '10.0.0.93', accessCode: '12345678' } });
+  assert.equal(url, 'mqtts://10.0.0.93:8883');
   assert.equal(options.username, 'bblp');
   assert.equal(options.password, '12345678');
   assert.equal(options.rejectUnauthorized, true);
   assert.equal(options.maxVersion, 'TLSv1.2');
   assert.match(options.ca, /BEGIN CERTIFICATE/);
-  assert.equal(options.checkServerIdentity('192.168.1.93', { subject: { CN: '0948AB521500157' } }), undefined);
-  const err = options.checkServerIdentity('192.168.1.93', { subject: { CN: '00M09C431902335' } });
+  assert.equal(options.checkServerIdentity('10.0.0.93', { subject: { CN: '01S00TEST000001' } }), undefined);
+  const err = options.checkServerIdentity('10.0.0.93', { subject: { CN: '01S00TEST000002' } });
   assert.equal(err.code, 'ERR_PRINTER_IDENTITY');
   assert.throws(() => buildConnectOptions({ kind: 'lan', deviceId: 'x', lan: { host: 'h' } }), /accessCode/);
 
@@ -68,11 +68,11 @@ test('transport choice and capability matrix', () => {
 });
 
 test('input validation', () => {
-  assert.ok(validHost('192.168.1.93') && validHost('printer.local'));
+  assert.ok(validHost('10.0.0.93') && validHost('printer.local'));
   for (const bad of ['1.2.3.999', 'http://x', 'a b', '-x.com', '', null]) assert.equal(validHost(bad), false, String(bad));
   assert.ok(validAccessCode('a1B2c3D4'));
   assert.equal(validAccessCode('1234567'), false);
-  assert.ok(validSerial('0948AB521500157'));
+  assert.ok(validSerial('01S00TEST000001'));
   assert.equal(validSerial('../etc'), false);
 });
 
