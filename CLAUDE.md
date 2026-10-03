@@ -37,6 +37,8 @@ Browser
 | `src/bambu/mqtt-client.js` | Printer transport (kind `cloud` / `lan`): connect options incl. LAN TLS (Bambu CA bundle in `src/bambu/certs/`, identity pinned to serial), pushall, `sendCommandAwaitReply` — contract in `docs/architecture-transports.md` |
 | `src/printers/transport-policy.js` | Which transport per printer + capability matrix (`control`: available / signature_required / unknown / offline) + input validation |
 | `src/db/printer-connections.js` | Connection settings; the ONLY reader of `printers.lan_access_code` (secret, never returned by the API) |
+| `src/printers/printer-files.js` | SD-card files over implicit FTPS (BAM-44): list/download, path allow-list, one session per printer, reuses LAN TLS policy |
+| `src/server/routes/printer-files.js` | `/api/printers/:id/files[/download]` (private under public-read) |
 | `src/server/routes/printer-connections.js` | Connection settings API, LAN connection test, hand-added LAN printers |
 | `src/bambu/message-parser.js` | MQTT message parsing, `extractPrinterState()` |
 | `src/bambu/diagnostics.js` | `state.diagnostics`: nozzles, firmware update, xcam AI-monitor *settings*, SD, IP, camera, AMS humidity, print_error, dev mode (BAM-32) |

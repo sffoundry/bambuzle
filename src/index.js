@@ -15,6 +15,7 @@ const { reconcileHms } = require('./db/hms-active');
 const printerConnections = require('./db/printer-connections');
 const { chooseTransport, computeCapabilities } = require('./printers/transport-policy');
 const { modelKeyFromCloudCode } = require('./utils/printer-models');
+const { getFilesStatus } = require('./printers/printer-files');
 const { getDb, closeDb } = require('./db/database');
 const { createBackupService } = require('./db/backup');
 const queries = require('./db/queries');
@@ -56,6 +57,7 @@ const printerManager = {
     lastError: mqttClients[deviceId]?.lastError || null,
     modelKey: mqttClients[deviceId]?.modelKey || modelKeyFromCloudCode(queries.getPrinter(deviceId)?.model),
     firmwareVersion: mqttClients[deviceId]?.firmwareVersion || null,
+    filesStatus: getFilesStatus(deviceId),
   }),
   /** HMS dataset model key (X1C, H2D…): printer's get_version reply, else the cloud model code (BAM-50). */
   getModelKey: (deviceId) => mqttClients[deviceId]?.modelKey || modelKeyFromCloudCode(queries.getPrinter(deviceId)?.model),

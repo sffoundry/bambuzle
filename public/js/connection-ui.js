@@ -47,7 +47,7 @@ async function api(method, url, body) {
 }
 
 /** Modal shell shared by both dialogs; resolves when closed. Topmost-only Escape, focus trap, focus return. */
-function openModal(title, buildBody) {
+export function openModal(title, buildBody) {
   return new Promise((resolve) => {
     const previouslyFocused = document.activeElement;
     const overlay = el('div', { class: 'modal conn-dialog', role: 'dialog', 'aria-modal': 'true' });

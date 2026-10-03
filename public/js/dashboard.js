@@ -1,4 +1,5 @@
 import { confirmDialog } from './confirm-dialog.js';
+import { openFilesDialog } from './files-ui.js';
 
 export function renderPrinterCards(printers, config, dashFilters) {
   const container = document.getElementById('printer-cards');
@@ -194,7 +195,7 @@ function updateCardContent(card, deviceId, printer) {
       <div class="stat"><span class="stat-label">Aux Fan</span><span class="stat-value">${auxFan}</span></div>
       <div class="stat"><span class="stat-label">Cham Fan</span><span class="stat-value">${chamberFan}</span></div>
     </div>
-    ${renderDiagnostics(live.diagnostics, printer.capabilities || printerCaps[deviceId])}
+    ${renderDiagnostics(live.diagnostics, printer.capabilities || printerCaps[deviceId], deviceId)}
     ${gaugeHtml}
   `;
   const html = renderControls(deviceId, live, connected, gcodeState);
@@ -308,6 +309,13 @@ function wireControls(container, getPrinter) {
     }
     sendPrinterCommand(deviceId, b.dataset.ctl, null, rerenderFor(deviceId), live);
   });
+  container.addEventListener('click', (e) => {
+    const f = e.target.closest('[data-files]');
+    if (!f) return;
+    e.stopPropagation();
+    const id = f.dataset.files;
+    openFilesDialog(id, getPrinter(id)?.db?.name || id);
+  });
   container.addEventListener('change', async (e) => {
     const sel = e.target.closest('.ctl-speed');
     if (!sel) return;
@@ -336,12 +344,17 @@ function chip(label, value, { tone = '', title = '' } = {}) {
   return `<span class="${cls}"${t}><span class="diag-label">${escapeHtml(label)}</span> ${escapeHtml(String(value))}</span>`;
 }
 
-function renderDiagnostics(d, caps) {
+function renderDiagnostics(d, caps, deviceId) {
   if (!d && !caps) return '';
   d = d || {};
   const chips = [];
   if (caps?.transport) {
     chips.push(chip('Via', caps.transport === 'lan' ? 'LAN' : 'Cloud', { title: caps.transport === 'lan' ? 'Connected directly to the printer on the local network' : 'Connected through BambuLab Cloud' }));
+  }
+  // BAM-44: SD-card files (needs a LAN connection; availability learned on first use)
+  if (caps?.files && caps.files !== 'needs_lan' && deviceId) {
+    const title = caps.files === 'unavailable' ? (caps.filesHint || 'File access unavailable') : 'Browse timelapses and print files on the SD card';
+    chips.push(`<button type="button" class="diag-chip diag-files${caps.files === 'unavailable' ? ' diag-warn' : ''}" data-files="${escapeHtml(deviceId)}" title="${escapeHtml(title)}"><span class="diag-label">SD</span> files</button>`);
   }
 
   if (d.printError?.active) {

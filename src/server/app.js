@@ -14,6 +14,7 @@ const { createMetricsRouter } = require('./routes/metrics');
 const { createExportRouter } = require('./routes/export');
 const { createMaintenanceRouter } = require('./routes/maintenance');
 const { createPrinterConnectionsRouter } = require('./routes/printer-connections');
+const { createPrinterFilesRouter } = require('./routes/printer-files');
 const { getAuthStatus } = require('../bambu/auth');
 const config = require('../config');
 
@@ -74,6 +75,7 @@ function createApp(printerManager, authCallbacks, adminAuth, deps = {}) {
   app.use('/api/auth', createAuthRouter(authCallbacks));
   app.use('/api', createApiRouter(printerManager, { getCloudAuthStatus }));
   app.use('/api', createPrinterConnectionsRouter(printerManager, { probe: deps.lanProbe }));
+  app.use('/api', createPrinterFilesRouter({ fileOps: deps.fileOps }));
   app.use('/api/alerts', createAlertsRouter());
   app.use('/api/system', createSystemRouter({ backupService, dataDir }));
   app.use('/api/export', createExportRouter({ maxRows: deps.exportMaxRows }));

@@ -20,10 +20,11 @@ function chooseTransport(conn, cloudAuthenticated) {
  * Capability summary for the UI/API. `developerMode` comes from the printer's own print.fun bit
  * (src/bambu/diagnostics.js); `signatureRejected` is set once a printer answered "verify failed".
  */
-function computeCapabilities({ conn, transport, connected, developerMode, signatureRejected = false, lastError = null, modelKey = null, firmwareVersion = null }) {
+function computeCapabilities({ conn, transport, connected, developerMode, signatureRejected = false, lastError = null, modelKey = null, firmwareVersion = null, filesStatus = null }) {
   const base = {
     modelKey,
     firmwareVersion,
+    ...filesCapability(conn, filesStatus),
     transport: transport || null,
     connected: Boolean(connected),
     connectionMode: conn?.mode || 'auto',
@@ -48,6 +49,15 @@ function computeCapabilities({ conn, transport, connected, developerMode, signat
     return { ...base, control: 'signature_required', controlHint: 'Developer Mode printers must be connected over LAN' };
   }
   return { ...base, control: 'unknown', controlHint: 'Firmware did not report its authorization mode — commands will be tried' };
+}
+
+/** SD-card file access (BAM-44, FTPS). Known only after an attempt — Bambu firmware may gate it. */
+function filesCapability(conn, status) {
+  if (!conn?.lanHost || !conn?.accessCode) return { files: 'needs_lan', filesHint: 'Configure a LAN connection (IP + access code) to browse SD-card files' };
+  if (!status) return { files: 'unknown', filesHint: null };
+  return status.ok
+    ? { files: 'available', filesHint: null }
+    : { files: 'unavailable', filesHint: status.error || 'File access failed' };
 }
 
 function connectHint(conn) {

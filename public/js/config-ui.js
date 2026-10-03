@@ -1,5 +1,6 @@
 import { getThemeList, getCurrentThemeId, getThemeSwatchColors, applyTheme } from './themes.js';
 import { openConnectionDialog, openAddLanPrinterDialog } from './connection-ui.js';
+import { openFilesDialog } from './files-ui.js';
 // ─── Config UI — Widget Visibility Toggles ───
 // Persists per-printer and chart visibility to localStorage.
 
@@ -80,6 +81,14 @@ export function openConfigModal(cfg, printers, onChanged) {
     connBtn.textContent = 'Connection…';
     connBtn.addEventListener('click', () => openConnectionDialog(deviceId, name));
     row.append(label, via, connBtn);
+    if (printer.capabilities?.files && printer.capabilities.files !== 'needs_lan') {
+      const filesBtn = document.createElement('button');
+      filesBtn.type = 'button';
+      filesBtn.className = 'btn-secondary config-conn-btn';
+      filesBtn.textContent = 'SD files…';
+      filesBtn.addEventListener('click', () => openFilesDialog(deviceId, name));
+      row.append(filesBtn);
+    }
     printersList.appendChild(row);
   }
   const addLan = document.createElement('button');

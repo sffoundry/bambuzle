@@ -17,6 +17,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "basic-ftp": "^6.2.1",
     "better-sqlite3": "^11.10.0",
     "croner": "^8.1.2",
     "dotenv": "^16.6.1",

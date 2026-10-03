@@ -296,6 +296,10 @@ Each printer connects one of two ways (see `docs/architecture-transports.md`):
 
 Printers that aren't on your Bambu account (e.g. LAN-only / Developer Mode) can be added with **+ Add LAN printer**. LAN printers connect and keep working independently of the cloud session (an expired cloud token doesn't interrupt them). The dashboard itself still asks you to log in with your BambuLab account.
 
+### SD-card files (timelapses)
+
+With a LAN connection configured, the **SD files** chip on a printer card (or **SD files…** in Configuration) lists the printer's timelapse videos and print files and downloads them over FTPS. Uses the same certificate checks as the LAN connection. On current Bambu firmware this may require Developer Mode; if the printer refuses, the dialog says why.
+
 ## Backup & restore
 
 Bambuzle backs up its SQLite database automatically using SQLite's online-backup API (safe while the server is running — never copy `bambuzle.db` by hand while it runs).

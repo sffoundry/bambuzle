@@ -1140,3 +1140,12 @@ a:hover { color: var(--text); }
 .conn-test-result.conn-bad { color: var(--red); }
 .conn-dialog .form-actions { display: flex; gap: 8px; justify-content: flex-end; }
 .conn-remove { margin-right: auto; }
+
+/* BAM-44: SD-card files dialog */
+.files-dialog-content { max-width: 640px; }
+.files-tabs { display: flex; gap: 6px; margin-bottom: 8px; }
+.files-tab.active { border-color: var(--accent); color: var(--text); }
+.files-body { max-height: 50vh; overflow: auto; margin-bottom: 8px; }
+.files-name { word-break: break-all; }
+.files-dl { padding: 2px 8px; font-size: 10px; text-decoration: none; display: inline-block; }
+button.diag-files { cursor: pointer; background: transparent; font-family: var(--font); }
