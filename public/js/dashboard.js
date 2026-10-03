@@ -358,6 +358,12 @@ function renderDiagnostics(d, caps, deviceId) {
   if (caps?.transport) {
     chips.push(chip('Via', caps.transport === 'lan' ? 'LAN' : 'Cloud', { title: caps.transport === 'lan' ? 'Connected directly to the printer on the local network' : 'Connected through BambuLab Cloud' }));
   }
+  // BAM-35: camera reachability (detection only — no stream yet). Unknown / no camera → no chip.
+  const CAM = { available: ['LAN', ''], disabled: ['liveview off', ''], unreachable: ['unreachable', 'diag-warn'] };
+  if (caps?.camera && CAM[caps.camera]) {
+    const [text, tone] = CAM[caps.camera];
+    chips.push(chip('Cam', text, { tone, title: caps.cameraHint || '' }));
+  }
   // BAM-44: SD-card files (needs a LAN connection; availability learned on first use)
   if (caps?.files && caps.files !== 'needs_lan' && deviceId && canOperate()) {
     const title = caps.files === 'unavailable' ? (caps.filesHint || 'File access unavailable') : 'Browse timelapses and print files on the SD card';

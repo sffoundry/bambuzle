@@ -307,4 +307,4 @@ class MqttPrinterClient extends EventEmitter {
   }
 }
 
-module.exports = { MqttPrinterClient, buildConnectOptions, checkPrinterIdentity, isFatalLanError, LAN_MQTT_PORT };
+module.exports = { MqttPrinterClient, buildConnectOptions, checkPrinterIdentity, getLanCaBundle, isFatalLanError, LAN_MQTT_PORT };

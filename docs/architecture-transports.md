@@ -51,6 +51,30 @@ LAN printers connect at startup and keep running **independently of the Bambu Cl
 | `cloud` | off | `signature_required`: "enable Developer Mode and connect over LAN, or use the Bambu SDK" |
 | any | not reported (pre-2025 firmware) | `unknown`: commands are tried; a `verify failed` reply flips it to `signature_required` |
 
+## Camera capability
+
+`src/printers/camera-probe.js` only detects a camera; nothing in Bambuzle streams video yet (BAM-9).
+
+**Protocol by model:**
+
+| Models | Protocol | Port | When it's open |
+|---|---|---|---|
+| X1 / X1C / X1E / H2D / H2S / H2C | RTSPS | 322 | Only with "LAN Only Liveview" on |
+| P1P / P1S / A1 / A1 mini | JPEG frames over TLS | 6000 | — |
+
+**How it decides:**
+- The printer reports whether a camera is present (`ipcam_dev`). X1 and H2 printers also report whether LAN liveview is on (`rtsp_url`, which is never exposed or logged).
+- If a camera is present and liveview isn't reported off, Bambuzle opens one TLS connection to the camera port and closes it. It sends no credentials.
+- The address used is the saved LAN host, or else the IP the printer reports. Offline printers are not probed.
+- The certificate must chain to the Bambu CA and have CN == serial, the same rule as LAN MQTT.
+- A working camera is re-checked hourly and a failing one every 10 min. A probe runs at once if the address or the liveview switch changes.
+
+**Result:** `camera` is one of `available`, `disabled` (liveview off or port closed), `unreachable`, `none` or `unknown`, together with `cameraProtocol` and `cameraHint`. Cards show a **Cam** chip.
+
+**Checked on hardware (2026-10-03):**
+- An H2D and an X1C with liveview off report `rtsp_url: disable` and refuse port 322.
+- Port 6000 on both presents a certificate that verifies against the bundled CA with CN = serial.
+
 ## LAN TLS
 
 - **Certificate check:** printers present certificates issued by Bambu's device CAs. We verify the chain against Bambu's public CA bundle (`src/bambu/certs/`, from ha-bambulab, MIT), so a non-Bambu device can't impersonate a printer.

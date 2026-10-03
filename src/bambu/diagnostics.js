@@ -129,8 +129,12 @@ function extractNetwork(p) {
 function extractCamera(p) {
   const c = p.ipcam;
   if (!c || typeof c !== 'object') return null;
-  // rtsp_url is deliberately not exposed
+  // rtsp_url itself is deliberately not exposed (it embeds the printer's address); only whether
+  // LAN liveview is switched on ('disable' = off; absent on models that don't report it)
+  const rtsp = typeof c.rtsp_url === 'string' ? c.rtsp_url : null;
   return {
+    present: c.ipcam_dev != null ? String(c.ipcam_dev) !== '0' : null,
+    lanLiveview: rtsp == null ? null : rtsp !== 'disable' && rtsp !== '',
     recording: c.ipcam_record != null ? c.ipcam_record === 'enable' : null,
     timelapse: c.timelapse != null ? c.timelapse === 'enable' : null,
     resolution: c.resolution || null,

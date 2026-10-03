@@ -19,6 +19,7 @@ const printerConnections = require('./db/printer-connections');
 const { chooseTransport, computeCapabilities } = require('./printers/transport-policy');
 const { modelKeyFromCloudCode } = require('./utils/printer-models');
 const { getFilesStatus } = require('./printers/printer-files');
+const { createCameraMonitor } = require('./printers/camera-probe');
 const { getDb, closeDb } = require('./db/database');
 const { createBackupService } = require('./db/backup');
 const queries = require('./db/queries');
@@ -46,13 +47,27 @@ let backupService = null;
 
 const lastMessageAt = {}; // deviceId -> ms timestamp of the last MQTT report (BAM-37 metrics)
 
+// Camera capability (BAM-35): background TLS check of the camera port; a changed result is pushed to the UI
+const cameraMonitor = createCameraMonitor({
+  tlsVerify: config.lan.tlsVerify,
+  onChange: (id) => broadcast('state', { deviceId: id, state: liveStates[id] || {}, connected: mqttClients[id]?.connected ?? false, capabilities: printerManager.getCapabilities(id) }),
+});
+
+function cameraFor(deviceId, modelKey) {
+  const connected = mqttClients[deviceId]?.connected ?? false;
+  const reported = liveStates[deviceId]?.diagnostics?.camera || null;
+  // Only probe printers that are online; the saved LAN address wins over the one the printer reports
+  const host = connected ? (printerConnections.getConnection(deviceId)?.lanHost || liveStates[deviceId]?.diagnostics?.network?.ip || null) : null;
+  return cameraMonitor.check(deviceId, { modelKey, host, reported });
+}
+
 const printerManager = {
   getLiveStates: () => liveStates,
   getLastMessageAt: (deviceId) => lastMessageAt[deviceId] || null,
   isConnected: (deviceId) => mqttClients[deviceId]?.connected ?? false,
   getClient: (deviceId) => mqttClients[deviceId] || null,
   getTransportKind: (deviceId) => mqttClients[deviceId]?.kind || null,
-  getCapabilities: (deviceId) => computeCapabilities({
+  getCapabilities: (deviceId) => ({ ...computeCapabilities({
     conn: printerConnections.getConnection(deviceId),
     transport: mqttClients[deviceId]?.kind || null,
     connected: mqttClients[deviceId]?.connected ?? false,
@@ -62,7 +77,7 @@ const printerManager = {
     modelKey: mqttClients[deviceId]?.modelKey || modelKeyFromCloudCode(queries.getPrinter(deviceId)?.model),
     firmwareVersion: mqttClients[deviceId]?.firmwareVersion || null,
     filesStatus: getFilesStatus(deviceId),
-  }),
+  }), ...cameraFor(deviceId, mqttClients[deviceId]?.modelKey || modelKeyFromCloudCode(queries.getPrinter(deviceId)?.model)) }),
   /** HMS dataset model key (X1C, H2D…): printer's get_version reply, else the cloud model code (BAM-50). */
   getModelKey: (deviceId) => mqttClients[deviceId]?.modelKey || modelKeyFromCloudCode(queries.getPrinter(deviceId)?.model),
   markSignatureRejected: (deviceId) => signatureRejected.add(deviceId),
