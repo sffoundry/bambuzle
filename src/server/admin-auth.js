@@ -212,7 +212,7 @@ function createAdminAuth({ auth, dataDir, log }) {
     return `${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`;
   }
 
-  return { enabled, publicRead, trustProxy: auth.trustProxy || '', isAuthorized, getPrincipal, requireAdmin, verifyWsRequest, checkToken, sessionCookie, userSessionCookie, userSessionToken, clearCookie };
+  return { enabled, publicRead, trustProxy: auth.trustProxy || '', isAuthorized, crossOriginWrite, getPrincipal, requireAdmin, verifyWsRequest, checkToken, sessionCookie, userSessionCookie, userSessionToken, clearCookie };
 }
 
 module.exports = { createAdminAuth, COOKIE_NAME };

@@ -64,6 +64,11 @@ function validatePassword(p) {
   return p;
 }
 
+function validateDisabled(d) {
+  if (typeof d !== 'boolean') throw new UserError('disabled must be true or false');
+  return d;
+}
+
 function validateRole(r) {
   if (!ROLES.includes(r)) throw new UserError(`Role must be one of ${ROLES.join(', ')}`);
   return r;
@@ -114,12 +119,21 @@ async function createUser({ username, password, role }) {
   validateUsername(username);
   validatePassword(password);
   validateRole(role);
-  const exists = db().prepare('SELECT 1 FROM users WHERE username_lc = ?').get(username.toLowerCase());
-  if (exists) throw new UserError('A user with this name already exists', 409);
+  if (usernameExists(username)) throw new UserError('A user with this name already exists', 409);
   const hash = await hashPassword(password);
-  const r = db().prepare('INSERT INTO users (username, username_lc, password_hash, role) VALUES (?, ?, ?, ?)')
-    .run(username, username.toLowerCase(), hash, role);
-  return getUser(r.lastInsertRowid);
+  try {
+    const r = db().prepare('INSERT INTO users (username, username_lc, password_hash, role) VALUES (?, ?, ?, ?)')
+      .run(username, username.toLowerCase(), hash, role);
+    return getUser(r.lastInsertRowid);
+  } catch (err) {
+    // A concurrent create of the same name won the race while we were hashing
+    if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') throw new UserError('A user with this name already exists', 409);
+    throw err;
+  }
+}
+
+function usernameExists(username) {
+  return typeof username === 'string' && Boolean(db().prepare('SELECT 1 FROM users WHERE username_lc = ?').get(username.toLowerCase()));
 }
 
 /** Credential check. Returns the public user or null (same timing for unknown user / wrong password / disabled). */
@@ -141,15 +155,21 @@ async function authenticate(username, password) {
 
 /** Admin edits. Guards against removing the last active admin. Revokes the user's sessions on any change. */
 async function updateUser(id, { role, disabled, password }) {
-  const u = db().prepare('SELECT * FROM users WHERE id = ?').get(id);
-  if (!u) throw new UserError('User not found', 404);
-  const nextRole = role !== undefined ? validateRole(role) : u.role;
-  const nextDisabled = disabled !== undefined ? Boolean(disabled) : Boolean(u.disabled);
-  const losesAdmin = u.role === 'admin' && !u.disabled && (nextRole !== 'admin' || nextDisabled);
-  if (losesAdmin && countActiveAdmins(u.id) === 0) throw new UserError('Can\'t demote or disable the last active admin', 409);
-  const hash = password !== undefined ? await hashPassword(validatePassword(password)) : u.password_hash;
-  db().prepare('UPDATE users SET role = ?, disabled = ?, password_hash = ? WHERE id = ?').run(nextRole, nextDisabled ? 1 : 0, hash, id);
-  revokeUserSessions(id);
+  if (role !== undefined) validateRole(role);
+  if (disabled !== undefined) validateDisabled(disabled);
+  // Hash BEFORE the check-and-write: the last-admin check and the UPDATE must not have an await between
+  // them, or two concurrent demotions can each see the other admin and leave none (review finding).
+  const newHash = password !== undefined ? await hashPassword(validatePassword(password)) : null;
+  db().transaction(() => {
+    const u = db().prepare('SELECT * FROM users WHERE id = ?').get(id);
+    if (!u) throw new UserError('User not found', 404);
+    const nextRole = role ?? u.role;
+    const nextDisabled = disabled ?? Boolean(u.disabled);
+    const losesAdmin = u.role === 'admin' && !u.disabled && (nextRole !== 'admin' || nextDisabled);
+    if (losesAdmin && countActiveAdmins(u.id) === 0) throw new UserError('Can\'t demote or disable the last active admin', 409);
+    db().prepare('UPDATE users SET role = ?, disabled = ?, password_hash = ? WHERE id = ?').run(nextRole, nextDisabled ? 1 : 0, newHash ?? u.password_hash, id);
+    revokeUserSessions(id);
+  })();
   return getUser(id);
 }
 
@@ -213,7 +233,7 @@ function pruneExpiredSessions() {
 
 module.exports = {
   ROLES, UserError, MIN_PASSWORD,
-  countUsers, listUsers, getUser, createUser, updateUser, deleteUser, authenticate, changeOwnPassword,
+  countUsers, listUsers, usernameExists, getUser, createUser, updateUser, deleteUser, authenticate, changeOwnPassword,
   createSession, sessionUser, deleteSession, revokeUserSessions, pruneExpiredSessions,
   hashPassword, verifyPassword,
 };

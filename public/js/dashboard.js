@@ -214,7 +214,7 @@ function updateCardContent(card, deviceId, printer) {
 const CMD_STATUS_MS = 20000;
 
 // BAM-16: the signed-in role; the server enforces permissions, this only hides what can't be used
-let userRole = 'admin';
+let userRole = 'viewer'; // least privilege until /api/session says otherwise
 const ROLE_RANK = { viewer: 1, operator: 2, admin: 3 };
 export function setUserRole(role) { userRole = role || 'viewer'; }
 const canOperate = () => (ROLE_RANK[userRole] || 0) >= ROLE_RANK.operator;

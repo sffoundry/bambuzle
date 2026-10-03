@@ -3,7 +3,7 @@
 const { test, after } = require('node:test');
 const assert = require('node:assert/strict');
 const WebSocket = require('ws');
-const { authHeaders, startServer, cleanup } = require('./helpers');
+const { authHeaders, startServer, cleanup, TEST_TOKEN } = require('./helpers');
 const users = require('../src/db/users');
 const { requiredRole, hasRole } = require('../src/server/permissions');
 const queries = require('../src/db/queries');
@@ -147,5 +147,113 @@ test('per-username lockout applies across sign-in attempts', async () => {
     assert.equal(last.status, 429);
   } finally {
     await srv.close();
+  }
+});
+
+// ─── Review findings (BAM-16 review) ───
+const { _resetForTests } = require('../src/server/routes/session');
+
+test('review #1: a parallel burst of wrong passwords cannot exceed the lockout', async () => {
+  _resetForTests();
+  await users.createUser({ username: 'burst', password: PW, role: 'viewer' });
+  const srv = await startServer();
+  try {
+    const results = await Promise.all(Array.from({ length: 25 }, (_, i) => login(srv.baseUrl, 'burst', `wrong pw ${i}xx`)));
+    const counts = results.reduce((m, r) => ({ ...m, [r.status]: (m[r.status] || 0) + 1 }), {});
+    assert.equal(counts[401], 10, JSON.stringify(counts));
+    assert.equal(counts[429], 15);
+  } finally {
+    await srv.close();
+    _resetForTests();
+  }
+});
+
+test('review #4: a user who signed in from this IP is not locked out by guesses against their name', async () => {
+  _resetForTests();
+  await users.createUser({ username: 'victim', password: PW, role: 'admin' });
+  const srv = await startServer({ auth: { mode: 'on', adminToken: TEST_TOKEN, trustProxy: 'loopback' } });
+  const viaIp = (ip, password) => fetch(`${srv.baseUrl}/api/session`, { method: 'POST', headers: { ...json, 'X-Forwarded-For': ip }, body: JSON.stringify({ username: 'victim', password }) });
+  try {
+    assert.equal((await viaIp('10.0.0.5', PW)).status, 200);
+    for (let i = 0; i < 10; i++) await viaIp(`10.0.1.${i + 1}`, `attacker guess ${i}`);
+    assert.equal((await viaIp('10.0.2.1', PW)).status, 429, 'unknown IPs still hit the per-account lock');
+    assert.equal((await viaIp('10.0.0.5', PW)).status, 200, 'the known-good IP still gets in');
+  } finally {
+    await srv.close();
+    _resetForTests();
+  }
+});
+
+test('review #2: concurrent demotions cannot remove the last active admin', async () => {
+  const a = await users.createUser({ username: 'raceA', password: PW, role: 'admin' });
+  const b = await users.createUser({ username: 'raceB', password: PW, role: 'admin' });
+  // Demote every other active admin first so raceA/raceB are the only two
+  for (const u of users.listUsers()) if (u.role === 'admin' && !u.disabled && u.id !== a.id && u.id !== b.id) await users.updateUser(u.id, { role: 'viewer' });
+  const results = await Promise.allSettled([
+    users.updateUser(a.id, { role: 'viewer', password: 'new password one' }),
+    users.updateUser(b.id, { role: 'viewer', password: 'new password two' }),
+  ]);
+  assert.equal(results.filter((r) => r.status === 'fulfilled').length, 1);
+  assert.equal(results.find((r) => r.status === 'rejected').reason.status, 409);
+  assert.equal(users.listUsers().filter((u) => u.role === 'admin' && !u.disabled).length, 1);
+});
+
+test('review #5/#8/#10: strict disabled flag, duplicate-create race → 409, strict ids', async () => {
+  const u = await users.createUser({ username: 'strict1', password: PW, role: 'viewer' });
+  await assert.rejects(users.updateUser(u.id, { disabled: 'false' }), (e) => e.status === 400);
+  assert.equal(users.getUser(u.id).disabled, false);
+  const dup = await Promise.allSettled([1, 2, 3].map(() => users.createUser({ username: 'dupe', password: PW, role: 'viewer' })));
+  assert.equal(dup.filter((r) => r.status === 'fulfilled').length, 1);
+  assert.ok(dup.filter((r) => r.status === 'rejected').every((r) => r.reason.status === 409));
+  const srv = await startServer();
+  try {
+    for (const id of [' 1 ', '0x1', '1e0', '-1', '0']) {
+      const r = await fetch(`${srv.baseUrl}/api/users/${encodeURIComponent(id)}`, { method: 'PATCH', headers: { ...json, ...authHeaders }, body: JSON.stringify({ role: 'viewer' }) });
+      assert.equal(r.status, 400, id);
+    }
+  } finally {
+    await srv.close();
+  }
+});
+
+test('review #6/#7: login CSRF refused; mistyped usernames are not written to the audit trail', async () => {
+  _resetForTests();
+  const srv = await startServer();
+  try {
+    const r = await fetch(`${srv.baseUrl}/api/session`, { method: 'POST', headers: { ...json, Origin: 'http://127.0.0.1:1' }, body: JSON.stringify({ username: 'x', password: 'y' }) });
+    assert.equal(r.status, 403);
+    assert.equal((await fetch(`${srv.baseUrl}/api/session`, { method: 'DELETE', headers: { Origin: 'http://evil.example' } })).status, 403);
+    await login(srv.baseUrl, 'Sup3rSecretPw!', 'whatever-password');
+    const rows = await (await fetch(`${srv.baseUrl}/api/audit?limit=50`, { headers: authHeaders })).json();
+    assert.ok(!JSON.stringify(rows).includes('Sup3rSecretPw!'));
+  } finally {
+    await srv.close();
+    _resetForTests();
+  }
+});
+
+test('review #3/#9: disabling a user drops their live WebSocket; own-password guesses are limited', async () => {
+  _resetForTests();
+  const u = await users.createUser({ username: 'wsuser', password: PW, role: 'operator' });
+  const srv = await startServer();
+  try {
+    const { cookie } = await login(srv.baseUrl, 'wsuser', PW);
+    const ws = new WebSocket(`${srv.baseUrl.replace('http', 'ws')}/ws`, { headers: { cookie } });
+    await new Promise((res, rej) => { ws.once('open', res); ws.once('error', rej); });
+    const closed = new Promise((res) => ws.once('close', res));
+    // Own-password guesses: 5 wrong → then 429
+    const statuses = [];
+    for (let i = 0; i < 6; i++) {
+      const r = await fetch(`${srv.baseUrl}/api/me/password`, { method: 'POST', headers: { ...json, cookie }, body: JSON.stringify({ currentPassword: `nope nope ${i}`, newPassword: 'another long password' }) });
+      statuses.push(r.status);
+    }
+    assert.deepEqual(statuses, [403, 403, 403, 403, 403, 429]);
+    const r = await fetch(`${srv.baseUrl}/api/users/${u.id}`, { method: 'PATCH', headers: { ...json, ...authHeaders }, body: JSON.stringify({ disabled: true }) });
+    assert.equal(r.status, 200);
+    await closed;
+    assert.equal(ws.readyState, WebSocket.CLOSED);
+  } finally {
+    await srv.close();
+    _resetForTests();
   }
 });

@@ -3,6 +3,9 @@
 const { WebSocketServer } = require('ws');
 
 let wss = null;
+let verify = null;
+let sweepTimer = null;
+const REVALIDATE_MS = 30 * 1000;
 
 /**
  * Attach a WebSocket server to an existing HTTP server.
@@ -18,7 +21,9 @@ function createWebSocket(httpServer, logger, { verifyRequest } = {}) {
   });
   const log = logger.child({ component: 'websocket' });
 
-  server.on('connection', (ws) => {
+  verify = verifyRequest || null;
+  server.on('connection', (ws, req) => {
+    ws._authReq = req; // re-checked later: a disabled/deleted user or revoked session loses the stream
     log.info({ clients: server.clients.size }, 'WebSocket client connected');
 
     ws.on('close', () => {
@@ -31,7 +36,29 @@ function createWebSocket(httpServer, logger, { verifyRequest } = {}) {
   });
 
   wss = server;
+  if (verify) {
+    sweepTimer = setInterval(revalidateClients, REVALIDATE_MS);
+    sweepTimer.unref();
+  }
   return wss;
+}
+
+/**
+ * Re-run the upgrade check for every open socket and drop the ones whose credential no longer
+ * holds (BAM-16). Called after account changes / sign-out, and every 30 s as a backstop.
+ */
+function revalidateClients() {
+  if (!wss || !verify) return 0;
+  let dropped = 0;
+  for (const client of wss.clients) {
+    const req = client._authReq;
+    if (!req) continue;
+    delete req._principal; // getPrincipal caches per request — force a fresh session lookup
+    let ok = false;
+    try { ok = Boolean(verify(req)); } catch { ok = false; }
+    if (!ok) { client.terminate(); dropped++; }
+  }
+  return dropped;
 }
 
 /**
@@ -58,6 +85,8 @@ function clientCount() {
 }
 
 function closeWebSocket() {
+  if (sweepTimer) { clearInterval(sweepTimer); sweepTimer = null; }
+  verify = null;
   if (wss) {
     // ws v8 with an external HTTP server leaves clients open on close(); terminate them so shutdown completes
     for (const client of wss.clients) client.terminate();
@@ -66,4 +95,4 @@ function closeWebSocket() {
   }
 }
 
-module.exports = { createWebSocket, broadcast, clientCount, closeWebSocket };
+module.exports = { createWebSocket, broadcast, clientCount, closeWebSocket, revalidateClients };

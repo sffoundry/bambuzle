@@ -103,7 +103,9 @@ async function checkAuth() {
     const loginForm = document.getElementById('login-form');
     const verifyForm = document.getElementById('verify-form');
 
-    if (status === 'authenticated') {
+    // Only an admin can sign in to BambuLab Cloud (/api/auth/* is admin-only). Everyone else goes
+    // straight to the dashboard — LAN printers and history still work without a cloud session.
+    if (status === 'authenticated' || currentUser?.role !== 'admin') {
       overlay.classList.add('hidden');
       loadPrinters();
       return;
