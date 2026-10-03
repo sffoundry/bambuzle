@@ -1436,3 +1436,11 @@ html[data-role="viewer"] .maint-empty button { display: none !important; }
 .power-circuit-row input { background: var(--bg); color: var(--text); border: 1px solid var(--border); padding: 5px 7px; font-family: var(--font); }
 .power-circuit-row input[type="text"] { flex: 1 1 140px; min-width: 0; }
 .power-circuit-row input[type="number"] { width: 90px; }
+
+/* BAM-9 live camera */
+.modal-content.camera-dialog-content { max-width: min(1100px, 96vw); width: 96vw; }
+.camera-stage { background: #000; display: flex; align-items: center; justify-content: center; min-height: 200px; }
+.camera-stage:fullscreen { width: 100vw; height: 100vh; }
+.camera-view { display: block; width: 100%; height: auto; max-height: 75vh; object-fit: contain; }
+.camera-stage:fullscreen .camera-view { max-height: 100vh; }
+.camera-status { min-height: 1.2em; margin: 6px 0; font-size: 12px; color: var(--text-dim); }

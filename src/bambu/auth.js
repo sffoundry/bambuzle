@@ -349,6 +349,9 @@ async function getDevices(auth) {
     model: d.dev_model_name || d.dev_product_name || 'Unknown',
     nozzleDiameter: d.nozzle_diameter || null,
     online: d.dev_connection_type !== 'unknown',
+    // The printer's LAN access code, as reported to the account (same as Bambu Studio shows). Secret:
+    // never logged; only ever stored as the printer's LAN access code (BAM-9 camera, BAM-35 LAN).
+    accessCode: typeof d.dev_access_code === 'string' && /^[A-Za-z0-9]{8}$/.test(d.dev_access_code) ? d.dev_access_code : null,
   }));
 }
 

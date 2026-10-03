@@ -43,6 +43,9 @@ Browser
 | `src/power/plug-readers.js` | BAM-18 smart-plug readers (Shelly/Tasmota/HA/JSON) — read-only, no redirects, size/time capped |
 | `src/power/monitor.js` | Polls plugs every 15 s → per-minute `power_samples`; live snapshot + circuit totals |
 | `src/db/power.js` | Plug config (write-only secret), power settings, samples, job energy/cost |
+| `src/printers/camera-stream.js` | BAM-9 live camera: JPEG-over-TLS (:6000) and RTSPS (:322) clients, H.264 depacketiser, per-printer shared hub |
+| `src/printers/fmp4.js` | Fragmented-MP4 muxer (H.264 → MSE; works on plain http, unlike WebCodecs) |
+| `test/support/` | Test-only fake RTSPS camera and an I_PCM H.264 generator (real bitstream, no encoder) |
 | `src/printers/camera-probe.js` | Camera capability: protocol by model + credential-less verified TLS check of the camera port |
 | `src/server/permissions.js` | **Role required per /api route (BAM-16).** Add new routes here; unlisted writes default to admin, reads to viewer |
 | `src/db/users.js` | Accounts (scrypt), server-side hashed sessions, last-admin guard |

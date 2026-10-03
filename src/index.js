@@ -19,7 +19,8 @@ const printerConnections = require('./db/printer-connections');
 const { chooseTransport, computeCapabilities } = require('./printers/transport-policy');
 const { modelKeyFromCloudCode } = require('./utils/printer-models');
 const { getFilesStatus } = require('./printers/printer-files');
-const { createCameraMonitor } = require('./printers/camera-probe');
+const { createCameraMonitor, cameraProtocol } = require('./printers/camera-probe');
+const { createCameraStreams } = require('./printers/camera-stream');
 const { createPowerMonitor } = require('./power/monitor');
 const power = require('./db/power');
 const { getDb, closeDb } = require('./db/database');
@@ -56,12 +57,32 @@ const cameraMonitor = createCameraMonitor({
   onChange: (id) => broadcast('state', { deviceId: id, state: liveStates[id] || {}, connected: mqttClients[id]?.connected ?? false, capabilities: printerManager.getCapabilities(id) }),
 });
 
+// Live camera streams (BAM-9): one shared upstream per printer
+const cameraStreams = createCameraStreams({ log, tlsVerify: config.lan.tlsVerify });
+
+/** Where to get a printer's live camera from, or why not (BAM-9). The access code never leaves the server. */
+function getCameraTarget(deviceId) {
+  if (!queries.getPrinter(deviceId)) return null;
+  const caps = printerManager.getCapabilities(deviceId);
+  const proto = cameraProtocol(caps.modelKey);
+  const conn = printerConnections.getConnection(deviceId);
+  const host = conn?.lanHost || liveStates[deviceId]?.diagnostics?.network?.ip || null;
+  if (!proto) return { ok: false, status: 409, error: 'Live camera isn\'t supported for this printer model yet' };
+  if (caps.camera === 'none') return { ok: false, status: 409, error: 'This printer reports no camera' };
+  if (caps.camera === 'disabled') return { ok: false, status: 409, error: caps.cameraHint || 'The camera is switched off on the printer' };
+  if (!caps.connected || !host) return { ok: false, status: 409, error: 'Printer is offline or its address is not known yet' };
+  if (!conn?.accessCode) return { ok: false, status: 409, error: 'The camera needs the printer\'s LAN access code — log in to BambuLab Cloud (it is filled in automatically) or enter it under Connection…' };
+  return { ok: true, protocol: proto.protocol, host, accessCode: conn.accessCode };
+}
+
 function cameraFor(deviceId, modelKey) {
   const connected = mqttClients[deviceId]?.connected ?? false;
   const reported = liveStates[deviceId]?.diagnostics?.camera || null;
   // Only probe printers that are online; the saved LAN address wins over the one the printer reports
   const host = connected ? (printerConnections.getConnection(deviceId)?.lanHost || liveStates[deviceId]?.diagnostics?.network?.ip || null) : null;
-  return cameraMonitor.check(deviceId, { modelKey, host, reported });
+  const cam = cameraMonitor.check(deviceId, { modelKey, host, reported });
+  // Live view possible: the camera port answered and we have the access code to log in (BAM-9)
+  return { ...cam, cameraLive: cam.camera === 'available' && Boolean(printerConnections.getConnection(deviceId)?.accessCode) };
 }
 
 const printerManager = {
@@ -84,6 +105,7 @@ const printerManager = {
   /** HMS dataset model key (X1C, H2D…): printer's get_version reply, else the cloud model code (BAM-50). */
   getModelKey: (deviceId) => mqttClients[deviceId]?.modelKey || modelKeyFromCloudCode(queries.getPrinter(deviceId)?.model),
   markSignatureRejected: (deviceId) => signatureRejected.add(deviceId),
+  getCameraTarget: (deviceId) => getCameraTarget(deviceId),
   /** Re-evaluate one printer's transport after its connection settings changed. */
   reconnect: (deviceId) => syncConnection(deviceId),
 };
@@ -127,6 +149,7 @@ async function main() {
     getCloudAuthStatus: getAuthStatus,
     dataDir: config.dataDir,
     powerMonitor,
+    cameraStreams,
   });
   const server = http.createServer(app);
   createWebSocket(server, log, { verifyRequest: adminAuth.verifyWsRequest });
@@ -178,6 +201,7 @@ async function main() {
     }
 
     powerMonitor?.stop();
+    cameraStreams.closeAll();
     closeWebSocket(); // terminates open dashboard sockets, otherwise server.close() never resolves
 
     await new Promise((resolve) => server.close(resolve));
@@ -212,10 +236,21 @@ async function onAuthenticated(auth) {
   }
 
   // Upsert printers in DB
+  let codesImported = 0;
   for (const d of devices) {
     queries.upsertPrinter(d);
     log.info({ deviceId: d.deviceId, name: d.name, model: d.model }, 'Registered printer');
+    // LAN access code from the account (BAM-9): saved like a typed-in code. Only the code — never the
+    // address — so a cloud printer stays on cloud (a LAN switch needs a host too); refreshed if the
+    // printer's code changed. Used for the LAN camera stream and LAN connection tests.
+    const conn = d.accessCode ? printerConnections.getConnection(d.deviceId) : null;
+    if (conn && conn.source !== 'manual' && conn.accessCode !== d.accessCode) {
+      printerConnections.setConnection(d.deviceId, { accessCode: d.accessCode });
+      codesImported++;
+      if (conn.lanHost) syncConnection(d.deviceId); // a LAN printer with a stale code reconnects with the new one
+    }
   }
+  if (codesImported) log.info({ count: codesImported }, 'LAN access codes updated from the BambuLab account');
 
   // Re-auth: cloud transports must reconnect with the new credentials; LAN ones are unaffected
   for (const [id, client] of Object.entries(mqttClients)) {

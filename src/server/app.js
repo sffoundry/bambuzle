@@ -17,6 +17,7 @@ const { createPrinterConnectionsRouter } = require('./routes/printer-connections
 const { createPrinterFilesRouter } = require('./routes/printer-files');
 const { createUsersRouter } = require('./routes/users');
 const { createPowerRouter } = require('./routes/power');
+const { createCameraRouter } = require('./routes/camera');
 const { createAuditRouter } = require('./routes/audit');
 const { attachAuditActor } = require('./audit');
 const { getAuthStatus } = require('../bambu/auth');
@@ -84,6 +85,7 @@ function createApp(printerManager, authCallbacks, adminAuth, deps = {}) {
   app.use('/api', createPrinterFilesRouter({ fileOps: deps.fileOps }));
   app.use('/api', createUsersRouter(adminAuth));
   app.use('/api', createPowerRouter({ powerMonitor: deps.powerMonitor || null, read: deps.plugReader }));
+  app.use('/api', createCameraRouter({ printerManager, cameraStreams: deps.cameraStreams || null, adminAuth }));
   app.use('/api/alerts', createAlertsRouter());
   app.use('/api/system', createSystemRouter({ backupService, dataDir }));
   app.use('/api/export', createExportRouter({ maxRows: deps.exportMaxRows }));

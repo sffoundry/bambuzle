@@ -18,7 +18,7 @@ info:
     ## Real-time Data
     For live updates, connect to the WebSocket endpoint at `ws://<host>:<port>/ws`.
     Messages are JSON with `{ type, data }` format. Types include `state`, `event`, and `auth`.
-  version: 0.10.0
+  version: 0.11.0
   contact:
     name: Bambuzle
   license:
@@ -288,6 +288,21 @@ paths:
       parameters:
         - { name: id, in: path, required: true, schema: { type: string } }
       responses: { '200': { description: "{ ok, watts, totalWh } or { ok: false, message }" } }
+
+  /api/printers/{id}/camera/stream:
+    get:
+      tags: [Printers]
+      summary: Live camera (LAN only, BAM-9). Viewer role; never anonymous
+      description: |
+        P1/A1 (jpeg-tls): multipart/x-mixed-replace MJPEG. X1/H2 (rtsps, needs "LAN Only Liveview"):
+        fragmented MP4 (H.264, not re-encoded) for Media Source Extensions. One upstream connection per
+        printer, shared by all viewers.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: 'Endless stream (multipart/x-mixed-replace or video/mp4)' }
+        '409': { description: 'Not available, with the reason (liveview off, no access code, offline, unsupported model)' }
+        '503': { description: Too many viewers }
 
   /api/users:
     get:

@@ -127,7 +127,7 @@ function createAdminAuth({ auth, dataDir, log }) {
    */
   function isPrivateRead(req) {
     const p = (req.baseUrl + req.path).toLowerCase();
-    return p.startsWith('/api/alerts') || p.startsWith('/api/system') || p.startsWith('/api/audit') || p.includes('/debug/') || /^\/api\/printers\/[^/]+\/files/.test(p);
+    return p.startsWith('/api/alerts') || p.startsWith('/api/system') || p.startsWith('/api/audit') || p.includes('/debug/') || /^\/api\/printers\/[^/]+\/(files|camera)/.test(p);
   }
 
   /**

@@ -319,6 +319,21 @@ Printers that aren't on your Bambu account (e.g. LAN-only / Developer Mode) can 
 
 With a LAN connection configured, the **SD files** chip on a printer card (or **SD files…** in Configuration) lists the printer's timelapse videos and print files and downloads them over FTPS. Uses the same certificate checks as the LAN connection. On current Bambu firmware this may require Developer Mode; if the printer refuses, the dialog says why.
 
+## Live camera
+
+Click a printer's **Cam live** chip to watch its camera. The video comes straight from the printer over your local network; nothing goes through the cloud.
+
+**What it needs:**
+- **The printer's LAN access code.** If you're logged in to BambuLab Cloud, Bambuzle fills it in from your account. That saves only the code, not the address, so the printer stays on its current connection. Otherwise, enter it under **⚙ Configuration → Connection…**.
+- **X1 / X1C / X1E / H2D / H2S:** turn on **LAN Only Liveview** on the printer (Settings → Network). Until then the chip says **Cam: liveview off**.
+- **P1P (with camera) / P1S / A1 / A1 mini:** nothing else.
+
+**How it works:**
+- One connection per printer is shared by everyone watching, and it closes 10 s after the last viewer leaves.
+- **X1/H2:** the H.264 stream is repackaged, not re-encoded, so it's light even on a Raspberry Pi.
+- **P1/A1:** the camera sends still frames (MJPEG).
+- **Who can watch:** any signed-in user. It's never available anonymously, even with `BAMBUZLE_PUBLIC_READ`.
+
 ## Power tracking (smart plugs)
 
 If a printer is powered through a smart plug with a power meter, Bambuzle can read it. It shows live watts on the printer card and records each job's energy (kWh) and cost.

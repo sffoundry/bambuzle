@@ -1,5 +1,6 @@
 import { confirmDialog } from './confirm-dialog.js';
 import { openFilesDialog } from './files-ui.js';
+import { openCameraDialog } from './camera-ui.js';
 
 export function renderPrinterCards(printers, config, dashFilters) {
   const container = document.getElementById('printer-cards');
@@ -328,6 +329,13 @@ function wireControls(container, getPrinter) {
     sendPrinterCommand(deviceId, b.dataset.ctl, null, rerenderFor(deviceId), live);
   });
   container.addEventListener('click', (e) => {
+    const c = e.target.closest('[data-camera]');
+    if (!c) return;
+    e.stopPropagation();
+    const id = c.dataset.camera;
+    openCameraDialog(id, getPrinter(id)?.db?.name || id, getPrinter(id)?.capabilities?.cameraProtocol);
+  });
+  container.addEventListener('click', (e) => {
     const f = e.target.closest('[data-files]');
     if (!f) return;
     e.stopPropagation();
@@ -382,7 +390,10 @@ function renderDiagnostics(d, caps, deviceId) {
   }
   // BAM-35: camera reachability (detection only — no stream yet). Unknown / no camera → no chip.
   const CAM = { available: ['LAN', ''], disabled: ['liveview off', ''], unreachable: ['unreachable', 'diag-warn'] };
-  if (caps?.camera && CAM[caps.camera]) {
+  if (caps?.cameraLive && deviceId) {
+    // BAM-9: live view available — the chip opens it
+    chips.push(`<button type="button" class="diag-chip diag-files" data-camera="${escapeHtml(deviceId)}" title="Open the live camera"><span class="diag-label">Cam</span> live</button>`);
+  } else if (caps?.camera && CAM[caps.camera]) {
     const [text, tone] = CAM[caps.camera];
     chips.push(chip('Cam', text, { tone, title: caps.cameraHint || '' }));
   }

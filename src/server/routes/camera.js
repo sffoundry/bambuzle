@@ -1,0 +1,80 @@
+'use strict';
+
+// BAM-9 live camera (LAN only). GET /api/printers/:id/camera/stream — role: viewer (permissions.js),
+// never anonymous (isPrivateRead). Body depends on the printer's camera protocol:
+//   jpeg-tls → multipart/x-mixed-replace MJPEG (an <img> can show it directly)
+//   rtsps    → video/mp4: fragmented MP4 (init segment, then one fragment per frame) for Media Source
+//              Extensions. MSE works on plain http://<LAN IP>; WebCodecs would need HTTPS.
+// Slow viewers: frames are dropped (H.264 resumes at the next keyframe) instead of buffering.
+// Long-lived responses re-check the viewer's session every 30 s (BAM-16 revocation).
+
+const express = require('express');
+const { hasRole } = require('../permissions');
+const { Fmp4Writer } = require('../../printers/fmp4');
+
+const MAX_VIEWERS = 6;
+const MAX_BUFFER = 2 * 1024 * 1024;
+const RECHECK_MS = 30 * 1000;
+const BOUNDARY = 'bambuzleframe';
+
+/**
+ * @param {object} deps
+ * @param {object} deps.printerManager — getCameraTarget(id) → { ok, protocol, host, accessCode } | { ok: false, status, error }
+ * @param {object} deps.cameraStreams — from createCameraStreams()
+ * @param {object} deps.adminAuth
+ */
+function createCameraRouter({ printerManager, cameraStreams, adminAuth }) {
+  const router = express.Router();
+
+  router.get('/printers/:id/camera/stream', (req, res) => {
+    const id = req.params.id;
+    const target = printerManager.getCameraTarget?.(id);
+    if (!target || !cameraStreams) return res.status(404).json({ error: 'Printer not found' });
+    if (!target.ok) return res.status(target.status || 409).json({ error: target.error });
+    if (cameraStreams.viewerCount(id) >= MAX_VIEWERS) return res.status(503).json({ error: 'Too many people are watching this camera' });
+
+    const hub = cameraStreams.hubFor(id, target);
+    const mjpeg = target.protocol === 'jpeg-tls';
+    res.writeHead(200, {
+      'Content-Type': mjpeg ? `multipart/x-mixed-replace; boundary=${BOUNDARY}` : 'video/mp4',
+      'Cache-Control': 'no-store, no-transform',
+      'X-Content-Type-Options': 'nosniff',
+      'X-Accel-Buffering': 'no', // nginx: don't buffer the stream
+      Connection: 'close',
+    });
+    res.flushHeaders?.();
+
+    let waitKey = !mjpeg; // a new H.264 viewer starts at a keyframe (the hub replays the current GOP)
+    const mp4 = mjpeg ? null : new Fmp4Writer((buf) => res.write(buf));
+    const send = (msg) => {
+      if (mjpeg) {
+        if (msg.type !== 'jpeg' || res.writableLength > MAX_BUFFER) return;
+        res.write(`--${BOUNDARY}\r\nContent-Type: image/jpeg\r\nContent-Length: ${msg.data.length}\r\n\r\n`);
+        res.write(msg.data);
+        res.write('\r\n');
+        return;
+      }
+      if (msg.type === 'config') { mp4.config({ avcc: msg.description, sps: msg.sps }); waitKey = true; return; }
+      if (msg.type !== 'au') return;
+      if (res.writableLength > MAX_BUFFER) { waitKey = true; return; } // too slow: skip to the next keyframe
+      if (waitKey && !msg.key) return;
+      waitKey = false;
+      mp4.frame(msg);
+    };
+    const unsubscribe = hub.subscribe(send);
+
+    const recheck = setInterval(() => {
+      delete req._principal;
+      const p = adminAuth?.getPrincipal(req);
+      if (adminAuth?.enabled && (!p || !hasRole(p.role, 'viewer'))) res.end();
+    }, RECHECK_MS);
+    recheck.unref?.();
+    const done = () => { clearInterval(recheck); unsubscribe(); };
+    req.on('close', done);
+    res.on('close', done);
+  });
+
+  return router;
+}
+
+module.exports = { createCameraRouter, MAX_VIEWERS };
