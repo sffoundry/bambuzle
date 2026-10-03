@@ -79,6 +79,13 @@ function createApp(printerManager, authCallbacks, adminAuth, deps = {}) {
   app.use('/api/export', createExportRouter({ maxRows: deps.exportMaxRows }));
   app.use('/api/maintenance', createMaintenanceRouter());
 
+  // JSON errors for the API — never Express's HTML page with stack traces and paths (review BAM-35 #4)
+  // eslint-disable-next-line no-unused-vars
+  app.use('/api', (err, req, res, next) => {
+    if (res.headersSent) return;
+    res.status(err.status && err.status < 500 ? err.status : 500).json({ error: err.status && err.status < 500 ? err.message : 'Internal error' });
+  });
+
   // SPA fallback
   app.get('*', (req, res) => {
     res.sendFile(path.resolve(__dirname, '..', '..', 'public', 'index.html'));

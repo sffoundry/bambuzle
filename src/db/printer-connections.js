@@ -22,7 +22,7 @@ function getConnection(deviceId) {
 }
 
 function getAllConnections() {
-  return getDb().prepare('SELECT device_id FROM printers').all().map((r) => getConnection(r.device_id));
+  return getDb().prepare("SELECT device_id FROM printers WHERE source != 'removed'").all().map((r) => getConnection(r.device_id));
 }
 
 /**
@@ -44,17 +44,51 @@ function setConnection(deviceId, { mode, lanHost, accessCode }) {
   return true;
 }
 
-/** Add a printer by hand (LAN / Developer Mode setups with no Bambu Cloud account). */
+/** Bambu serials are uppercase; the printer only publishes on device/<SERIAL>/report. */
+function normalizeSerial(serial) {
+  return String(serial).trim().toUpperCase();
+}
+
+/** Existing printer (any source, incl. removed) whose serial matches case-insensitively. */
+function findBySerial(serial) {
+  return getDb().prepare('SELECT device_id, source FROM printers WHERE UPPER(device_id) = ?').get(normalizeSerial(serial)) || null;
+}
+
+/** Add a printer by hand (LAN / Developer Mode setups with no Bambu Cloud account). Revives a removed one. */
 function addManualPrinter({ serial, name, model, lanHost, accessCode }) {
+  const id = normalizeSerial(serial);
+  const existing = findBySerial(id);
+  if (existing?.source === 'removed') {
+    getDb().prepare(`
+      UPDATE printers SET name = ?, model = ?, connection_mode = 'lan', lan_host = ?, lan_access_code = ?,
+        source = 'manual', updated_at = datetime('now') WHERE device_id = ?
+    `).run(name, model || 'Unknown', lanHost, accessCode, existing.device_id);
+    return existing.device_id;
+  }
   getDb().prepare(`
     INSERT INTO printers (device_id, name, model, connection_mode, lan_host, lan_access_code, source, updated_at)
     VALUES (?, ?, ?, 'lan', ?, ?, 'manual', datetime('now'))
-  `).run(serial, name, model || 'Unknown', lanHost, accessCode);
+  `).run(id, name, model || 'Unknown', lanHost, accessCode);
+  return id;
 }
 
-/** Only hand-added printers can be deleted (cloud ones come back on the next device sync). */
+/**
+ * Remove a hand-added printer. Cloud ones come back on the next device sync, so they can't be removed.
+ * Printers with history (jobs/samples/events reference them) are soft-removed — hidden, disconnected, and
+ * their secret cleared — so the history stays queryable and the FK holds (review BAM-35 #4).
+ */
 function deleteManualPrinter(serial) {
-  return getDb().prepare("DELETE FROM printers WHERE device_id = ? AND source = 'manual'").run(serial).changes > 0;
+  const db = getDb();
+  const row = db.prepare("SELECT device_id FROM printers WHERE device_id = ? AND source = 'manual'").get(serial);
+  if (!row) return false;
+  const referenced = ['print_jobs', 'samples', 'events'].some((t) => db.prepare(`SELECT 1 FROM ${t} WHERE device_id = ? LIMIT 1`).get(serial));
+  if (referenced) {
+    db.prepare(`UPDATE printers SET source = 'removed', connection_mode = 'lan', lan_host = NULL, lan_access_code = NULL,
+      updated_at = datetime('now') WHERE device_id = ?`).run(serial);
+  } else {
+    db.prepare('DELETE FROM printers WHERE device_id = ?').run(serial);
+  }
+  return true;
 }
 
-module.exports = { MODES, getConnection, getAllConnections, setConnection, addManualPrinter, deleteManualPrinter };
+module.exports = { MODES, getConnection, getAllConnections, setConnection, addManualPrinter, deleteManualPrinter, findBySerial, normalizeSerial };

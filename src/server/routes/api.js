@@ -166,10 +166,12 @@ function createApiRouter(printerManager, { getCloudAuthStatus = getAuthStatus } 
     };
 
     try {
-      if (getCloudAuthStatus() !== 'authenticated') {
+      const client = printerManager.getClient(deviceId);
+      // A cloud login is only needed for printers connected through the cloud (LAN works without one)
+      const kind = printerManager.getTransportKind ? printerManager.getTransportKind(deviceId) : 'cloud';
+      if ((kind || 'cloud') === 'cloud' && getCloudAuthStatus() !== 'authenticated') {
         return res.status(503).json({ error: 'Server is not logged into BambuLab Cloud' });
       }
-      const client = printerManager.getClient(deviceId);
       if (!client || !printerManager.isConnected(deviceId)) {
         return res.status(404).json({ error: 'Printer not found or not connected' });
       }

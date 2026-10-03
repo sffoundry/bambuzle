@@ -8,7 +8,7 @@
  * @returns {'cloud'|'lan'|null} null = can't connect yet (cloud printer without a cloud login)
  */
 function chooseTransport(conn, cloudAuthenticated) {
-  if (!conn) return null;
+  if (!conn || conn.source === 'removed') return null;
   const lanReady = Boolean(conn.lanHost && conn.accessCode);
   if (conn.mode === 'lan') return lanReady ? 'lan' : null;
   if (conn.mode === 'cloud') return cloudAuthenticated ? 'cloud' : null;
@@ -20,7 +20,7 @@ function chooseTransport(conn, cloudAuthenticated) {
  * Capability summary for the UI/API. `developerMode` comes from the printer's own print.fun bit
  * (src/bambu/diagnostics.js); `signatureRejected` is set once a printer answered "verify failed".
  */
-function computeCapabilities({ conn, transport, connected, developerMode, signatureRejected = false }) {
+function computeCapabilities({ conn, transport, connected, developerMode, signatureRejected = false, lastError = null }) {
   const base = {
     transport: transport || null,
     connected: Boolean(connected),
@@ -29,7 +29,7 @@ function computeCapabilities({ conn, transport, connected, developerMode, signat
     developerMode: developerMode ?? null,
   };
   if (!transport || !connected) {
-    return { ...base, control: 'offline', controlHint: transport ? 'Printer not connected' : connectHint(conn) };
+    return { ...base, control: 'offline', lastError: lastError || null, controlHint: transport ? (lastError ? `Not connected: ${lastError}` : 'Printer not connected') : connectHint(conn) };
   }
   if (developerMode === true && transport === 'lan') return { ...base, control: 'available', controlHint: null };
   if (developerMode === false || signatureRejected) {

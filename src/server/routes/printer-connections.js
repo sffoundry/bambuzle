@@ -52,9 +52,19 @@ function createPrinterConnectionsRouter(printerManager, { probe = probeLan } = {
     const saved = conns.getConnection(id);
     if (!saved) return res.status(404).json({ error: 'Printer not found' });
     const host = req.body?.lanHost || saved.lanHost;
-    const accessCode = req.body?.accessCode || saved.accessCode;
+    // The saved code is only ever sent to the saved host — a new host needs the code typed again (review #8)
+    const hostChanged = Boolean(req.body?.lanHost) && req.body.lanHost !== saved.lanHost;
+    const accessCode = req.body?.accessCode || (hostChanged ? null : saved.accessCode);
     if (!validHost(host || '') || !validAccessCode(accessCode || '')) {
-      return res.status(400).json({ error: 'Need a valid lanHost and 8-character accessCode (saved or in the request)' });
+      return res.status(400).json({ error: hostChanged && !req.body?.accessCode
+        ? 'Enter the access code to test a new address (the saved code is only sent to the saved address)'
+        : 'Need a valid lanHost and 8-character accessCode (saved or in the request)' });
+    }
+    // Already connected over LAN with these settings: report the live session instead of opening a second
+    // one — printers allow only a few local MQTT clients (review #9)
+    if (!hostChanged && !req.body?.accessCode && printerManager.getTransportKind?.(id) === 'lan' && printerManager.isConnected?.(id)) {
+      const caps = printerManager.getCapabilities?.(id);
+      return res.json({ ok: true, stage: 'connected', message: 'Connected (live session)', developerMode: caps?.developerMode ?? null });
     }
     try {
       res.json(await probe({ serial: id, host, accessCode, tlsVerify: config.lan.tlsVerify }));
@@ -71,10 +81,13 @@ function createPrinterConnectionsRouter(printerManager, { probe = probeLan } = {
     if (model !== undefined && (typeof model !== 'string' || model.length > 32)) return res.status(400).json({ error: 'model must be a short string' });
     if (!validHost(lanHost)) return res.status(400).json({ error: 'lanHost must be an IPv4 address or hostname' });
     if (!validAccessCode(accessCode)) return res.status(400).json({ error: 'accessCode must be the 8-character LAN access code' });
-    if (conns.getConnection(serial)) return res.status(409).json({ error: 'A printer with this serial already exists — edit its connection instead' });
-    conns.addManualPrinter({ serial, name: name.trim(), model, lanHost, accessCode });
-    printerManager.reconnect?.(serial);
-    res.status(201).json(view(serial));
+    const existing = conns.findBySerial(serial);
+    if (existing && existing.source !== 'removed') {
+      return res.status(409).json({ error: 'A printer with this serial already exists — edit its connection instead' });
+    }
+    const id = conns.addManualPrinter({ serial, name: name.trim(), model, lanHost, accessCode });
+    printerManager.reconnect?.(id);
+    res.status(201).json(view(id));
   });
 
   // DELETE /api/printers/:id — hand-added printers only

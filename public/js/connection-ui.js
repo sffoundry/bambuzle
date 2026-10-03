@@ -1,3 +1,5 @@
+import { isTopDialog } from './confirm-dialog.js';
+
 // Printer connection settings (BAM-35): cloud vs LAN per printer, LAN access code, connection test,
 // and adding LAN-only printers by hand. The access code is write-only — the API never returns it.
 // After a change we fire 'bambuzle:printers-changed' so app.js reloads the printer list.
@@ -44,17 +46,29 @@ async function api(method, url, body) {
   return { ok: res.ok, status: res.status, data };
 }
 
-/** Modal shell shared by both dialogs; resolves when closed. */
+/** Modal shell shared by both dialogs; resolves when closed. Topmost-only Escape, focus trap, focus return. */
 function openModal(title, buildBody) {
   return new Promise((resolve) => {
+    const previouslyFocused = document.activeElement;
     const overlay = el('div', { class: 'modal conn-dialog', role: 'dialog', 'aria-modal': 'true' });
     const box = el('div', { class: 'modal-content conn-dialog-content' }, el('h3', { text: title }));
     const close = (result) => {
       document.removeEventListener('keydown', onKey, true);
       overlay.remove();
+      if (previouslyFocused && previouslyFocused.isConnected) previouslyFocused.focus();
       resolve(result);
     };
-    const onKey = (e) => { if (e.key === 'Escape') { e.preventDefault(); close(false); } };
+    const onKey = (e) => {
+      if (!isTopDialog(overlay)) return; // e.g. the "Remove printer?" confirm on top handles Escape itself
+      if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); close(false); return; }
+      if (e.key === 'Tab') {
+        const f = [...box.querySelectorAll('button, input, select')].filter((n) => !n.disabled && n.offsetParent !== null);
+        if (!f.length) return;
+        const i = f.indexOf(document.activeElement);
+        if (e.shiftKey && (i <= 0)) { e.preventDefault(); f[f.length - 1].focus(); }
+        else if (!e.shiftKey && i === f.length - 1) { e.preventDefault(); f[0].focus(); }
+      }
+    };
     buildBody(box, close);
     overlay.append(box);
     overlay.addEventListener('click', (e) => { if (e.target === overlay) close(false); });

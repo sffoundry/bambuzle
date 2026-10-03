@@ -112,7 +112,11 @@ function renderSemiGauge(value, max, label, sublabel, color) {
 
 function updateCardContent(card, deviceId, printer) {
   const live = printer.live || {};
-  if (printer.capabilities) printerCaps[deviceId] = printer.capabilities;
+  if (printer.capabilities) {
+    printerCaps[deviceId] = printer.capabilities;
+    // Server re-evaluated (e.g. switched to LAN + Developer Mode): drop the stale "rejected" flag (review #7)
+    if (['available', 'unknown'].includes(printer.capabilities.control)) delete signatureRejected[deviceId];
+  }
   const db = printer.db || {};
   const connected = printer.connected;
   const gcodeState = connected ? (live.gcodeState || 'UNKNOWN') : 'OFFLINE';

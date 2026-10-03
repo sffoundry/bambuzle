@@ -294,7 +294,7 @@ Each printer connects one of two ways (see `docs/architecture-transports.md`):
 
 **Printer controls (pause / resume / stop / speed)** on current Bambu firmware only work over **LAN with Developer Mode turned on** in the printer's settings. Bambu's authorization firmware rejects commands from third-party tools otherwise, and Developer Mode disconnects the printer from Bambu Cloud. When controls can't work, Bambuzle hides the buttons and says why.
 
-LAN-only printers that aren't on a Bambu account can be added with **+ Add LAN printer**. LAN printers connect at startup without any Bambu login.
+Printers that aren't on your Bambu account (e.g. LAN-only / Developer Mode) can be added with **+ Add LAN printer**. LAN printers connect and keep working independently of the cloud session (an expired cloud token doesn't interrupt them). The dashboard itself still asks you to log in with your BambuLab account.
 
 ## Backup & restore
 

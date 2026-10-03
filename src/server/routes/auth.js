@@ -80,6 +80,7 @@ function createAuthRouter(callbacks) {
   // POST /api/auth/logout — clear auth (does not disconnect existing MQTT yet)
   router.post('/logout', (req, res) => {
     clearAuth();
+    callbacks.onLoggedOut?.();
     res.json({ status: 'needs_login' });
   });
 

@@ -90,7 +90,11 @@ export function openConfigModal(cfg, printers, onChanged) {
   printersList.appendChild(addLan);
 
   if (Object.keys(printers).length === 0) {
-    printersList.innerHTML = '<span class="config-empty">No printers available</span>';
+    // Insert (don't replace the list) so "+ Add LAN printer" stays reachable on a fresh install (review BAM-35 #2)
+    const empty = document.createElement('span');
+    empty.className = 'config-empty';
+    empty.textContent = 'No printers yet';
+    printersList.prepend(empty);
   }
 
   // ── Chart toggles ──

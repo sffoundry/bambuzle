@@ -29,7 +29,7 @@ An SDK transport has to implement exactly this. The commands it receives are the
 - `cloud`
 - `lan`
 
-LAN printers connect at startup **without** a Bambu Cloud login, so a Developer Mode / LAN-only setup works with no Bambu account at all. Printers can be added by hand (serial, name, model, IP, access code) for exactly that case.
+LAN printers connect at startup and keep running **independently of the Bambu Cloud session**. Their monitoring and commands don't depend on a cloud token, so an expired token or a logout only affects cloud-transport printers. The dashboard UI itself still asks for a BambuLab login (a deliberate product choice, 2026-10-03). Printers that aren't on the account can be added by hand (serial, name, model, IP, access code).
 
 ## Capabilities
 

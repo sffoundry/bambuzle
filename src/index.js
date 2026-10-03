@@ -51,6 +51,7 @@ const printerManager = {
     connected: mqttClients[deviceId]?.connected ?? false,
     developerMode: liveStates[deviceId]?.diagnostics?.developerMode,
     signatureRejected: signatureRejected.has(deviceId),
+    lastError: mqttClients[deviceId]?.lastError || null,
   }),
   markSignatureRejected: (deviceId) => signatureRejected.add(deviceId),
   /** Re-evaluate one printer's transport after its connection settings changed. */
@@ -85,7 +86,7 @@ async function main() {
 
   // Start HTTP server unconditionally so the dashboard is always reachable
   const adminAuth = createAdminAuth({ auth: config.auth, dataDir: config.dataDir, log });
-  const app = createApp(printerManager, { onAuthenticated }, adminAuth, {
+  const app = createApp(printerManager, { onAuthenticated, onLoggedOut }, adminAuth, {
     backupService,
     getCloudAuthStatus: getAuthStatus,
     dataDir: config.dataDir,
@@ -188,6 +189,20 @@ async function onAuthenticated(auth) {
   tokenRefreshJob = startTokenRefresh();
 }
 
+/** BambuLab Cloud logout: drop cloud transports (LAN ones keep running). */
+function onLoggedOut() {
+  currentAuth = null;
+  if (tokenRefreshJob) { tokenRefreshJob.stop(); tokenRefreshJob = null; }
+  for (const [id, client] of Object.entries(mqttClients)) {
+    if (client.kind === 'cloud') {
+      client.destroy();
+      delete mqttClients[id];
+      broadcast('state', { deviceId: id, state: liveStates[id] || {}, connected: false, capabilities: printerManager.getCapabilities(id) });
+    }
+  }
+  log.info('Logged out of BambuLab Cloud — cloud printers disconnected');
+}
+
 // ─── Cron Jobs ───
 
 function startCronJobs() {
@@ -243,6 +258,9 @@ function syncConnection(deviceId) {
   const signature = kind === 'lan' ? `lan:${conn.lanHost}:${conn.accessCode}` : kind === 'cloud' ? 'cloud' : null;
   const existing = mqttClients[deviceId];
   if (existing && existing.signature === signature) return;
+  // Carry the merged report over a transport switch: the new client's first partial update would otherwise
+  // parse as gcodeState UNKNOWN and log a bogus "RUNNING → UNKNOWN" mid-print (review BAM-35 #6)
+  const carriedState = existing?.mergedState && Object.keys(existing.mergedState).length ? existing.mergedState : null;
   if (existing) {
     existing.destroy();
     delete mqttClients[deviceId];
@@ -250,7 +268,7 @@ function syncConnection(deviceId) {
   }
   signatureRejected.delete(deviceId);
   if (!kind) return;
-  connectPrinter(deviceId, kind, conn, signature);
+  connectPrinter(deviceId, kind, conn, signature, carriedState);
 }
 
 function syncAllConnections() {
@@ -266,7 +284,7 @@ function syncAllConnections() {
 
 // ─── Printer Connection ───
 
-function connectPrinter(deviceId, kind, conn, signature) {
+function connectPrinter(deviceId, kind, conn, signature, carriedState = null) {
   const client = new MqttPrinterClient({
     deviceId,
     kind,
@@ -277,6 +295,7 @@ function connectPrinter(deviceId, kind, conn, signature) {
     logger: log,
   });
   client.signature = signature;
+  if (carriedState) client.mergedState = carriedState;
   log.info({ deviceId, transport: kind }, 'Connecting printer');
 
   mqttClients[deviceId] = client;

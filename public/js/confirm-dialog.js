@@ -5,6 +5,12 @@
 
 let open = null; // the pending dialog, so a second request replaces the first
 
+/** True when `overlay` is the most recently opened dialog (dialogs are appended to <body> in order). */
+export function isTopDialog(overlay) {
+  const all = document.querySelectorAll('.confirm-dialog, .conn-dialog');
+  return all[all.length - 1] === overlay;
+}
+
 export function confirmDialog({ title = 'Confirm', message = '', confirmLabel = 'OK', cancelLabel = 'Cancel', danger = false } = {}) {
   if (open) open.finish(false);
 
@@ -40,7 +46,8 @@ export function confirmDialog({ title = 'Confirm', message = '', confirmLabel = 
 
   return new Promise((resolve) => {
     const onKey = (e) => {
-      if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+      if (!isTopDialog(overlay)) return; // a dialog stacked above us handles its own keys
+      if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); finish(false); }
       else if (e.key === 'Tab') {
         // keep focus inside the dialog
         const focusables = [cancel, ok];

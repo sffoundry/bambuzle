@@ -18,6 +18,11 @@ function getLanCaBundle() {
 
 const LAN_MQTT_PORT = 8883;
 
+/** Errors a reconnect can't fix: refused access code (CONNACK 4/5, MQTT5 134/135) or the wrong printer. */
+function isFatalLanError(err) {
+  return err?.code === 'ERR_PRINTER_IDENTITY' || [4, 5, 134, 135].includes(err?.code);
+}
+
 /** TLS identity check for LAN printers: certificate CN must be the expected serial. */
 function checkPrinterIdentity(serial, host, cert) {
   const cn = cert?.subject?.CN;
@@ -114,6 +119,7 @@ class MqttPrinterClient extends EventEmitter {
     this.client = this.connectFn(url, options);
 
     this.client.on('connect', () => {
+      this.lastError = null;
       this.log.info('Connected to MQTT broker');
       this.emit('connected', this.deviceId);
 
@@ -136,6 +142,16 @@ class MqttPrinterClient extends EventEmitter {
     });
 
     this.client.on('error', (err) => {
+      this.lastError = err?.message || String(err);
+      // Wrong access code / wrong printer at this address won't fix itself: stop retrying every 5 s
+      // (printers throttle rapid reconnects) until settings change (review BAM-35 #10)
+      if (this.kind === 'lan' && isFatalLanError(err)) {
+        this.log.error({ err: this.lastError }, 'LAN connection refused — not retrying until settings change');
+        this.fatal = true;
+        this.emit('mqtt_error', this.deviceId, err);
+        this.client.end(true);
+        return;
+      }
       this.log.error({ err }, 'MQTT error');
       this.emit('mqtt_error', this.deviceId, err);
     });
@@ -245,6 +261,12 @@ class MqttPrinterClient extends EventEmitter {
   updateCredentials(token, userId) {
     this.token = token;
     this.userId = userId;
+    // mqtt.js reconnects with the options captured at connect() — update them too, or a reconnect after a
+    // token refresh would still use the old token (review BAM-35)
+    if (this.client?.options && this.kind === 'cloud') {
+      this.client.options.username = `u_${userId}`;
+      this.client.options.password = token;
+    }
   }
 
   /**
@@ -272,4 +294,4 @@ class MqttPrinterClient extends EventEmitter {
   }
 }
 
-module.exports = { MqttPrinterClient, buildConnectOptions, checkPrinterIdentity, LAN_MQTT_PORT };
+module.exports = { MqttPrinterClient, buildConnectOptions, checkPrinterIdentity, isFatalLanError, LAN_MQTT_PORT };

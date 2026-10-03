@@ -147,3 +147,108 @@ test('MqttPrinterClient carries its transport kind', () => {
   assert.equal(c.kind, 'lan');
   assert.equal(new MqttPrinterClient({ deviceId: 'S', token: 't', userId: 'u' }).kind, 'cloud');
 });
+
+// ─── BAM-35 review fixes ───
+
+test('LAN command route works without a cloud login; cloud printers still need one — review #3', async () => {
+  const { createApp } = require('../src/server/app');
+  const { createAdminAuth } = require('../src/server/admin-auth');
+  const http = require('http');
+  const pino = require('pino');
+  const { dataDir, TEST_TOKEN } = require('./helpers');
+  queries.upsertPrinter({ deviceId: 'LANCMD001', name: 'L', model: 'P1S' });
+  const client = { connected: true, sendCommandAwaitReply: async (cmd) => ({ sent: true, acknowledged: true, result: 'success' }) };
+  const mk = (kind) => ({
+    ...fakePrinterManager({ liveStates: { LANCMD001: { gcodeState: 'RUNNING' } }, clients: { LANCMD001: client } }),
+    getTransportKind: () => kind,
+    getCapabilities: () => ({ control: kind === 'lan' ? 'available' : 'unknown' }),
+  });
+  for (const [kind, expected] of [['lan', 200], ['cloud', 503]]) {
+    const adminAuth = createAdminAuth({ auth: { mode: 'on', adminToken: TEST_TOKEN }, dataDir, log: pino({ level: 'silent' }) });
+    const app = createApp(mk(kind), { onAuthenticated() {} }, adminAuth, { getCloudAuthStatus: () => 'needs_login', dataDir });
+    const server = http.createServer(app);
+    await new Promise((r) => server.listen(0, '127.0.0.1', r));
+    try {
+      const r = await fetch(`http://127.0.0.1:${server.address().port}/api/printers/LANCMD001/command`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders }, body: JSON.stringify({ command: 'pause' }) });
+      assert.equal(r.status, expected, kind);
+    } finally {
+      await new Promise((r) => server.close(r));
+    }
+  }
+});
+
+test('removing a hand-added printer with history soft-removes it; re-adding revives it; serials are case-insensitive — review #4/#5', async () => {
+  const pm = { ...fakePrinterManager(), reconnect() {}, getCapabilities: () => null };
+  const srv = await startServer({ printerManager: pm });
+  const H = { 'Content-Type': 'application/json', ...authHeaders };
+  const call = (method, url, body) => fetch(srv.baseUrl + url, { method, headers: H, body: body && JSON.stringify(body) });
+  try {
+    let r = await call('POST', '/api/printers', { serial: 'hist0000001', name: 'Hist', lanHost: '10.0.0.7', accessCode: '12345678' });
+    assert.equal(r.status, 201);
+    assert.equal((await r.json()).deviceId, 'HIST0000001', 'normalized to uppercase');
+    assert.equal((await call('POST', '/api/printers', { serial: 'HIST0000001', name: 'dup', lanHost: '10.0.0.7', accessCode: '12345678' })).status, 409, 'case-variant duplicate refused');
+
+    queries.insertEvent({ deviceId: 'HIST0000001', eventType: 'state_change', severity: 'info', message: 'x' });
+    r = await call('DELETE', '/api/printers/HIST0000001');
+    assert.equal(r.status, 200, 'no FK 500');
+    assert.equal(conns.getConnection('HIST0000001').source, 'removed');
+    assert.equal(conns.getConnection('HIST0000001').accessCode, null, 'secret cleared');
+    assert.ok(!(await (await call('GET', '/api/printers')).text()).includes('HIST0000001'), 'hidden from the list');
+    assert.equal(queries.getEvents('HIST0000001', { limit: 5 }).length, 1, 'history kept');
+
+    r = await call('POST', '/api/printers', { serial: 'HIST0000001', name: 'Back', lanHost: '10.0.0.8', accessCode: '87654321' });
+    assert.equal(r.status, 201, 'revived');
+    assert.equal(conns.getConnection('HIST0000001').source, 'manual');
+  } finally {
+    await srv.close();
+  }
+});
+
+test('connection test: saved code only goes to the saved host; live LAN session is reused — review #8/#9', async () => {
+  queries.upsertPrinter({ deviceId: 'PROBE0001', name: 'P', model: 'X1C' });
+  conns.setConnection('PROBE0001', { mode: 'lan', lanHost: '10.0.0.20', accessCode: 'SAVED123' });
+  const probes = [];
+  let live = false;
+  const pm = { ...fakePrinterManager(), reconnect() {}, getTransportKind: () => (live ? 'lan' : null), isConnected: () => live, getCapabilities: () => ({ developerMode: true }) };
+  const srv = await startServer({ printerManager: pm, deps: { lanProbe: async (a) => { probes.push(a); return { ok: true, stage: 'connected' }; } } });
+  const H = { 'Content-Type': 'application/json', ...authHeaders };
+  const test = (body) => fetch(`${srv.baseUrl}/api/printers/PROBE0001/connection/test`, { method: 'POST', headers: H, body: JSON.stringify(body) });
+  try {
+    const r = await test({ lanHost: '10.9.9.9' });
+    assert.equal(r.status, 400);
+    assert.match((await r.json()).error, /saved code is only sent to the saved address/);
+    assert.equal(probes.length, 0, 'saved code never sent to a new host');
+    await test({ lanHost: '10.9.9.9', accessCode: 'TYPED123' });
+    assert.deepEqual([probes[0].host, probes[0].accessCode], ['10.9.9.9', 'TYPED123']);
+    live = true;
+    const reuse = await (await test({})).json();
+    assert.equal(reuse.message, 'Connected (live session)');
+    assert.equal(probes.length, 1, 'no second LAN session opened');
+  } finally {
+    await srv.close();
+  }
+});
+
+test('LAN client stops reconnecting after a refused access code or wrong printer — review #10', async () => {
+  const { isFatalLanError } = require('../src/bambu/mqtt-client');
+  assert.ok(isFatalLanError({ code: 5 }) && isFatalLanError({ code: 'ERR_PRINTER_IDENTITY' }));
+  assert.equal(isFatalLanError({ code: 'ECONNREFUSED' }), false, 'transient errors keep retrying');
+  let ended = false;
+  const fake = Object.assign(new EventEmitter(), { end: () => { ended = true; } });
+  const c = new MqttPrinterClient({ deviceId: 'S1', kind: 'lan', lan: { host: '10.0.0.1', accessCode: '12345678' }, connectFn: () => fake, logger: require('pino')({ level: 'silent' }) });
+  c.on('mqtt_error', () => {});
+  c.connect();
+  fake.emit('error', Object.assign(new Error('Connection refused: Not authorized'), { code: 5 }));
+  assert.ok(ended && c.fatal);
+  assert.match(c.lastError, /Not authorized/);
+  const caps = computeCapabilities({ conn: { mode: 'lan', lanHost: 'h', accessCode: 'x' }, transport: 'lan', connected: false, lastError: c.lastError });
+  assert.match(caps.controlHint, /Not connected: Connection refused/);
+});
+
+test('cloud token refresh updates the options mqtt.js reconnects with', () => {
+  const fake = Object.assign(new EventEmitter(), { options: { username: 'u_1', password: 'old' } });
+  const c = new MqttPrinterClient({ deviceId: 'S2', token: 'old', userId: '1', connectFn: () => fake, logger: require('pino')({ level: 'silent' }) });
+  c.connect();
+  c.updateCredentials('new', '2');
+  assert.deepEqual([fake.options.username, fake.options.password], ['u_2', 'new']);
+});
