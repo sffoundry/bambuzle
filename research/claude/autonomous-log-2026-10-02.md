@@ -48,3 +48,4 @@
 - BAM-41 merged (agent, 3cb26aa): audit trail; resolved 4 conflicts (index/app/admin-auth/style); added printer.files.list/download auditing. 133/133.
 - BAM-40 backend (Claude): rule-based triage verdict (intervene/inspect/clean) + reasons + clustered timeline; GET /api/printers/:id/triage and /jobs/:jobId/triage. UI pending BAM-12 merge. 138/138.
 - BAM-36 (Claude): hourly rollups + tiered retention, atomic count-checked compaction, rollup-aware history. Found + fixed: /history LIMIT oldest-first truncated the newest ~10 h of a busy 24 h chart. 144/144.
+- BAM-42 (Claude): read-only HA discovery bridge (publish-only, LWT, throttled retained state, creds never logged). 148/148.

@@ -304,6 +304,10 @@ Printers that aren't on your Bambu account (e.g. LAN-only / Developer Mode) can 
 
 With a LAN connection configured, the **SD files** chip on a printer card (or **SD files…** in Configuration) lists the printer's timelapse videos and print files and downloads them over FTPS. Uses the same certificate checks as the LAN connection. On current Bambu firmware this may require Developer Mode; if the printer refuses, the dialog says why.
 
+## Home Assistant
+
+Set `BAMBUZLE_HA_MQTT_URL` (plus `BAMBUZLE_HA_MQTT_USERNAME` / `BAMBUZLE_HA_MQTT_PASSWORD`) to your Home Assistant MQTT broker, e.g. the Mosquitto add-on. Each printer then appears in HA automatically (MQTT discovery) with print state, progress, time remaining, layer, temperatures, current job, active HMS errors and a print-error problem sensor. The bridge is read-only: it never subscribes, so nothing in HA can command a printer through it.
+
 ## Backup & restore
 
 Bambuzle backs up its SQLite database automatically using SQLite's online-backup API (safe while the server is running — never copy `bambuzle.db` by hand while it runs).

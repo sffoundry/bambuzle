@@ -81,6 +81,15 @@ const config = {
     tlsVerify: (process.env.BAMBUZLE_LAN_TLS_VERIFY || fileConfig.lan?.tlsVerify || 'on').toString().toLowerCase() !== 'off',
   },
 
+  // Home Assistant MQTT bridge (BAM-42) — off unless a broker URL is set. Read-only (publish only).
+  ha: {
+    url: process.env.BAMBUZLE_HA_MQTT_URL || fileConfig.ha?.url || '',
+    username: process.env.BAMBUZLE_HA_MQTT_USERNAME || fileConfig.ha?.username || '',
+    password: process.env.BAMBUZLE_HA_MQTT_PASSWORD || fileConfig.ha?.password || '',
+    prefix: process.env.BAMBUZLE_HA_PREFIX || fileConfig.ha?.prefix || 'bambuzle',
+    throttleSec: Number(process.env.BAMBUZLE_HA_THROTTLE_SEC || fileConfig.ha?.throttleSec || 10),
+  },
+
   // HTTP server
   server: {
     port: parseInt(process.env.PORT, 10) || fileConfig.server?.port || 3000,

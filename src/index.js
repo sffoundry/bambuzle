@@ -13,6 +13,7 @@ const { jobEndState, JOB_END_CANCELLED } = require('./utils/job-state');
 const amsHumidity = require('./db/ams-humidity');
 const { reconcileHms } = require('./db/hms-active');
 const rollups = require('./db/rollups');
+const { createHaBridge } = require('./integrations/ha-bridge');
 const auditLog = require('./db/audit');
 const printerConnections = require('./db/printer-connections');
 const { chooseTransport, computeCapabilities } = require('./printers/transport-policy');
@@ -40,6 +41,7 @@ let alertEngine = null;
 let anomalyDetector = null;
 let cronJobs = [];
 let tokenRefreshJob = null;
+let haBridge = null;
 let backupService = null;
 
 const lastMessageAt = {}; // deviceId -> ms timestamp of the last MQTT report (BAM-37 metrics)
@@ -111,6 +113,11 @@ async function main() {
   // Housekeeping runs with or without a cloud login (LAN-only installs need it too)
   cronJobs = startCronJobs();
 
+  // Optional read-only Home Assistant bridge (BAM-42)
+  if (config.ha.url) {
+    haBridge = createHaBridge({ config: config.ha, listPrinters: () => queries.getAllPrinters(), log }).start();
+  }
+
   // LAN printers connect now — they don't need a BambuLab Cloud login (BAM-35)
   syncAllConnections();
 
@@ -138,6 +145,7 @@ async function main() {
 
     for (const job of cronJobs) job.stop();
     if (tokenRefreshJob) tokenRefreshJob.stop();
+    haBridge?.stop();
     await backupService.stop(); // waits for an in-flight backup before the DB closes
 
     for (const client of Object.values(mqttClients)) {
@@ -328,6 +336,7 @@ function connectPrinter(deviceId, kind, conn, signature, carriedState = null) {
     lastMessageAt[deviceId] = Date.now();
 
     broadcast('state', { deviceId, state, connected: true, capabilities: printerManager.getCapabilities(deviceId) });
+    haBridge?.onState(deviceId, state, true);
     handleJobTransition(deviceId, state, prevState);
 
     const activeJob = queries.getActiveJob(deviceId);
@@ -351,6 +360,7 @@ function connectPrinter(deviceId, kind, conn, signature, carriedState = null) {
 
   client.on('disconnected', (deviceId) => {
     broadcast('state', { deviceId, state: liveStates[deviceId] || {}, connected: false, capabilities: printerManager.getCapabilities(deviceId) });
+    haBridge?.onState(deviceId, liveStates[deviceId] || {}, false);
   });
 
   client.on('version', (deviceId, info) => {

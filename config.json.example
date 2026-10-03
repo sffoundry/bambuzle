@@ -31,5 +31,11 @@
       "bed": 0.5,
       "chamber": 0.3
     }
+  },
+  "ha": {
+    "url": "",
+    "username": "",
+    "prefix": "bambuzle",
+    "throttleSec": 10
   }
 }
