@@ -1,5 +1,7 @@
 export function renderPrinterCards(printers, config, dashFilters) {
   const container = document.getElementById('printer-cards');
+  latestPrinters = printers;
+  wireControls(container, (id) => latestPrinters[id]);
   container.innerHTML = '';
 
   const total = Object.keys(printers).length;
@@ -46,7 +48,11 @@ export function renderPrinterCards(printers, config, dashFilters) {
   }
 }
 
+let latestPrinters = {};
+
 export function updatePrinterCard(deviceId, printer, config, dashFilters) {
+  latestPrinters[deviceId] = printer;
+  wireControls(document.getElementById('printer-cards'), (id) => latestPrinters[id]);
   let card = document.getElementById(`card-${deviceId}`);
   if (!card) {
     const container = document.getElementById('printer-cards');
@@ -171,7 +177,90 @@ function updateCardContent(card, deviceId, printer) {
     </div>
     ${renderDiagnostics(live.diagnostics)}
     ${gaugeHtml}
+    ${renderControls(deviceId, live, connected, gcodeState)}
   `;
+}
+
+// ─── BAM-28: printer controls ───
+// Cards are re-rendered on every MQTT update, so clicks are handled by one delegated listener and the
+// last command result is kept per printer (shown for CMD_STATUS_MS) instead of living in the DOM.
+
+const CMD_STATUS_MS = 20000;
+const cmdStatus = {}; // deviceId -> { text, tone, at, busy }
+let controlsWired = false;
+
+function renderControls(deviceId, live, connected, gcodeState) {
+  const active = ['RUNNING', 'PREPARE', 'PAUSE'].includes(gcodeState);
+  const st = cmdStatus[deviceId];
+  const showStatus = st && (st.busy || Date.now() - st.at < CMD_STATUS_MS);
+  if (!connected || (!active && !showStatus)) return '';
+
+  const id = escapeHtml(deviceId);
+  const dis = st?.busy ? ' disabled' : '';
+  const btn = (action, label, cls = 'btn-secondary') =>
+    `<button type="button" class="${cls} ctl-btn" data-ctl="${action}" data-device="${id}"${dis}>${label}</button>`;
+
+  let buttons = '';
+  if (active) {
+    if (gcodeState === 'PAUSE') buttons += btn('resume', 'Resume');
+    else buttons += btn('pause', 'Pause');
+    buttons += btn('stop', 'Stop', 'btn-danger');
+    const levels = { 1: 'Silent', 2: 'Standard', 3: 'Sport', 4: 'Ludicrous' };
+    const opts = Object.entries(levels)
+      .map(([v, n]) => `<option value="${v}"${Number(v) === live.speedLevel ? ' selected' : ''}>${n}</option>`).join('');
+    buttons += `<select class="ctl-speed" data-device="${id}" title="Print speed"${dis}>${opts}</select>`;
+  }
+  const status = showStatus
+    ? `<div class="ctl-status ${st.tone ? `ctl-${st.tone}` : ''}">${escapeHtml(st.text)}</div>`
+    : '';
+  return `<div class="card-controls">${buttons}</div>${status}`;
+}
+
+async function sendPrinterCommand(deviceId, command, param, rerender) {
+  cmdStatus[deviceId] = { text: `Sending ${command.replace('_', ' ')}…`, tone: '', at: Date.now(), busy: true };
+  rerender();
+  try {
+    const res = await fetch(`/api/printers/${encodeURIComponent(deviceId)}/command`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(param != null ? { command, param } : { command }),
+    });
+    const data = await res.json().catch(() => ({}));
+    const text = res.ok ? `${command.replace('_', ' ')}: ${data.outcome || 'sent'}` : (data.error || `Failed (${res.status})`);
+    const tone = !res.ok || data.ok === false ? 'error' : data.acknowledged ? 'ok' : 'warn';
+    cmdStatus[deviceId] = { text, tone, at: Date.now(), busy: false };
+  } catch {
+    cmdStatus[deviceId] = { text: 'Network error — command may not have been sent', tone: 'error', at: Date.now(), busy: false };
+  }
+  rerender();
+}
+
+function wireControls(container, getPrinter) {
+  if (controlsWired) return;
+  controlsWired = true;
+  const rerenderFor = (deviceId) => () => {
+    const card = document.getElementById(`card-${deviceId}`);
+    const printer = getPrinter(deviceId);
+    if (card && printer) updateCardContent(card, deviceId, printer);
+  };
+  container.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-ctl]');
+    if (!b || b.disabled) return;
+    e.stopPropagation();
+    const deviceId = b.dataset.device;
+    const printer = getPrinter(deviceId);
+    const name = printer?.db?.name || deviceId;
+    if (b.dataset.ctl === 'stop') {
+      const file = printer?.live?.subtaskName || printer?.live?.gcodeFile || 'the current print';
+      if (!window.confirm(`Stop "${file}" on ${name}?\n\nThis cancels the print and cannot be undone.`)) return;
+    }
+    sendPrinterCommand(deviceId, b.dataset.ctl, null, rerenderFor(deviceId));
+  });
+  container.addEventListener('change', (e) => {
+    const sel = e.target.closest('.ctl-speed');
+    if (!sel) return;
+    sendPrinterCommand(sel.dataset.device, 'set_speed', Number(sel.value), rerenderFor(sel.dataset.device));
+  });
 }
 
 // BAM-32: compact chips for printer diagnostics (see src/bambu/diagnostics.js). Absent data → no chip.

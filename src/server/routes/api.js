@@ -2,7 +2,7 @@
 
 const express = require('express');
 const queries = require('../../db/queries');
-const { buildPause, buildResume, buildStop, buildSetSpeed } = require('../../bambu/commands');
+const { planCommand } = require('../printer-commands');
 const { getAuthStatus } = require('../../bambu/auth');
 
 // Upper bounds for ?limit= (BAM-30 / code-review 2026-10-02 M3). The charts request 10000 samples.
@@ -50,7 +50,7 @@ function toSqlDatetime(d) {
  * Create API router.
  * @param {object} printerManager — object with getLiveStates(), getClient(deviceId) methods
  */
-function createApiRouter(printerManager) {
+function createApiRouter(printerManager, { getCloudAuthStatus = getAuthStatus } = {}) {
   const router = express.Router();
 
   // GET /api/printers — all printers with live state
@@ -134,39 +134,39 @@ function createApiRouter(printerManager) {
     res.json(jobs);
   });
 
-  // POST /api/printers/:id/command — send command to printer (requires auth)
-  router.post('/printers/:id/command', (req, res) => {
-    if (getAuthStatus() !== 'authenticated') {
-      return res.status(401).json({ error: 'Not authenticated — please log in first' });
+  // POST /api/printers/:id/command — pause / resume / stop / set_speed (BAM-28)
+  // Admin-token guarded (BAM-30); state-gated; every attempt is recorded as a 'command' event.
+  router.post('/printers/:id/command', async (req, res) => {
+    const deviceId = req.params.id;
+    const { command, param } = req.body || {};
+
+    const record = (severity, message) => {
+      try {
+        queries.insertEvent({ deviceId, eventType: 'command', severity, code: String(command || ''), message });
+      } catch { /* unknown printer id — FK; nothing to audit against */ }
+    };
+
+    if (getCloudAuthStatus() !== 'authenticated') {
+      return res.status(503).json({ error: 'Server is not logged into BambuLab Cloud' });
     }
-
-    const { command, param } = req.body;
-    const client = printerManager.getClient(req.params.id);
-
-    if (!client) {
+    const client = printerManager.getClient(deviceId);
+    if (!client || !printerManager.isConnected(deviceId)) {
       return res.status(404).json({ error: 'Printer not found or not connected' });
     }
 
-    let cmd;
-    switch (command) {
-      case 'pause':
-        cmd = buildPause();
-        break;
-      case 'resume':
-        cmd = buildResume();
-        break;
-      case 'stop':
-        cmd = buildStop();
-        break;
-      case 'set_speed':
-        cmd = buildSetSpeed(parseInt(param, 10));
-        break;
-      default:
-        return res.status(400).json({ error: `Unknown command: ${command}` });
+    const plan = planCommand(command, param, printerManager.getLiveStates()[deviceId]);
+    if (plan.error) {
+      record('warning', `Rejected command "${command}": ${plan.error}`);
+      return res.status(plan.status).json({ error: plan.error });
     }
 
-    const sent = client.sendCommand(cmd);
-    res.json({ ok: sent });
+    const reply = await client.sendCommandAwaitReply(plan.cmd);
+    const failed = reply.acknowledged && reply.result && String(reply.result).toLowerCase() !== 'success';
+    const outcome = !reply.sent ? 'not sent (printer offline)'
+      : !reply.acknowledged ? 'sent, no confirmation from printer'
+        : failed ? `printer rejected it: ${reply.reason || reply.result}` : 'confirmed by printer';
+    record(failed || !reply.sent ? 'warning' : 'info', `Command ${plan.label}: ${outcome}`);
+    res.status(reply.sent ? 200 : 502).json({ ok: reply.sent && !failed, ...reply, outcome });
   });
 
   // GET /api/printers/:id/debug/mqtt — raw MQTT merged state for diagnostics

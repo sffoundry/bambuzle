@@ -678,7 +678,11 @@ paths:
     post:
       tags: [Commands]
       summary: Send command to printer
-      description: Sends a command to the printer via MQTT. The printer must be connected.
+      description: |
+        Sends a command via cloud MQTT and waits up to 4 s for the printer's reply (matched by sequence_id).
+        State-gated: pause needs RUNNING/PREPARE, resume needs PAUSE, stop/set_speed need an active print.
+        Every attempt (including rejections) is recorded as a `command` event. Firmware with Bambu's
+        authorization control may refuse unsigned commands — that surfaces as `ok:false` with the printer's reason.
       parameters:
         - $ref: '#/components/parameters/DeviceId'
       requestBody:
@@ -699,16 +703,26 @@ paths:
                     - type: integer
       responses:
         '200':
-          description: Command sent
+          description: Command sent (check `acknowledged` / `ok` for the printer's answer)
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  ok:
-                    type: boolean
+                  ok: { type: boolean, description: 'sent and not rejected by the printer' }
+                  sent: { type: boolean }
+                  acknowledged: { type: boolean, description: 'printer replied within 4 s' }
+                  result: { type: string, nullable: true }
+                  reason: { type: string, nullable: true }
+                  outcome: { type: string }
+        '409':
+          description: Command not valid in the printer's current state
+        '502':
+          description: Could not publish (printer connection dropped)
+        '503':
+          description: Server not logged into BambuLab Cloud
         '400':
-          description: Unknown command
+          description: Unknown command or invalid speed level
           content:
             application/json:
               schema:
@@ -1124,7 +1138,7 @@ components:
           format: date-time
         event_type:
           type: string
-          enum: [state_change, hms_error, print_error, alert_fired]
+          enum: [state_change, hms_error, print_error, alert_fired, command]
         severity:
           type: string
           enum: [info, warning, error]

@@ -141,6 +141,34 @@ class MqttPrinterClient extends EventEmitter {
     return this._publish(cmd);
   }
 
+  /**
+   * Publish a print command and wait briefly for the printer's reply (BAM-28).
+   * Replies echo `print.command` + `print.sequence_id`; `result`/`reason` are reported when present.
+   * Resolves { sent, acknowledged, result, reason } — never rejects.
+   */
+  sendCommandAwaitReply(cmd, { timeoutMs = 4000 } = {}) {
+    const seq = cmd.print?.sequence_id;
+    const name = cmd.print?.command;
+    return new Promise((resolve) => {
+      if (!this._publish(cmd)) return resolve({ sent: false, acknowledged: false });
+      const onRaw = (deviceId, msg) => {
+        const p = msg?.print;
+        if (!p || p.command !== name || String(p.sequence_id) !== String(seq)) return;
+        cleanup();
+        resolve({ sent: true, acknowledged: true, result: p.result ?? null, reason: p.reason ?? null });
+      };
+      const timer = setTimeout(() => {
+        cleanup();
+        resolve({ sent: true, acknowledged: false });
+      }, timeoutMs);
+      const cleanup = () => {
+        clearTimeout(timer);
+        this.off('raw', onRaw);
+      };
+      this.on('raw', onRaw);
+    });
+  }
+
   _publish(cmd) {
     if (!this.client || !this.client.connected) {
       this.log.warn('Cannot publish — not connected');

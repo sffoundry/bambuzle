@@ -68,7 +68,7 @@ function createApp(printerManager, authCallbacks, adminAuth, deps = {}) {
 
   // API routes
   app.use('/api/auth', createAuthRouter(authCallbacks));
-  app.use('/api', createApiRouter(printerManager));
+  app.use('/api', createApiRouter(printerManager, { getCloudAuthStatus }));
   app.use('/api/alerts', createAlertsRouter());
   app.use('/api/system', createSystemRouter({ backupService, dataDir }));
 

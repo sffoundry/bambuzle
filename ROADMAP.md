@@ -65,7 +65,7 @@ Shipped Feb 2026 but never recorded on the roadmap. Effort sizes are retrospecti
 | BAM-25 |Anomaly capture: layer transitions, temp anomalies, job pauses|✅|L|`abaa82d` — `src/anomaly/detector.js`; capture + REST API, no triage view yet|
 | BAM-26 |Swagger UI API docs at `/api/docs`|✅|S|`fee6e55` — `openapi.yaml`|
 | BAM-27 |Multi-chart MQTT visualization (6 chart types) with 60s auto-refresh|✅|L|`f896538`, `aa1b0fd`|
-| BAM-28 |Printer control API (pause / resume / stop / speed)|🟡|M|`POST /api/printers/:id/command`. API only — no UI. Guarded by the BAM-30 admin token since v0.5.0 (previously open to any LAN client)|
+| BAM-28 |Printer control API (pause / resume / stop / speed)|✅|M|v0.6.0. Card buttons (Pause/Resume, Stop with confirm, speed select); state-gated; waits for the printer's reply by sequence_id and shows confirmed / rejected / unconfirmed; every attempt audited as a `command` event. **Not yet tried on real hardware** — 2025 authorization firmware may reject unsigned cloud commands (shown as "rejected")|
 | BAM-29 |Rate limiting on auth login/verify endpoints|✅|S|`89148c5`|
 
 ---

@@ -16,10 +16,10 @@ function buildPushall() {
 /**
  * Build a pause print command.
  */
-function buildPause() {
+function buildPause(sequenceId = '0') {
   return {
     print: {
-      sequence_id: '0',
+      sequence_id: String(sequenceId),
       command: 'pause',
     },
   };
@@ -28,10 +28,10 @@ function buildPause() {
 /**
  * Build a resume print command.
  */
-function buildResume() {
+function buildResume(sequenceId = '0') {
   return {
     print: {
-      sequence_id: '0',
+      sequence_id: String(sequenceId),
       command: 'resume',
     },
   };
@@ -40,10 +40,10 @@ function buildResume() {
 /**
  * Build a stop print command.
  */
-function buildStop() {
+function buildStop(sequenceId = '0') {
   return {
     print: {
-      sequence_id: '0',
+      sequence_id: String(sequenceId),
       command: 'stop',
     },
   };
@@ -53,10 +53,10 @@ function buildStop() {
  * Build a speed level command.
  * @param {number} level — 1=Silent, 2=Standard, 3=Sport, 4=Ludicrous
  */
-function buildSetSpeed(level) {
+function buildSetSpeed(level, sequenceId = '0') {
   return {
     print: {
-      sequence_id: '0',
+      sequence_id: String(sequenceId),
       command: 'print_speed',
       param: String(level),
     },

@@ -84,7 +84,7 @@ Every other `/api/*` route and `/ws` is guarded by `src/server/admin-auth.js` (B
 
 ### Stats
 - `GET /api/stats` — print job statistics: totals, success rate, by printer / material / day (query: printer, from, to; default last 30 days; bad dates → 400)
-- `POST /api/printers/:id/command` — send command to printer via MQTT
+- `POST /api/printers/:id/command` — pause/resume/stop/set_speed; state-gated (`src/server/printer-commands.js`), waits for the printer's reply, audited as `command` events (BAM-28)
 
 ### Events
 - `GET /api/events` — recent events across all printers (query: limit)

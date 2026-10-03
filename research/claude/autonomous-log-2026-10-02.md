@@ -23,3 +23,8 @@
 - BAM-37 done (Claude): /metrics (hand-rolled exposition, no dep), admin-token guarded, bounded labels, last-message age + MQTT connection count + backup status. Live-checked (401 unauth / 200 token). 52/52.
 - Independent review (agent): 1 High / 4 Med / 5 Low, all verified by reproduction. All fixed + regression tests; fixing #4 surfaced a 2nd bug (close handlers deref nulled wss). Live-verified crash fix, 0.03s shutdown, 0600 DB, restore.js in image. 60/60. Record: code-review/2026-10-02-tranche-review.md
 - 2026-10-02 (supervised, after grant): fixed all 16 Dependabot alerts via npm audit fix (lockfile) + raised floors for express/js-yaml/ws. 60/60, live + Docker verified. Slip: ran host-wide `docker volume prune` during cleanup (named volumes intact; orphaned anonymous volumes may have been removed) — disclosed to Steve.
+
+## Batch 2 — granted 2026-10-03 by Steve ("run that batch autonomously")
+- **Trust:** T1 (bambuzle). **Items:** BAM-43 AMS humidity trend + alert, BAM-28 printer-control UI, BAM-39 maintenance ledger, BAM-46 job export.
+- Plan: Claude does BAM-28 + BAM-43; agents do BAM-39 and BAM-46 in manual worktrees (auto/bam-39-maintenance, auto/bam-46-export).
+- BAM-28 done (Claude): state-gated command route + reply wait by sequence_id + command audit events + card controls (Stop confirm). Stub-rendered; NOT tried on real printers (would interrupt prints). 62/62.
