@@ -1,3 +1,4 @@
+import { renderRecentTriage } from './triage-ui.js';
 // Stats view (BAM-10) — print job totals, success rates, by printer / material / day.
 // All DOM is built with createElement + textContent; no innerHTML with data.
 
@@ -203,6 +204,8 @@ function render(data) {
   renderTable('stats-printer-body', data.byPrinter, (r) => r.name || r.deviceId);
   renderTable('stats-material-body', data.byMaterial, (r) => r.material);
   renderDays(data.byDay);
+  const name = ui.printer ? (document.querySelector(`#stats-filter-printer option[value="${CSS.escape(ui.printer)}"]`)?.textContent || ui.printer) : '';
+  renderRecentTriage(document.getElementById('stats-triage'), ui.printer, name);
 }
 
 async function loadStats() {

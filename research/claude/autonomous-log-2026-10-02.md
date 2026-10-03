@@ -50,3 +50,4 @@
 - BAM-36 (Claude): hourly rollups + tiered retention, atomic count-checked compaction, rollup-aware history. Found + fixed: /history LIMIT oldest-first truncated the newest ~10 h of a busy 24 h chart. 144/144.
 - BAM-42 (Claude): read-only HA discovery bridge (publish-only, LWT, throttled retained state, creds never logged). 148/148.
 - BAM-12 merged (agent, 580284b): responsive layout, verified 360–1440 in all themes; fixed 3 desktop bugs (config toggles, login forms all visible, OFFLINE contrast). CSS append conflict resolved. 148/148.
+- BAM-40 UI + BAM-45 (Claude): triage list/dialog in Stats, fleet Cards/Table toggle. Browser checks (extended BAM-12 harness, seeded throwaway server): 252/252 overflow incl. new views, contrast 0 all themes ×2 widths. Found + fixed: fleet thead never rendered (append() chained), triage badge wrapping at 375 px.

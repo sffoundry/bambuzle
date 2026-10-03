@@ -1376,3 +1376,35 @@ button.diag-files { cursor: pointer; background: transparent; font-family: var(-
 @media (pointer: coarse) and (max-width: 1024px) {
   #events-table thead th, #dash-events-table thead th { min-height: 44px; display: flex; align-items: center; padding: 0 12px; }
 }
+
+/* BAM-40: print-failure triage */
+.triage-badge { white-space: nowrap; flex-shrink: 0; display: inline-block; padding: 1px 7px; border-radius: var(--radius); font-size: 10px; font-weight: 700; text-transform: uppercase; border: 1px solid var(--border); }
+.triage-badge.triage-intervene { background: var(--red); color: var(--on-accent); border-color: var(--red); }
+.triage-badge.triage-inspect { color: var(--yellow); border-color: var(--yellow); }
+.triage-badge.triage-clean { color: var(--green); border-color: var(--accent-dim); }
+.triage-reason { color: var(--text-dim); font-size: 11px; }
+.triage-open { padding: 2px 8px; font-size: 10px; }
+.triage-dialog-content { max-width: 620px; }
+.triage-head { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 8px; }
+.triage-head .triage-job { min-width: 0; overflow-wrap: anywhere; }
+.triage-reasons { margin: 0 0 12px 18px; color: var(--text); font-size: 12px; }
+.triage-timeline { max-height: 45vh; overflow: auto; display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.triage-cluster { border-left: 3px solid var(--border); padding: 4px 8px; }
+.triage-cluster.triage-intervene { border-left-color: var(--red); }
+.triage-cluster.triage-inspect { border-left-color: var(--yellow); }
+.triage-cluster-time { color: var(--text-dim); font-size: 10px; margin-bottom: 2px; }
+.triage-item { display: flex; flex-wrap: wrap; gap: 6px; font-size: 12px; }
+.triage-item-title { color: var(--text); }
+.triage-item-detail { color: var(--text-dim); word-break: break-word; }
+
+/* BAM-45: compact fleet view */
+.layout-toggle { display: inline-flex; gap: 4px; margin-left: auto; }
+.fleet-table.hidden, .printer-grid.hidden { display: none; }
+.data-table.fleet td { white-space: nowrap; }
+.fleet-name { font-weight: 700; color: var(--text); }
+.fleet-job { max-width: 240px; overflow: hidden; text-overflow: ellipsis; color: var(--text-dim); }
+.fleet-progress { min-width: 120px; }
+.fleet-bar { display: inline-block; width: 70px; height: 6px; background: var(--bg-hover); border: 1px solid var(--border); vertical-align: middle; margin-right: 6px; }
+.fleet-bar-fill { height: 100%; background: var(--accent); }
+.fleet-pct { color: var(--text); }
+.fleet-alerts { color: var(--yellow); }

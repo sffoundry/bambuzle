@@ -1,3 +1,4 @@
+import { initFleetToggle, renderFleet, scheduleFleetRender } from './fleet.js';
 import { initTheme } from './themes.js';
 import { renderPrinterCards, updatePrinterCard } from './dashboard.js';
 import { initCharts, loadChartData, destroyCharts, pushLivePoint, setZoomCallback, highlightEvent } from './charts.js';
@@ -259,6 +260,7 @@ function handleWsMessage(msg) {
         state.printers[deviceId] = { db: null, live: printerState, connected, capabilities: capabilities || null };
       }
       updatePrinterCard(deviceId, state.printers[deviceId], uiConfig, dashFilters);
+      scheduleFleetRender(state.printers);
       updateAmsWidget(deviceId, state.printers, dashFilters);
       // Push live data into charts if they're open for this printer
       pushLivePoint(deviceId, printerState);
@@ -498,6 +500,7 @@ async function loadPrinters() {
     }
     populateDashPrinterFilter();
     renderPrinterCards(state.printers, uiConfig, dashFilters);
+    renderFleet(state.printers);
     renderAmsWidget(state.printers, dashFilters);
     loadDashEvents();
     // Don't auto-select a printer — wait for user to choose from dropdown
@@ -839,6 +842,7 @@ function initResizeHandle() {
 // ─── Boot ───
 
 initTheme();
+initFleetToggle(() => state.printers);
 setupAuthForms();
 startDashboard();
 

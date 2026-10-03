@@ -88,10 +88,15 @@
         </select>
         <input type="datetime-local" id="dash-filter-from" step="1" class="dash-custom-time hidden" />
         <input type="datetime-local" id="dash-filter-to" step="1" class="dash-custom-time hidden" />
+        <div class="layout-toggle" role="group" aria-label="Printer layout">
+          <button type="button" class="stats-range-btn" data-layout="cards" title="Printer cards">Cards</button>
+          <button type="button" class="stats-range-btn" data-layout="table" title="Compact fleet table">Table</button>
+        </div>
       </div>
       <div class="dashboard-panes">
         <div id="dash-left" class="dash-pane-left">
           <div id="printer-cards" class="printer-grid"></div>
+          <div id="fleet-table" class="fleet-table hidden"></div>
           <div id="chart-panel" class="chart-panel">
             <div class="chart-header">
               <h2 id="chart-printer-name"></h2>
@@ -269,6 +274,8 @@
           </table>
         </div>
       </div>
+          <h3 class="dash-section-title">Recent jobs — triage</h3>
+      <div id="stats-triage" class="stats-triage"></div>
     </section>
 
     <!-- Maintenance view (BAM-39) -->
