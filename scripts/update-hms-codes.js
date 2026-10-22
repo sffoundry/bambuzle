@@ -12,7 +12,7 @@
  * and the Bambu Lab HMS wiki index (https://wiki.bambulab.com/en/hms/home).
  *
  * Usage:  node scripts/update-hms-codes.js [git-ref]   (default ref: main)
- * Requires network access (Node 20+ built-in fetch). Never run at app runtime.
+ * Requires network access (Node 22+ built-in fetch). Never run at app runtime.
  */
 
 const fs = require('fs');
