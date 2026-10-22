@@ -1,12 +1,12 @@
 # Installation
 
-Bambuzle requires **Node.js 18+** and a C/C++ toolchain (needed to compile the `better-sqlite3` native module). Python 3.6+ is also required at build time by `node-gyp` (the Node.js native module compiler) — it is **not** a runtime dependency.
+Bambuzle requires **Node.js 22+** and a C/C++ toolchain (needed to compile the `better-sqlite3` native module). Python 3.6+ is also required at build time by `node-gyp` (the Node.js native module compiler) — it is **not** a runtime dependency.
 
 ## Prerequisites by Platform
 
 ### Windows
 
-1. Install [Node.js LTS](https://nodejs.org/) (v18 or later). During install, check **"Automatically install the necessary tools"** — this installs the Visual C++ Build Tools and Python for you.
+1. Install [Node.js LTS](https://nodejs.org/) (v22 or later). During install, check **"Automatically install the necessary tools"** — this installs the Visual C++ Build Tools and Python for you.
 
    If you already have Node.js installed without build tools, install them separately:
 
@@ -25,12 +25,12 @@ Bambuzle requires **Node.js 18+** and a C/C++ toolchain (needed to compile the `
 
 ### macOS / Linux
 
-1. Install Node.js 18+ via your package manager or [nvm](https://github.com/nvm-sh/nvm):
+1. Install Node.js 22+ via your package manager or [nvm](https://github.com/nvm-sh/nvm):
 
    ```bash
    # nvm (recommended)
    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
-   nvm install 20
+   nvm install 22
    ```
 
    Or use your system package manager:
@@ -40,7 +40,7 @@ Bambuzle requires **Node.js 18+** and a C/C++ toolchain (needed to compile the `
    brew install node
 
    # Debian / Ubuntu
-   curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+   curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
    sudo apt install -y nodejs
 
    # Fedora
@@ -74,10 +74,10 @@ Bambuzle requires **Node.js 18+** and a C/C++ toolchain (needed to compile the `
 
 Tested on Raspberry Pi 3B+ and newer (ARMv7/ARM64) running Raspberry Pi OS (Bookworm).
 
-1. Install Node.js 20 via NodeSource:
+1. Install Node.js 22 via NodeSource:
 
    ```bash
-   curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+   curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
    sudo apt install -y nodejs
    ```
 
@@ -205,7 +205,7 @@ Use Task Scheduler or install as a service with [node-windows](https://github.co
 
 ## Docker
 
-Bambuzle ships a multi-stage `Dockerfile` (based on `node:20-bookworm-slim`, glibc) that runs on **linux/amd64** and **linux/arm64** (Raspberry Pi 4/5 on a 64-bit OS). No host Node.js or C/C++ toolchain is needed — `better-sqlite3` is built inside the image.
+Bambuzle ships a multi-stage `Dockerfile` (based on `node:22-bookworm-slim`, glibc) that runs on **linux/amd64** and **linux/arm64** (Raspberry Pi 4/5 on a 64-bit OS). No host Node.js or C/C++ toolchain is needed — `better-sqlite3` is built inside the image.
 
 The container runs as the non-root `node` user (uid/gid **1000**), listens on port **3000**, and keeps all runtime state (`bambuzle.db` and its `-wal`/`-shm` files, plus the generated `admin-token`) in **`/data`**, which is declared as a volume (`BAMBUZLE_DATA_DIR=/data`).
 
@@ -411,6 +411,6 @@ Useful alerts: `bambuzle_printer_last_message_age_seconds > 300` (stale data), `
 |---------|-----|
 | `npm install` fails with `gyp ERR!` | Missing C/C++ build tools — see prerequisites above |
 | `EADDRINUSE` on startup | Another process is using port 3000. Change `PORT` in `.env` or stop the other process |
-| `better-sqlite3` crashes on ARM | Make sure you're on Node.js 18+ and have `build-essential` installed, then `npm rebuild better-sqlite3` |
+| `better-sqlite3` crashes on ARM | Make sure you're on Node.js 22+ and have `build-essential` installed, then `npm rebuild better-sqlite3` |
 | Docker: container exits with `unable to open database file` or `EACCES` on `/data` | Bind-mounted dir isn't writable by uid 1000 — `chown 1000:1000 data` or run with `--user "$(id -u):$(id -g)"` (see Docker section) |
 | Dashboard shows login but printers don't appear | Check `.env` credentials and `BAMBU_REGION`. Look at the server console for auth errors |

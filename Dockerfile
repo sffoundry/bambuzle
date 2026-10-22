@@ -4,7 +4,7 @@
 # Multi-arch: docker buildx build --platform linux/amd64,linux/arm64 -t bambuzle .
 
 # ---- build stage: install production deps (compiles better-sqlite3 if no prebuilt matches) ----
-FROM node:20-bookworm-slim AS build
+FROM node:22-bookworm-slim AS build
 WORKDIR /app
 RUN apt-get update \
  && apt-get install -y --no-install-recommends python3 make g++ \
@@ -13,7 +13,8 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 
 # ---- runtime stage: slim image, no toolchain ----
-FROM node:20-bookworm-slim AS runtime
+# Node 22+ required: Node 20 is EOL and does not distrust the compromised eMudhra intermediates (Oct 2026).
+FROM node:22-bookworm-slim AS runtime
 ENV NODE_ENV=production \
     BAMBUZLE_DATA_DIR=/data \
     HOST=0.0.0.0 \
