@@ -9,6 +9,7 @@ import { initStatsUI } from './stats.js';
 import { initMaintenanceUI } from './maintenance.js';
 import { initAuditUI } from './audit.js';
 import { renderAmsWidget, updateAmsWidget } from './ams-widget.js';
+import { initCameraWidget, renderCameraWidget, updateCameraWidget, setCameraViewActive, setCameraWidgetEnabled } from './camera-ui.js';
 import { loadConfig, saveConfig, openConfigModal, applyVisibility } from './config-ui.js';
 
 const state = {
@@ -335,6 +336,7 @@ function handleWsMessage(msg) {
       updatePrinterCard(deviceId, state.printers[deviceId], uiConfig, dashFilters);
       scheduleFleetRender(state.printers);
       updateAmsWidget(deviceId, state.printers, dashFilters);
+      updateCameraWidget(deviceId, state.printers, dashFilters);
       // Push live data into charts if they're open for this printer
       pushLivePoint(deviceId, printerState);
       break;
@@ -370,6 +372,7 @@ document.querySelectorAll('.nav-btn').forEach((btn) => {
     document.querySelectorAll('.view').forEach((v) => v.classList.remove('active'));
     document.getElementById(`view-${btn.dataset.view}`).classList.add('active');
 
+    setCameraViewActive(btn.dataset.view === 'dashboard');
     if (btn.dataset.view === 'events') loadEvents();
     if (btn.dataset.view === 'alerts') initAlertsUI(state);
     if (btn.dataset.view === 'stats') initStatsUI(state);
@@ -582,6 +585,7 @@ async function loadPrinters() {
     renderPrinterCards(state.printers, uiConfig, dashFilters);
     renderFleet(state.printers);
     renderAmsWidget(state.printers, dashFilters);
+    renderCameraWidget(state.printers, dashFilters);
     loadDashEvents();
     // Don't auto-select a printer — wait for user to choose from dropdown
     const sel = document.getElementById('dash-filter-printer');
@@ -684,6 +688,7 @@ function initDashFilters() {
 
     renderPrinterCards(state.printers, uiConfig, dashFilters);
     renderAmsWidget(state.printers, dashFilters);
+    renderCameraWidget(state.printers, dashFilters);
     renderDashEvents();
     updateChartPrinter();
   }
@@ -944,7 +949,9 @@ initEventFilters();
 initDashFilters();
 initDashEventSorting();
 initResizeHandle();
+initCameraWidget();
 applyVisibility(uiConfig);
+setCameraWidgetEnabled(uiConfig.cameraWidget !== false);
 setZoomCallback(onChartZoom);
 
 document.getElementById('config-btn').addEventListener('click', () => {
@@ -952,6 +959,7 @@ document.getElementById('config-btn').addEventListener('click', () => {
     uiConfig = updatedCfg;
     saveConfig(uiConfig);
     applyVisibility(uiConfig);
+    setCameraWidgetEnabled(uiConfig.cameraWidget !== false);
     renderPrinterCards(state.printers, uiConfig, dashFilters);
   });
 });

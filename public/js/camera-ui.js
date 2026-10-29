@@ -30,13 +30,17 @@ async function streamError(id) {
   }
 }
 
-function showMjpeg(id, stage, status) {
+// `onEnd` (optional): called once when the stream stops on its own (error or end), not when closed by the caller.
+function showMjpeg(id, stage, status, { onEnd } = {}) {
   const img = el('img', { class: 'camera-view', alt: 'Live camera' });
   let closed = false;
   img.addEventListener('load', () => { status.textContent = ''; }, { once: true });
   img.addEventListener('error', async () => {
     if (closed) return; // closing swaps the src, which fires error — don't open a new stream to explain it
-    status.textContent = (await streamError(id)) || 'Camera stream ended';
+    const why = await streamError(id);
+    if (closed) return;
+    status.textContent = why || 'Camera stream ended';
+    onEnd?.();
   });
   img.src = streamUrl(id);
   stage.append(img);
@@ -69,10 +73,11 @@ function initLength(bytes) {
 }
 
 /** X1 / H2: fragmented MP4 via Media Source Extensions (works on plain http://, unlike WebCodecs). */
-function showMse(id, stage, status) {
+function showMse(id, stage, status, { onEnd } = {}) {
   const MS = window.ManagedMediaSource || window.MediaSource;
   if (!MS) {
     status.textContent = 'This browser can\'t play the camera stream (no Media Source Extensions).';
+    if (onEnd) queueMicrotask(onEnd); // after the caller has stored the returned stop function
     return () => {};
   }
   const video = el('video', { class: 'camera-view', muted: '', autoplay: '', playsinline: '' });
@@ -90,10 +95,14 @@ function showMse(id, stage, status) {
     try {
       res = await fetch(streamUrl(id), { signal: ac.signal });
     } catch {
-      if (!closed) status.textContent = 'Camera stream could not be opened';
+      if (!closed) { status.textContent = 'Camera stream could not be opened'; onEnd?.(); }
       return;
     }
-    if (!res.ok) { status.textContent = (await res.json().catch(() => ({}))).error || `HTTP ${res.status}`; return; }
+    if (!res.ok) {
+      const why = (await res.json().catch(() => ({}))).error || `HTTP ${res.status}`;
+      if (!closed) { status.textContent = why; onEnd?.(); }
+      return;
+    }
     const reader = res.body.getReader();
     let head = new Uint8Array(0);
     let sb = null;
@@ -127,7 +136,7 @@ function showMse(id, stage, status) {
         if (!initLength(head)) continue;
         const codec = codecFromInit(head) || 'avc1.640028';
         const mime = `video/mp4; codecs="${codec}"`;
-        if (!MS.isTypeSupported(mime)) { status.textContent = `This browser can't play ${codec} video.`; ac.abort(); return; }
+        if (!MS.isTypeSupported(mime)) { status.textContent = `This browser can't play ${codec} video.`; ac.abort(); onEnd?.(); return; }
         sb = ms.addSourceBuffer(mime);
         sb.mode = 'segments';
         sb.addEventListener('updateend', () => {
@@ -140,7 +149,7 @@ function showMse(id, stage, status) {
       }
       pump();
     }
-    if (!closed) status.textContent = 'Camera stream ended — close and reopen to retry';
+    if (!closed) { status.textContent = onEnd ? 'Camera stream ended' : 'Camera stream ended — close and reopen to retry'; onEnd?.(); }
   }, { once: true });
 
   // Stall watchdog: playback stuck while video is buffered ahead → skip to just behind the live edge
@@ -178,4 +187,137 @@ export function openCameraDialog(deviceId, printerName, protocol) {
     box.append(stage, status, el('p', { class: 'conn-intro', text: 'Live from the printer over your local network.' }), el('div', { class: 'form-actions' }, full, closeBtn));
     stop = protocol === 'rtsps' ? showMse(deviceId, stage, status) : showMjpeg(deviceId, stage, status);
   }).finally(() => stop());
+}
+
+// ─── BAM-52: dashboard camera widget ───
+// Shown when the dashboard filter is one specific printer whose camera is live. The stream starts by
+// default; Stop only affects this tab and isn't remembered (a reload or a new selection starts it again).
+// Leaving the Dashboard view disconnects without counting as a Stop.
+
+const cam = {
+  deviceId: null, // printer the widget is showing
+  live: false, // that printer's capabilities.cameraLive
+  protocol: null,
+  hint: null, // why the camera isn't available (capabilities.cameraHint / offline)
+  userStopped: false,
+  enabled: true, // Configuration → Camera Widget
+  viewActive: true, // Dashboard view is showing
+  stop: null, // closes the running stream, or null when none
+};
+
+function camEls() {
+  return {
+    box: document.getElementById('camera-widget'),
+    stage: document.getElementById('camera-widget-stage'),
+    status: document.getElementById('camera-widget-status'),
+    toggle: document.getElementById('camera-widget-toggle'),
+    full: document.getElementById('camera-widget-full'),
+  };
+}
+
+function stopStream() {
+  const stop = cam.stop;
+  cam.stop = null;
+  stop?.();
+  const { stage } = camEls();
+  stage?.replaceChildren();
+}
+
+function startStream() {
+  const { stage, status } = camEls();
+  if (!stage || cam.stop) return;
+  stage.replaceChildren(); // the last frame of a stream that ended on its own
+  const onEnd = () => { cam.stop?.(); cam.stop = null; syncButtons(); };
+  const show = cam.protocol === 'rtsps' ? showMse : showMjpeg;
+  cam.stop = show(cam.deviceId, stage, status, { onEnd });
+}
+
+function syncButtons() {
+  const { toggle, full } = camEls();
+  if (!toggle) return;
+  toggle.hidden = !cam.live;
+  full.hidden = !cam.stop;
+  toggle.textContent = cam.stop ? 'Stop' : 'Start';
+}
+
+/** Bring the widget in line with `cam` (idempotent; called on every relevant change). */
+function syncCamera() {
+  const { box, status } = camEls();
+  if (!box) return;
+  const shown = cam.enabled && Boolean(cam.deviceId);
+  box.classList.toggle('hidden', !shown);
+  const want = shown && cam.viewActive && cam.live && !cam.userStopped;
+  if (!want && cam.stop) stopStream();
+  if (!shown) return;
+  if (want) startStream();
+  else if (!cam.live) status.textContent = cam.hint || 'Live camera isn\'t available for this printer';
+  else if (cam.userStopped) status.textContent = 'Stopped';
+  syncButtons();
+}
+
+/** One specific printer selected on the dashboard → its id; "All Printers" or none → null. */
+function selectedPrinter(dashFilters) {
+  const id = dashFilters?.printer;
+  return id && id !== '__all__' ? id : null;
+}
+
+/** Re-read the selected printer's camera state. `printers`: deviceId → { capabilities, connected, … } */
+export function renderCameraWidget(printers, dashFilters) {
+  const id = selectedPrinter(dashFilters);
+  const caps = (id && printers[id]?.capabilities) || {};
+  const live = Boolean(id && printers[id]?.connected !== false && caps.cameraLive);
+  const protocol = caps.cameraProtocol || null;
+  if (id !== cam.deviceId) {
+    stopStream();
+    cam.userStopped = false; // a new selection starts by default
+    camEls().status.textContent = '';
+  } else if (live === cam.live && protocol === cam.protocol) {
+    if (!live) { cam.hint = hintFor(printers[id]); syncCamera(); } // the reason may have changed
+    return; // nothing that affects the stream changed (state messages arrive several times a second)
+  } else if (cam.stop) {
+    stopStream(); // camera went away or its protocol changed
+  }
+  cam.deviceId = id;
+  cam.live = live;
+  cam.protocol = protocol;
+  cam.hint = id ? hintFor(printers[id]) : null;
+  syncCamera();
+}
+
+function hintFor(printer) {
+  if (printer?.connected === false) return 'Printer is offline';
+  return printer?.capabilities?.cameraHint || null;
+}
+
+/** A printer's state changed; only matters if it's the one the widget shows. */
+export function updateCameraWidget(deviceId, printers, dashFilters) {
+  if (deviceId === selectedPrinter(dashFilters)) renderCameraWidget(printers, dashFilters);
+}
+
+/** Dashboard view shown / hidden (other views don't keep the stream open). */
+export function setCameraViewActive(active) {
+  cam.viewActive = active;
+  syncCamera();
+}
+
+/** Configuration → Camera Widget toggle. */
+export function setCameraWidgetEnabled(enabled) {
+  cam.enabled = enabled;
+  syncCamera();
+}
+
+export function initCameraWidget() {
+  const { toggle, full, stage, status } = camEls();
+  if (!toggle) return;
+  toggle.addEventListener('click', () => {
+    if (cam.stop) {
+      cam.userStopped = true;
+      stopStream();
+    } else {
+      cam.userStopped = false;
+      status.textContent = '';
+    }
+    syncCamera();
+  });
+  full.addEventListener('click', () => stage.requestFullscreen?.().catch(() => {}));
 }

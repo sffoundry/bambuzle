@@ -134,6 +134,17 @@
         </div>
         <div id="dash-resize" class="dash-resize-handle"></div>
         <div id="dash-right" class="dash-pane-right">
+          <div id="camera-widget" class="hidden">
+            <div class="camera-widget-header">
+              <h3 class="dash-section-title">Camera</h3>
+              <div class="camera-widget-actions">
+                <button type="button" id="camera-widget-toggle" class="btn-secondary">Stop</button>
+                <button type="button" id="camera-widget-full" class="btn-secondary">Full screen</button>
+              </div>
+            </div>
+            <div id="camera-widget-stage" class="camera-stage"></div>
+            <div id="camera-widget-status" class="camera-status" role="status"></div>
+          </div>
           <div id="ams-widget">
             <h3 class="dash-section-title">AMS</h3>
             <div id="ams-content"></div>

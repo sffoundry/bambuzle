@@ -8,7 +8,7 @@ import { openPlugDialog, openPowerSettings } from './power-ui.js';
 
 const STORAGE_KEY = 'bambuzle_widget_config';
 
-const DEFAULTS = { printers: {}, tempChart: true, eventsWidget: true, amsWidget: true };
+const DEFAULTS = { printers: {}, tempChart: true, eventsWidget: true, amsWidget: true, cameraWidget: true };
 
 export function loadConfig() {
   try {
@@ -39,8 +39,8 @@ export function applyVisibility(cfg) {
   const dashResize = document.getElementById('dash-resize');
   const amsWidget = document.getElementById('ams-widget');
   if (chartPanel) chartPanel.classList.toggle('cfg-hidden', !cfg.tempChart);
-  // Hide right pane only if both events and AMS are hidden
-  const rightPaneHidden = !cfg.eventsWidget && !cfg.amsWidget;
+  // Hide right pane only if events, AMS and camera are all hidden
+  const rightPaneHidden = !cfg.eventsWidget && !cfg.amsWidget && cfg.cameraWidget === false;
   if (dashRight) dashRight.classList.toggle('cfg-hidden', rightPaneHidden);
   if (dashResize) dashResize.classList.toggle('cfg-hidden', rightPaneHidden);
   if (amsWidget) amsWidget.classList.toggle('cfg-hidden', cfg.amsWidget === false);
@@ -135,7 +135,7 @@ export function openConfigModal(cfg, printers, onChanged) {
 
   // ── Chart toggles ──
   chartsList.innerHTML = '';
-  for (const [key, label] of [['tempChart', 'Charts Panel'], ['eventsWidget', 'Events Widget'], ['amsWidget', 'AMS Widget']]) {
+  for (const [key, label] of [['tempChart', 'Charts Panel'], ['eventsWidget', 'Events Widget'], ['amsWidget', 'AMS Widget'], ['cameraWidget', 'Camera Widget']]) {
     const el = document.createElement('label');
     el.innerHTML = `
       <span class="toggle">

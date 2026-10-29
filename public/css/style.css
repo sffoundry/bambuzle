@@ -1444,3 +1444,15 @@ html[data-role="viewer"] .maint-empty button { display: none !important; }
 .camera-view { display: block; width: 100%; height: auto; max-height: 75vh; object-fit: contain; }
 .camera-stage:fullscreen .camera-view { max-height: 100vh; }
 .camera-status { min-height: 1.2em; margin: 6px 0; font-size: 12px; color: var(--text-dim); }
+
+/* BAM-52 camera widget (dashboard right pane, one selected printer) */
+#camera-widget { margin-bottom: 12px; }
+#camera-widget.hidden { display: none; }
+.camera-widget-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.camera-widget-header .dash-section-title { flex: 1; }
+.camera-widget-actions { display: flex; gap: 4px; }
+.camera-widget-actions .btn-secondary { padding: 3px 10px; }
+#camera-widget .camera-stage { min-height: 120px; border-radius: var(--radius); overflow: hidden; }
+#camera-widget .camera-stage:empty { display: none; } /* stopped / unavailable: just the status line */
+#camera-widget .camera-stage:fullscreen { border-radius: 0; }
+#camera-widget .camera-view { max-height: 60vh; }

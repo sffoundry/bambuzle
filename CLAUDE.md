@@ -72,6 +72,7 @@ Browser
 | `public/js/app.js` | Frontend entry — auth, WS, views, events |
 | `public/js/dashboard.js` | Printer card rendering |
 | `public/js/triage-ui.js` | Stats → Recent jobs triage list + timeline dialog (BAM-40); backend `src/printers/job-triage.js` + `src/db/triage.js` |
+| `public/js/camera-ui.js` | Live camera players (MJPEG / MSE) for the **Cam live** dialog and the dashboard Camera widget (BAM-52: selected printer only, auto-start, per-tab Stop not remembered) |
 | `public/js/fleet.js` | Compact fleet table (Cards/Table toggle, BAM-45) |
 | `public/js/themes.js` | Theme engine (6 themes from HamTab), `themeVar()` for canvas/SVG colours, `bambuzle:themechange` event |
 | `public/js/charts.js` | uPlot chart rendering |
