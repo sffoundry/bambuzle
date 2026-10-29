@@ -3,7 +3,7 @@
 > **Mission:** Self-hosted monitoring dashboard for BambuLab 3D printers. Connects through BambuLab Cloud or directly over the LAN (MQTT), stores telemetry in SQLite, and serves a real-time web dashboard. Runs headless on Linux (x86_64 + ARM64); no Windows dependency.
 > **Adoption surface for `aiw feature adopt BAM-<N>`.**
 
-**Last updated:** 2026-10-03 (v0.8.0: mobile layout, audit trail, SD-card files, triage, fleet table, rollups, HA bridge, model-specific HMS, active print hours)
+**Last updated:** 2026-10-28 (BAM-52 camera card added; H2D camera verified). Previous: 2026-10-03 (v0.8.0: mobile layout, audit trail, SD-card files, triage, fleet table, rollups, HA bridge, model-specific HMS, active print hours)
 
 ---
 
@@ -24,7 +24,7 @@ Printer **control** is built, but Bambu's authorization firmware means it only w
 | 2 | **BAM-44: verify SD-card files on hardware** | FTPS on authorization firmware may need Developer Mode. Owner action: open "SD files" on a LAN printer. | S |
 | 3 | **BAM-18: verify with a real smart plug** | Readers are tested against each vendor's documented JSON, not against real plugs. Owner action: add a plug under Configuration → Power plug. | S |
 | 4 | **BAM-49: run the arm64 image on a real Pi 4/5; decide publishing** | CI now builds and smoke-tests arm64 under emulation on every push. Still open: a real-Pi run, and where to publish images. | S |
-| 5 | **BAM-9: see the live camera on real printers** | Built. Owner action: turn on "LAN Only Liveview" on the H2D/X1C, then click **Cam live**. | S |
+| 5 | **BAM-9: see the live camera on real printers** | Built. H2D verified 2026-10-28. Owner action: turn on "LAN Only Liveview" on the X1C, then click **Cam live**. | S |
 
 **Waiting on others**
 
@@ -102,9 +102,10 @@ Shipped Feb 2026 but never recorded on the roadmap. Effort sizes are retrospecti
 
 | ID | Feature | Status | Priority | Effort | Notes |
 |---|---|---|---|---|---|
-| BAM-9 |Live camera feed (LAN-only, MJPEG/WS)|🟡|HIGH|XL|v0.11.0. P1/A1: JPEG-over-TLS :6000 → MJPEG. X1/H2: RTSPS :322 client in JS (Digest auth, interleaved RTP, H.264 depacketiser) → fragmented MP4 → Media Source Extensions (works on plain http://LAN-IP; WebCodecs would need HTTPS). No ffmpeg, no transcoding. One shared upstream per printer, idle close, keyframe replay for late joiners, slow-viewer frame dropping, session re-check. Access codes imported from the BambuLab account (code only — transport unchanged). Verified in Chrome against a fake camera with a real H.264 bitstream. **Not yet seen on hardware:** H2D/X1C need "LAN Only Liveview" on; A1 mini was offline|
+| BAM-9 |Live camera feed (LAN-only, MJPEG/WS)|🟡|HIGH|XL|v0.11.0. P1/A1: JPEG-over-TLS :6000 → MJPEG. X1/H2: RTSPS :322 client in JS (Digest auth, interleaved RTP, H.264 depacketiser) → fragmented MP4 → Media Source Extensions (works on plain http://LAN-IP; WebCodecs would need HTTPS). No ffmpeg, no transcoding. One shared upstream per printer, idle close, keyframe replay for late joiners, slow-viewer frame dropping, session re-check. Access codes imported from the BambuLab account (code only — transport unchanged). Verified in Chrome against a fake camera with a real H.264 bitstream. **H2D verified on hardware 2026-10-28** (LAN Only Liveview on): 1080p H.264 ~30 fps, keyframe every 1 s, first frame ~1.4 s after connect, plays in the browser. **Not yet seen:** X1C (needs LAN Only Liveview on); A1 mini was offline|
 | BAM-10 |Print job statistics (totals, success rates, by-material)|✅|MEDIUM|M|v0.5.0. `GET /api/stats` + Stats view; jobs now record material/colour (active tray at start) and duration. Caveats: durations include pauses; one material per job; UTC days|
 | BAM-11 |Filament inventory tracking (per-spool usage)|❌|HIGH|XL|See § "Filament inventory tracking" below for full spec — schema + backend + UI changes. 2026-10-02 xval: both partners recommend re-scoping to Spoolman integration (BAM-38)|
+| BAM-52 |Live camera as its own dashboard card for the selected printer|❌|MEDIUM|M|Requested by Steve 2026-10-28 after the H2D camera was confirmed working. When the dashboard filter is set to **one specific printer** (not "All Printers" or none) and that printer reports `cameraLive`, show a separate Camera card/widget in the dashboard layout instead of only the **Cam live** dialog (`openCameraDialog`, `public/js/camera-ui.js`). The stream **starts automatically** when the card appears. The viewer can **stop** it from the card (and start it again), and stopping only affects that viewer: other viewers keep their streams, and the server's shared upstream closes on its own idle timer once nobody is watching. The card is removed and its stream closed when the selection changes or the printer goes offline. No camera, or camera unavailable: show `cameraHint` in the card instead of a player. Reuse the MSE/MJPEG player code from `camera-ui.js`; the dialog stays for the fleet view. Stopping is not remembered: every page load starts the stream again (Steve 2026-10-28)|
 | BAM-12 |Mobile-friendly responsive layout|✅|MEDIUM|M|v0.8.0. Phone/tablet: wrapped header with scrolling tabs, stacked panes, one-column cards, ≥44 px touch targets, table reflow/scroll, full-width scrollable modals, 16 px inputs (no iOS zoom). Verified 360–1440 px in all themes (0 overflow, 0 contrast failures). Also fixed: config toggles broken, login card showing all three forms, OFFLINE badge contrast|
 
 ---
