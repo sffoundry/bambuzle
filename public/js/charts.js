@@ -196,10 +196,16 @@ function syncToggleUI() {
 
 // ─── Chart Toggle Init ───
 
+let togglesBound = false;
+
 function initToggles() {
   Object.assign(chartVisibility, loadVisibility());
   syncToggleUI();
 
+  // initCharts() runs on every printer / range change. Bind the buttons once: a second listener made
+  // each click flip the chart twice, so the toggles did nothing after an even number of re-inits.
+  if (togglesBound) return;
+  togglesBound = true;
   document.querySelectorAll('#chart-toggles .chart-toggle-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
       const id = btn.dataset.chart;
